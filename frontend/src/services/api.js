@@ -83,6 +83,10 @@ class ApiService {
     return this.request('/students');
   }
 
+  async getStudentsByClass(classId) {
+    return this.request(`/students?classId=${classId}`);
+  }
+
   async getStudent(studentId) {
     return this.request(`/students/${studentId}`);
   }
@@ -248,6 +252,10 @@ class ApiService {
   async getFees(filters = {}) {
     const queryParams = new URLSearchParams(filters).toString();
     return this.request(`/fees${queryParams ? `?${queryParams}` : ''}`);
+  }
+  
+  async getFeesByClass(classId) {
+    return this.request(`/fees?classId=${classId}`);
   }
 
   async addFee(feeData) {

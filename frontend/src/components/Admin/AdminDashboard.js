@@ -12,9 +12,13 @@ const AdminDashboard = () => {
       <Routes>
         <Route path="/" element={<Navigate to="/admin/fees" replace />} />
         <Route path="/fees" element={<FeeManagement />} />
+        <Route path="/fees/:classId" element={<FeeManagement />} />
+        <Route path="/fees/grade/:grade" element={<FeeManagement />} />
         <Route path="/teachers" element={<TeacherManagement />} />
         <Route path="/system-config" element={<SystemConfiguration />} />
         <Route path="/students" element={<StudentManagement />} />
+        <Route path="/students/:classId" element={<StudentManagement />} />
+        <Route path="/students/grade/:grade" element={<StudentManagement />} />
       </Routes>
     </AdminLayout>
   );
