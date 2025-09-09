@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/database');
+const { Prisma } = require('@prisma/client');
 const { authenticateToken } = require('../utils/jwt');
 
 // GET /api/subjects - Get all subjects
@@ -8,58 +9,26 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { search, classApplicable, isActive, page = 1, limit = 50 } = req.query;
     
-    // Build where clause
-    const where = {};
-    
-    // Add search filter
-    if (search) {
-      where.OR = [
-        { subjectName: { contains: search, mode: 'insensitive' } },
-        { subjectCode: { contains: search, mode: 'insensitive' } }
-      ];
-    }
+    // Get subjects with simple query
+    const subjects = await prisma.$queryRaw`
+      SELECT * FROM subjects 
+      WHERE is_active = true
+      ORDER BY subject_name ASC
+    `;
 
-    // Add class applicable filter
-    if (classApplicable) {
-      where.classApplicable = { contains: classApplicable, mode: 'insensitive' };
-    }
-
-    // Add active filter
-    if (isActive !== undefined) {
-      where.isActive = isActive === 'true';
-    }
-
-    // Calculate pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Get subjects with pagination and relations
-    const subjects = await prisma.subject.findMany({
-      where,
-      include: {
-        _count: {
-          select: {
-            marks: true,
-            syllabus: true
-          }
-        }
-      },
-      orderBy: { subjectName: 'asc' },
-      skip,
-      take: limitNum
-    });
-
-    // Get total count
-    const total = await prisma.subject.count({ where });
+    // Convert BigInt fields to strings for JSON serialization
+    const subjectsWithStringIds = subjects.map(subject => ({
+      ...subject,
+      subject_id: subject.subject_id.toString()
+    }));
 
     res.json({
-      subjects,
+      subjects: subjectsWithStringIds,
       pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum)
+        page: 1,
+        limit: subjectsWithStringIds.length,
+        total: subjectsWithStringIds.length,
+        pages: 1
       }
     });
 

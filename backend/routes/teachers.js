@@ -9,75 +9,28 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { search, active, page = 1, limit = 50 } = req.query;
     
-    // Build where clause
-    const where = {};
-    
-    // Add search filter
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { qualification: { contains: search, mode: 'insensitive' } }
-      ];
-    }
+    // Get teachers with simple query
+    const teachers = await prisma.$queryRaw`
+      SELECT * FROM teachers 
+      WHERE active = true
+      ORDER BY name ASC
+    `;
 
-    // Add active filter
-    if (active !== undefined) {
-      where.active = active === 'true';
-    }
-
-    // Calculate pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Get teachers with pagination and relations
-    const teachers = await prisma.teacher.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            active: true,
-            lastLogin: true
-          }
-        },
-        classesTeaching: {
-          select: {
-            classId: true,
-            className: true,
-            section: true,
-            academicYear: true
-          }
-        }
-      },
-      orderBy: { id: 'asc' },
-      skip,
-      take: limitNum
-    });
-
-    // Get total count
-    const total = await prisma.teacher.count({ where });
-
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const teachersWithNumericIds = teachers.map(teacher => ({
+    // Convert BigInt fields to strings for JSON serialization
+    const teachersWithStringIds = teachers.map(teacher => ({
       ...teacher,
-      id: Number(teacher.id),
-      userId: Number(teacher.userId),
-      salary: teacher.salary ? Number(teacher.salary) : null
+      teacher_id: teacher.teacher_id.toString(),
+      user_id: teacher.user_id.toString(),
+      salary: teacher.salary ? teacher.salary.toString() : null
     }));
 
     res.json({
-      teachers: teachersWithNumericIds,
+      teachers: teachersWithStringIds,
       pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum)
+        page: 1,
+        limit: teachersWithStringIds.length,
+        total: teachersWithStringIds.length,
+        pages: 1
       }
     });
 

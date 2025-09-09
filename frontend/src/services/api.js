@@ -347,6 +347,39 @@ class ApiService {
       body: JSON.stringify(calendarData),
     });
   }
+
+  // Time Management
+  async getTimeSlots() {
+    return this.request('/timemanagement/timeslots');
+  }
+
+  async getClassSchedule(classId, section, academicYear = '2024-2025') {
+    return this.request(`/timemanagement/schedule/${classId}/${section}?academicYear=${academicYear}`);
+  }
+
+  async createScheduleEntry(scheduleData) {
+    return this.request('/timemanagement/schedule', {
+      method: 'POST',
+      body: JSON.stringify(scheduleData),
+    });
+  }
+
+  async updateScheduleEntry(scheduleData) {
+    return this.request('/timemanagement/schedule', {
+      method: 'PUT',
+      body: JSON.stringify(scheduleData),
+    });
+  }
+
+  async deleteScheduleEntry(scheduleId) {
+    return this.request(`/timemanagement/schedule/${scheduleId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getEvents(academicYear = '2024-2025') {
+    return this.request(`/timemanagement/exceptions?academicYear=${academicYear}`);
+  }
 }
 
 // Export a singleton instance

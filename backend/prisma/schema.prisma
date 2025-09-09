@@ -28,6 +28,7 @@ model User {
   student   Student?
   teacher   Teacher?
   academicCalendars AcademicCalendar[]
+  scheduleExceptions ScheduleException[]
 
   @@map("users")
 }
@@ -84,6 +85,8 @@ model Teacher {
   attendance    Attendance[]
   marks         Mark[]
   syllabus      Syllabus[]
+  classSchedules ClassSchedule[]
+  scheduleExceptions ScheduleException[]
 
   @@map("teachers")
 }
@@ -105,6 +108,8 @@ model Class {
   marks        Mark[]
   fees         Fee[]
   syllabus     Syllabus[]
+  classSchedules ClassSchedule[]
+  scheduleExceptions ScheduleException[]
 
   @@map("classes")
 }
@@ -122,6 +127,8 @@ model Subject {
   // Relations
   marks        Mark[]
   syllabus     Syllabus[]
+  classSchedules ClassSchedule[]
+  scheduleExceptions ScheduleException[]
 
   @@map("subjects")
 }
@@ -226,4 +233,71 @@ model AcademicCalendar {
   creator          User     @relation(fields: [createdBy], references: [id])
 
   @@map("academic_calendar")
+}
+
+model TimeSlot {
+  slotId      Int      @id @default(autoincrement()) @map("slot_id")
+  slotName    String   @map("slot_name") @db.VarChar(50)
+  startTime   DateTime @map("start_time") @db.Time
+  endTime     DateTime @map("end_time") @db.Time
+  slotOrder   Int      @map("slot_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  classSchedules      ClassSchedule[]
+  scheduleExceptions  ScheduleException[]
+
+  @@map("time_slots")
+}
+
+model ClassSchedule {
+  scheduleId    BigInt   @id @default(autoincrement()) @map("schedule_id")
+  classId       Int      @map("class_id")
+  section       String   @db.VarChar(10)
+  dayOfWeek     Int      @map("day_of_week") // 1=Monday, 2=Tuesday, ..., 7=Sunday
+  slotId        Int      @map("slot_id")
+  subjectId     Int?     @map("subject_id")
+  teacherId     BigInt?  @map("teacher_id")
+  academicYear  String   @map("academic_year") @db.VarChar(20)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  class         Class    @relation(fields: [classId], references: [classId], onDelete: Cascade)
+  timeSlot      TimeSlot @relation(fields: [slotId], references: [slotId], onDelete: Cascade)
+  subject       Subject? @relation(fields: [subjectId], references: [subjectId], onDelete: SetNull)
+  teacher       Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@unique([classId, section, dayOfWeek, slotId, academicYear])
+  @@map("class_schedule")
+}
+
+model ScheduleException {
+  exceptionId       BigInt   @id @default(autoincrement()) @map("exception_id")
+  classId           Int?     @map("class_id")
+  section           String?  @db.VarChar(10)
+  exceptionDate     DateTime @map("exception_date") @db.Date
+  slotId            Int?     @map("slot_id")
+  exceptionType     String   @map("exception_type") @db.VarChar(50) // 'exam', 'event', 'holiday', 'special_class'
+  title             String   @db.VarChar(255)
+  description       String?  @db.Text
+  subjectId         Int?     @map("subject_id")
+  teacherId         BigInt?  @map("teacher_id")
+  academicYear      String   @map("academic_year") @db.VarChar(20)
+  affectsAllClasses Boolean  @default(false) @map("affects_all_classes")
+  createdBy         BigInt   @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  class       Class?    @relation(fields: [classId], references: [classId], onDelete: Cascade)
+  timeSlot    TimeSlot? @relation(fields: [slotId], references: [slotId], onDelete: Cascade)
+  subject     Subject?  @relation(fields: [subjectId], references: [subjectId], onDelete: SetNull)
+  teacher     Teacher?  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  creator     User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@map("schedule_exceptions")
 }

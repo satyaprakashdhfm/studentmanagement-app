@@ -11,7 +11,7 @@ export const useAcademicYear = () => {
 };
 
 export const AcademicYearProvider = ({ children }) => {
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState('2025-2026');
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState('2024-2025');
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(false);
 

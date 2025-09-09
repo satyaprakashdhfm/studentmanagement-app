@@ -9,6 +9,7 @@ const AdminLayout = ({ children }) => {
   const navigate = useNavigate();
   const [showFeeDropdown, setShowFeeDropdown] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
+  const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   
   // Use the academic year context
   const { 
@@ -43,11 +44,25 @@ const AdminLayout = ({ children }) => {
     fetchClasses();
   }, [selectedAcademicYear]); // Re-fetch when academic year changes
 
+  // Keep dropdowns open based on current route
+  useEffect(() => {
+    if (location.pathname.includes('/admin/time-management')) {
+      setShowTimeDropdown(true);
+    }
+    if (location.pathname.includes('/admin/students')) {
+      setShowStudentDropdown(true);
+    }
+    if (location.pathname.includes('/admin/fees')) {
+      setShowFeeDropdown(true);
+    }
+  }, [location.pathname]);
+
   const handleStudentDropdownToggle = () => {
     setShowStudentDropdown(!showStudentDropdown);
     // Close fee dropdown when student dropdown is opened
     if (!showStudentDropdown) {
       setShowFeeDropdown(false);
+      setShowTimeDropdown(false);
     }
   };
 
@@ -56,6 +71,16 @@ const AdminLayout = ({ children }) => {
     // Close student dropdown when fee dropdown is opened
     if (!showFeeDropdown) {
       setShowStudentDropdown(false);
+      setShowTimeDropdown(false);
+    }
+  };
+
+  const handleTimeDropdownToggle = () => {
+    setShowTimeDropdown(!showTimeDropdown);
+    // Close other dropdowns when time dropdown is opened
+    if (!showTimeDropdown) {
+      setShowStudentDropdown(false);
+      setShowFeeDropdown(false);
     }
   };
 
@@ -63,6 +88,12 @@ const AdminLayout = ({ children }) => {
   const handleSingleNavClick = () => {
     setShowStudentDropdown(false);
     setShowFeeDropdown(false);
+    setShowTimeDropdown(false);
+  };
+
+  // Function to handle navigation without closing dropdown for Time Management
+  const handleTimeNavigation = () => {
+    // Don't close the dropdown when navigating within Time Management
   };
 
   const handleAcademicYearChange = (e) => {
@@ -185,6 +216,33 @@ const AdminLayout = ({ children }) => {
                       <Link 
                         to={`/admin/fees/grade/${grade}`} 
                         className={location.pathname === `/admin/fees/grade/${grade}` ? 'active' : ''}
+                      >
+                        Grade {grade}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+
+            {/* Time Management with Dropdown */}
+            <li>
+              <div 
+                className={`dropdown-header ${location.pathname.includes('/admin/time-management') ? 'active' : ''}`}
+                onClick={handleTimeDropdownToggle}
+              >
+                <span style={{ marginRight: '10px' }}>⏰</span>
+                Time Management
+                <span style={{ marginLeft: '10px' }}>{showTimeDropdown ? '▲' : '▼'}</span>
+              </div>
+              {showTimeDropdown && (
+                <ul className="dropdown-menu">
+                  {uniqueGrades.map(grade => (
+                    <li key={grade}>
+                      <Link 
+                        to={`/admin/time-management/grade/${grade}`}
+                        className={location.pathname === `/admin/time-management/grade/${grade}` ? 'active' : ''}
+                        onClick={handleTimeNavigation}
                       >
                         Grade {grade}
                       </Link>

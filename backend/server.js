@@ -19,6 +19,7 @@ const markRoutes = require('./routes/marks');
 const feeRoutes = require('./routes/fees');
 const syllabusRoutes = require('./routes/syllabus');
 const calendarRoutes = require('./routes/calendar');
+const timeManagementRoutes = require('./routes/timemanagement');
 
 // Import database connection
 const { testConnection } = require('./config/database');
@@ -101,6 +102,7 @@ app.use('/api/marks', markRoutes);
 app.use('/api/fees', feeRoutes);
 app.use('/api/syllabus', syllabusRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/timemanagement', timeManagementRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {
