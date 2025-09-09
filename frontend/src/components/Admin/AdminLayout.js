@@ -43,6 +43,28 @@ const AdminLayout = ({ children }) => {
     fetchClasses();
   }, [selectedAcademicYear]); // Re-fetch when academic year changes
 
+  const handleStudentDropdownToggle = () => {
+    setShowStudentDropdown(!showStudentDropdown);
+    // Close fee dropdown when student dropdown is opened
+    if (!showStudentDropdown) {
+      setShowFeeDropdown(false);
+    }
+  };
+
+  const handleFeeDropdownToggle = () => {
+    setShowFeeDropdown(!showFeeDropdown);
+    // Close student dropdown when fee dropdown is opened
+    if (!showFeeDropdown) {
+      setShowStudentDropdown(false);
+    }
+  };
+
+  // Close all dropdowns when clicking on Teacher Management or System Configuration
+  const handleSingleNavClick = () => {
+    setShowStudentDropdown(false);
+    setShowFeeDropdown(false);
+  };
+
   const handleAcademicYearChange = (e) => {
     const newYear = e.target.value;
     setSelectedAcademicYear(newYear);
@@ -103,6 +125,7 @@ const AdminLayout = ({ children }) => {
               <Link 
                 to="/admin/teachers"
                 className={location.pathname === '/admin/teachers' ? 'active' : ''}
+                onClick={handleSingleNavClick}
               >
                 <span style={{ marginRight: '10px' }}>👩‍🏫</span>
                 Teacher Management
@@ -113,7 +136,7 @@ const AdminLayout = ({ children }) => {
             <li>
               <div 
                 className={`dropdown-header ${location.pathname.includes('/admin/students') ? 'active' : ''}`}
-                onClick={() => setShowStudentDropdown(!showStudentDropdown)}
+                onClick={handleStudentDropdownToggle}
               >
                 <span style={{ marginRight: '10px' }}>🎓</span>
                 Student Management
@@ -144,7 +167,7 @@ const AdminLayout = ({ children }) => {
             <li>
               <div 
                 className={`dropdown-header ${location.pathname.includes('/admin/fees') ? 'active' : ''}`}
-                onClick={() => setShowFeeDropdown(!showFeeDropdown)}
+                onClick={handleFeeDropdownToggle}
               >
                 <span style={{ marginRight: '10px' }}>💰</span>
                 Fee Management
@@ -176,6 +199,7 @@ const AdminLayout = ({ children }) => {
               <Link 
                 to="/admin/system-config"
                 className={location.pathname === '/admin/system-config' ? 'active' : ''}
+                onClick={handleSingleNavClick}
               >
                 <span style={{ marginRight: '10px' }}>⚙️</span>
                 System Configuration
