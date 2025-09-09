@@ -1,49 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiService from '../../../services/api';
+import { useAcademicYear } from '../../../context/AcademicYearContext';
 
 const FeeManagement = () => {
   const { classId, grade } = useParams();
   const navigate = useNavigate();
   const [fees, setFees] = useState([]);
-  const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [filteredClasses, setFilteredClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Get the current academic year (default to 2025-2026)
-  const currentAcademicYear = "2025-2026";
+  // Use the academic year context
+  const { selectedAcademicYear, classes } = useAcademicYear();
 
   useEffect(() => {
-    const fetchClasses = async () => {
+    const fetchData = async () => {
       try {
-        const response = await apiService.getClasses();
-        if (response.classes) {
-          setClasses(response.classes);
-          
-          // If classId is provided, find the matching class
-          if (classId && !grade) {
-            const selectedClass = response.classes.find(cls => cls.classId === parseInt(classId));
-            if (selectedClass) {
-              setSelectedClass(selectedClass);
-            }
-          }
-          
-          // If grade is provided, filter classes for that grade
-          if (grade) {
-            const classesForGrade = response.classes.filter(cls => cls.className === grade);
-            setFilteredClasses(classesForGrade);
+        // Filter classes by selected academic year
+        const filteredByYear = classes.filter(cls => cls.academicYear === selectedAcademicYear);
+        
+        // If classId is provided, find the matching class
+        if (classId && !grade) {
+          const selectedClass = filteredByYear.find(cls => cls.classId === parseInt(classId));
+          if (selectedClass) {
+            setSelectedClass(selectedClass);
           }
         }
-      } catch (error) {
-        console.error('Error fetching classes:', error);
-      }
-    };
+        
+        // If grade is provided, filter classes for that grade and academic year
+        if (grade) {
+          const classesForGrade = filteredByYear.filter(cls => cls.className === grade);
+          setFilteredClasses(classesForGrade);
+        }
 
-    const fetchFees = async () => {
-      try {
-        // If classId is provided, fetch fees for that specific class
+        // Fetch fees
         const response = classId && !grade
           ? await apiService.getFeesByClass(classId)
           : await apiService.getFees();
@@ -55,16 +47,18 @@ const FeeManagement = () => {
           setError(response.message || 'Failed to fetch fees');
         }
       } catch (error) {
-        console.error('Error fetching fees:', error);
+        console.error('Error fetching data:', error);
         setError('Failed to load fee information');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchClasses();
-    fetchFees();
-  }, [classId, grade]);
+    // Only fetch data if classes are available
+    if (classes.length > 0) {
+      fetchData();
+    }
+  }, [classId, grade, classes, selectedAcademicYear]);
 
   // Handle clicking on a class section box
   const handleClassClick = (classId) => {

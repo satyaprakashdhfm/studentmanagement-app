@@ -2,14 +2,23 @@ import React, { useState, useEffect } from 'react';
 import ThemeToggle from '../Common/ThemeToggle';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import apiService from '../../services/api';
+import { useAcademicYear } from '../../context/AcademicYearContext';
 
 const AdminLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showFeeDropdown, setShowFeeDropdown] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
-  const [classes, setClasses] = useState([]);
-  const [loading, setLoading] = useState(false);
+  
+  // Use the academic year context
+  const { 
+    selectedAcademicYear, 
+    setSelectedAcademicYear, 
+    classes, 
+    setClasses, 
+    loading, 
+    setLoading 
+  } = useAcademicYear();
 
   // Fetch classes for dropdowns
   useEffect(() => {
@@ -18,7 +27,11 @@ const AdminLayout = ({ children }) => {
       try {
         const response = await apiService.getClasses();
         if (response.classes) {
-          setClasses(response.classes);
+          // Filter classes by selected academic year
+          const filteredClasses = response.classes.filter(
+            cls => cls.academicYear === selectedAcademicYear
+          );
+          setClasses(filteredClasses);
         }
       } catch (error) {
         console.error('Error fetching classes:', error);
@@ -28,7 +41,17 @@ const AdminLayout = ({ children }) => {
     };
 
     fetchClasses();
-  }, []);
+  }, [selectedAcademicYear]); // Re-fetch when academic year changes
+
+  const handleAcademicYearChange = (e) => {
+    const newYear = e.target.value;
+    setSelectedAcademicYear(newYear);
+    console.log('Academic year changed to:', newYear);
+    
+    // Close dropdowns when academic year changes
+    setShowFeeDropdown(false);
+    setShowStudentDropdown(false);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
@@ -52,39 +75,29 @@ const AdminLayout = ({ children }) => {
     <div className="dashboard">
       <div className="sidebar">
         <h2>Admin Portal</h2>
+        
+        {/* Academic Year Filter in Sidebar */}
+        <div className="sidebar-academic-year">
+          <label>Academic Year:</label>
+          <select 
+            value={selectedAcademicYear} 
+            onChange={handleAcademicYearChange}
+            disabled={loading}
+          >
+            <option value="2023-2024">2023-2024</option>
+            <option value="2024-2025">2024-2025</option>
+            <option value="2025-2026">2025-2026</option>
+            <option value="2026-2027">2026-2027</option>
+          </select>
+          {loading && (
+            <div className="loading-indicator">
+              <small>Loading classes...</small>
+            </div>
+          )}
+        </div>
+
         <nav>
           <ul className="sidebar-nav">
-            {/* Fee Management with Dropdown */}
-            <li>
-              <div 
-                className={`dropdown-header ${location.pathname.includes('/admin/fees') ? 'active' : ''}`}
-                onClick={() => setShowFeeDropdown(!showFeeDropdown)}
-              >
-                <span style={{ marginRight: '10px' }}>💰</span>
-                Fee Management
-                <span style={{ marginLeft: '10px' }}>{showFeeDropdown ? '▲' : '▼'}</span>
-              </div>
-              {showFeeDropdown && (
-                <ul className="dropdown-menu">
-                  <li>
-                    <Link to="/admin/fees" className={location.pathname === '/admin/fees' ? 'active' : ''}>
-                      All Classes
-                    </Link>
-                  </li>
-                  {uniqueGrades.map(grade => (
-                    <li key={grade}>
-                      <Link 
-                        to={`/admin/fees/grade/${grade}`} 
-                        className={location.pathname === `/admin/fees/grade/${grade}` ? 'active' : ''}
-                      >
-                        Grade {grade}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-
             {/* Teacher Management without Dropdown */}
             <li>
               <Link 
@@ -127,6 +140,37 @@ const AdminLayout = ({ children }) => {
               )}
             </li>
 
+            {/* Fee Management with Dropdown */}
+            <li>
+              <div 
+                className={`dropdown-header ${location.pathname.includes('/admin/fees') ? 'active' : ''}`}
+                onClick={() => setShowFeeDropdown(!showFeeDropdown)}
+              >
+                <span style={{ marginRight: '10px' }}>💰</span>
+                Fee Management
+                <span style={{ marginLeft: '10px' }}>{showFeeDropdown ? '▲' : '▼'}</span>
+              </div>
+              {showFeeDropdown && (
+                <ul className="dropdown-menu">
+                  <li>
+                    <Link to="/admin/fees" className={location.pathname === '/admin/fees' ? 'active' : ''}>
+                      All Classes
+                    </Link>
+                  </li>
+                  {uniqueGrades.map(grade => (
+                    <li key={grade}>
+                      <Link 
+                        to={`/admin/fees/grade/${grade}`} 
+                        className={location.pathname === `/admin/fees/grade/${grade}` ? 'active' : ''}
+                      >
+                        Grade {grade}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+
             {/* System Configuration without Dropdown */}
             <li>
               <Link 
@@ -147,14 +191,6 @@ const AdminLayout = ({ children }) => {
             <h1>Admin Dashboard</h1>
           </div>
           <div className="header-right">
-            <div className="academic-year-filter">
-              <label>Academic Year:</label>
-              <select defaultValue="2025-2026">
-                <option value="2023-2024">2023-2024</option>
-                <option value="2024-2025">2024-2025</option>
-                <option value="2025-2026">2025-2026</option>
-              </select>
-            </div>
             <div className="user-info">
               <span>Welcome, Admin</span>
               <ThemeToggle />
@@ -162,14 +198,59 @@ const AdminLayout = ({ children }) => {
             </div>
           </div>
         </div>
-        {children}
+        {/* Pass academic year context to children */}
+        <div className="academic-year-context" data-academic-year={selectedAcademicYear}>
+          {children}
+        </div>
       </div>
     </div>
   );
 };
 
-// Add CSS for the dropdown menu and other new components
+// Add CSS for the dropdown menu and sidebar academic year filter
 const styles = `
+  .sidebar-academic-year {
+    background-color: #34495e;
+    padding: 15px 20px;
+    border-bottom: 1px solid #2c3e50;
+    margin-bottom: 10px;
+  }
+  
+  .sidebar-academic-year label {
+    color: #ecf0f1;
+    font-size: 0.9em;
+    margin-bottom: 8px;
+    display: block;
+  }
+  
+  .sidebar-academic-year select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 4px;
+    border: 1px solid #bdc3c7;
+    background-color: #ecf0f1;
+    color: #2c3e50;
+    font-size: 0.9em;
+  }
+  
+  .sidebar-academic-year select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  .loading-indicator {
+    margin-top: 5px;
+  }
+  
+  .loading-indicator small {
+    color: #95a5a6;
+    font-style: italic;
+  }
+  
+  .academic-year-context {
+    height: 100%;
+  }
+  
   .dropdown-header {
     display: flex;
     align-items: center;
@@ -215,18 +296,6 @@ const styles = `
   .header-right {
     display: flex;
     gap: 20px;
-  }
-  
-  .academic-year-filter {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  .academic-year-filter select {
-    padding: 6px 10px;
-    border-radius: 4px;
-    border: 1px solid #bdc3c7;
   }
 `;
 

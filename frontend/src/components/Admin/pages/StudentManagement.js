@@ -1,49 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiService from '../../../services/api';
+import { useAcademicYear } from '../../../context/AcademicYearContext';
 
 const StudentManagement = () => {
   const { classId, grade } = useParams();
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
-  const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
   const [filteredClasses, setFilteredClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  // Get the current academic year (default to 2025-2026)
-  const currentAcademicYear = "2025-2026";
+  
+  // Use the academic year context
+  const { selectedAcademicYear, classes } = useAcademicYear();
 
   useEffect(() => {
-    const fetchClasses = async () => {
+    const fetchData = async () => {
       try {
-        const response = await apiService.getClasses();
-        if (response.classes) {
-          setClasses(response.classes);
-          
-          // If classId is provided, find the matching class
-          if (classId && !grade) {
-            const selectedClass = response.classes.find(cls => cls.classId === parseInt(classId));
-            if (selectedClass) {
-              setSelectedClass(selectedClass);
-            }
-          }
-          
-          // If grade is provided, filter classes for that grade
-          if (grade) {
-            const classesForGrade = response.classes.filter(cls => cls.className === grade);
-            setFilteredClasses(classesForGrade);
+        // Filter classes by selected academic year
+        const filteredByYear = classes.filter(cls => cls.academicYear === selectedAcademicYear);
+        
+        // If classId is provided, find the matching class
+        if (classId && !grade) {
+          const selectedClass = filteredByYear.find(cls => cls.classId === parseInt(classId));
+          if (selectedClass) {
+            setSelectedClass(selectedClass);
           }
         }
-      } catch (error) {
-        console.error('Error fetching classes:', error);
-      }
-    };
+        
+        // If grade is provided, filter classes for that grade and academic year
+        if (grade) {
+          const classesForGrade = filteredByYear.filter(cls => cls.className === grade);
+          setFilteredClasses(classesForGrade);
+        }
 
-    const fetchStudents = async () => {
-      try {
-        // If classId is provided, fetch students for that specific class
+        // Fetch students
         const response = classId && !grade
           ? await apiService.getStudentsByClass(classId)
           : await apiService.getStudents();
@@ -54,16 +46,18 @@ const StudentManagement = () => {
           setError(response.message || 'Failed to fetch students');
         }
       } catch (error) {
-        console.error('Error fetching students:', error);
-        setError('Failed to load students');
+        console.error('Error fetching data:', error);
+        setError('Failed to load data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchClasses();
-    fetchStudents();
-  }, [classId, grade]);
+    // Only fetch data if classes are available
+    if (classes.length > 0) {
+      fetchData();
+    }
+  }, [classId, grade, classes, selectedAcademicYear]);
 
   const handleEditStudent = (studentId) => {
     alert(`Edit student ${studentId} - Feature coming soon`);
@@ -86,15 +80,17 @@ const StudentManagement = () => {
     }
   };
 
-  // Group classes by grade level (8th, 9th, 10th)
-  const classGroups = classes.reduce((groups, cls) => {
-    const grade = cls.className; // e.g., "8th"
-    if (!groups[grade]) {
-      groups[grade] = [];
-    }
-    groups[grade].push(cls);
-    return groups;
-  }, {});
+  // Group classes by grade level (8th, 9th, 10th) - filtered by academic year
+  const classGroups = classes
+    .filter(cls => cls.academicYear === selectedAcademicYear)
+    .reduce((groups, cls) => {
+      const grade = cls.className; // e.g., "8th"
+      if (!groups[grade]) {
+        groups[grade] = [];
+      }
+      groups[grade].push(cls);
+      return groups;
+    }, {});
 
   // Handle clicking on a class section box
   const handleClassClick = (classId) => {
@@ -127,9 +123,9 @@ const StudentManagement = () => {
       <div className="content-card">
         <div className="class-management-header">
           <h2>Student Management: Grade {grade}</h2>
-          <button className="btn btn-primary" onClick={() => navigate('/admin/students')}>
-            Back to All Classes
-          </button>
+          <div className="academic-year-info">
+            <span>Academic Year: {selectedAcademicYear}</span>
+          </div>
         </div>
         
         <div className="class-boxes">
@@ -154,6 +150,13 @@ const StudentManagement = () => {
             display: flex;
             justify-content: space-between;
             align-items: center;
+          }
+          .academic-year-info {
+            background-color: #3498db;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 0.9em;
           }
           .class-boxes {
             display: flex;
@@ -196,7 +199,9 @@ const StudentManagement = () => {
       <div className="content-card">
         <div className="class-management-header">
           <h2>Student Management</h2>
-          <p>Select a class to manage students</p>
+          <div className="academic-year-info">
+            <span>Academic Year: {selectedAcademicYear}</span>
+          </div>
         </div>
         
         {Object.keys(classGroups).map(grade => (
@@ -223,6 +228,16 @@ const StudentManagement = () => {
         <style jsx>{`
           .class-management-header {
             margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .academic-year-info {
+            background-color: #3498db;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 0.9em;
           }
           .grade-section {
             margin-bottom: 25px;
@@ -272,11 +287,9 @@ const StudentManagement = () => {
     <div className="content-card">
       <div className="class-header">
         <h2>Student Management: {selectedClass ? `${selectedClass.className} ${selectedClass.section}` : 'All Classes'}</h2>
-        {selectedClass && (
-          <button className="btn btn-primary" onClick={() => navigate('/admin/students')}>
-            Back to All Classes
-          </button>
-        )}
+        <div className="academic-year-info">
+          <span>Academic Year: {selectedAcademicYear}</span>
+        </div>
       </div>
 
       <table className="data-table">
@@ -317,6 +330,22 @@ const StudentManagement = () => {
           No students found
         </div>
       )}
+      
+      <style jsx>{`
+        .class-header {
+          margin-bottom: 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .academic-year-info {
+          background-color: #3498db;
+          color: white;
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-size: 0.9em;
+        }
+      `}</style>
     </div>
   );
 };
