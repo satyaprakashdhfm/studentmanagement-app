@@ -104,7 +104,16 @@ const PersonalDetails = () => {
         <div>
           <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>Parent/Guardian Information</h3>
           <div style={{ marginBottom: '10px' }}>
-            <strong>Parent Name:</strong> {studentData.parentName || 'N/A'}
+            <strong>Father Name:</strong> {studentData.fatherName || 'N/A'}
+          </div>
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Father Occupation:</strong> {studentData.fatherOccupation || 'N/A'}
+          </div>
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Mother Name:</strong> {studentData.motherName || 'N/A'}
+          </div>
+          <div style={{ marginBottom: '10px' }}>
+            <strong>Mother Occupation:</strong> {studentData.motherOccupation || 'N/A'}
           </div>
           <div style={{ marginBottom: '10px' }}>
             <strong>Parent Contact:</strong> {studentData.parentContact || 'N/A'}

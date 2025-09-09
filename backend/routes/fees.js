@@ -64,7 +64,10 @@ router.get('/', authenticateToken, async (req, res) => {
             name: true,
             email: true,
             phone: true,
-            parentName: true,
+            fatherName: true,
+            fatherOccupation: true,
+            motherName: true,
+            motherOccupation: true,
             parentContact: true
           }
         },
@@ -209,7 +212,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
             name: true,
             email: true,
             phone: true,
-            parentName: true,
+            fatherName: true,
+            fatherOccupation: true,
+            motherName: true,
+            motherOccupation: true,
             parentContact: true,
             address: true
           }

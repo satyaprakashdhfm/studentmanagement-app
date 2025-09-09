@@ -21,7 +21,8 @@ router.get('/', authenticateToken, async (req, res) => {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
-        { parentName: { contains: search, mode: 'insensitive' } }
+        { fatherName: { contains: search, mode: 'insensitive' } },
+        { motherName: { contains: search, mode: 'insensitive' } }
       ];
     }
 
@@ -296,7 +297,10 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
       address, 
       phone, 
       dateOfBirth, 
-      parentName, 
+      fatherName,
+      fatherOccupation,
+      motherName,
+      motherOccupation,
       parentContact, 
       classId, 
       section, 
@@ -327,7 +331,7 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
       });
 
       // Create student
-      const newStudent = await prisma.student.create({
+    const newStudent = await prisma.student.create({
         data: {
           userId: newUser.id,
           name: name || `${firstName} ${lastName}`,
@@ -335,7 +339,10 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
           email,
           phone,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-          parentName,
+      fatherName,
+      fatherOccupation,
+      motherName,
+      motherOccupation,
           parentContact,
           classId: classId ? parseInt(classId) : null,
           section,
@@ -404,7 +411,7 @@ router.put('/:id', authenticateToken, updateStudentValidationRules(), handleVali
     const studentData = {};
 
     const userFields = ['username', 'email', 'firstName', 'lastName', 'active'];
-    const studentFields = ['name', 'address', 'phone', 'dateOfBirth', 'parentName', 'parentContact', 'classId', 'section', 'status'];
+  const studentFields = ['name', 'address', 'phone', 'dateOfBirth', 'fatherName', 'fatherOccupation', 'motherName', 'motherOccupation', 'parentContact', 'classId', 'section', 'status'];
 
     Object.keys(updateData).forEach(key => {
       if (userFields.includes(key)) {
