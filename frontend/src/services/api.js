@@ -288,6 +288,26 @@ class ApiService {
     });
   }
 
+  async recordPayment(feeId, paymentData) {
+    return this.request(`/fees/${feeId}/payment`, {
+      method: 'POST',
+      body: JSON.stringify(paymentData),
+    });
+  }
+
+  async updateFee(feeId, feeData) {
+    return this.request(`/fees/${feeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(feeData),
+    });
+  }
+
+  async deleteFee(feeId) {
+    return this.request(`/fees/${feeId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Syllabus
   async getSyllabus(filters = {}) {
     const queryParams = new URLSearchParams(filters).toString();

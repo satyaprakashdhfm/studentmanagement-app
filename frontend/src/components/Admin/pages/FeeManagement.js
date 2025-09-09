@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiService from '../../../services/api';
 import { useAcademicYear } from '../../../context/AcademicYearContext';
+import './FeeManagement.css';
 
 const FeeManagement = () => {
   const { classId, grade } = useParams();
@@ -11,6 +12,15 @@ const FeeManagement = () => {
   const [filteredClasses, setFilteredClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedFee, setSelectedFee] = useState(null);
+  const [showFeeModal, setShowFeeModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [paymentData, setPaymentData] = useState({
+    paymentAmount: '',
+    paymentMethod: 'Cash',
+    paymentDate: new Date().toISOString().split('T')[0]
+  });
 
   // Use the academic year context
   const { selectedAcademicYear, classes } = useAcademicYear();
@@ -63,6 +73,89 @@ const FeeManagement = () => {
   // Handle clicking on a class section box
   const handleClassClick = (classId) => {
     navigate(`/admin/fees/${classId}`);
+  };
+
+  const handleFeeClick = (fee) => {
+    setSelectedFee(fee);
+    setEditMode(false);
+    setShowFeeModal(true);
+  };
+
+  const handleEditFee = (fee) => {
+    setSelectedFee(fee);
+    setEditMode(true);
+    setShowFeeModal(true);
+  };
+
+  const handleRecordPayment = (fee) => {
+    setSelectedFee(fee);
+    setPaymentData({
+      paymentAmount: fee.balance || '',
+      paymentMethod: 'Cash',
+      paymentDate: new Date().toISOString().split('T')[0]
+    });
+    setShowPaymentModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowFeeModal(false);
+    setShowPaymentModal(false);
+    setSelectedFee(null);
+    setEditMode(false);
+    setPaymentData({
+      paymentAmount: '',
+      paymentMethod: 'Cash',
+      paymentDate: new Date().toISOString().split('T')[0]
+    });
+  };
+
+  const handleUpdateFee = async () => {
+    try {
+      const response = await apiService.updateFee(selectedFee.feeId, {
+        feeType: selectedFee.feeType,
+        amountDue: selectedFee.amountDue,
+        academicYear: selectedFee.academicYear
+      });
+      if (response.fee) {
+        setFees(fees.map(f => f.feeId === selectedFee.feeId ? response.fee : f));
+        handleCloseModal();
+        alert('Fee record updated successfully');
+      }
+    } catch (error) {
+      console.error('Error updating fee:', error);
+      alert('Failed to update fee record');
+    }
+  };
+
+  const handleSubmitPayment = async () => {
+    try {
+      const response = await apiService.recordPayment(selectedFee.feeId, paymentData);
+      if (response.fee) {
+        setFees(fees.map(f => f.feeId === selectedFee.feeId ? response.fee : f));
+        handleCloseModal();
+        alert('Payment recorded successfully');
+      }
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      alert('Failed to record payment');
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0
+    }).format(amount || 0);
+  };
+
+  const getPaymentStatus = (fee) => {
+    const balance = Number(fee.balance || 0);
+    const paid = Number(fee.amountPaid || 0);
+    
+    if (balance === 0) return 'paid';
+    if (paid > 0) return 'partial';
+    return 'unpaid';
   };
 
   if (loading) {
@@ -246,48 +339,274 @@ const FeeManagement = () => {
     <div className="content-card">
       <div className="class-header">
         <h2>Fee Management: {selectedClass ? `${selectedClass.className} ${selectedClass.section}` : 'All Classes'}</h2>
-        {selectedClass && (
-          <button className="btn btn-primary" onClick={() => navigate('/admin/fees')}>
-            Back to All Classes
-          </button>
-        )}
+        <div className="header-actions">
+          <div className="academic-year-info">
+            <span>Academic Year: {selectedAcademicYear}</span>
+          </div>
+        </div>
       </div>
       
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Class</th>
-            <th>Fee Type</th>
-            <th>Due</th>
-            <th>Paid</th>
-            <th>Balance</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {fees.map(fee => (
-            <tr key={fee.id}>
-              <td>{fee.student?.name || 'N/A'}</td>
-              <td>{fee.class ? `${fee.class.className} ${fee.class.section}` : 'N/A'}</td>
-              <td>{fee.feeType}</td>
-              <td>₹{fee.amountDue ? Number(fee.amountDue).toLocaleString() : '0'}</td>
-              <td>₹{fee.amountPaid ? Number(fee.amountPaid).toLocaleString() : '0'}</td>
-              <td style={{ color: fee.balance > 0 ? '#e74c3c' : '#27ae60' }}>₹{fee.balance ? Number(fee.balance).toLocaleString() : '0'}</td>
-              <td>
-                <button className="btn btn-warning" onClick={() => alert('Edit fee coming soon')}>Edit</button>
-              </td>
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Class</th>
+              <th>Fee Type</th>
+              <th>Due Amount</th>
+              <th>Paid Amount</th>
+              <th>Balance</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {fees.map(fee => (
+              <tr key={fee.feeId}>
+                <td>{fee.student?.name || 'N/A'}</td>
+                <td>{fee.class ? `${fee.class.className} ${fee.class.section}` : 'N/A'}</td>
+                <td>{fee.feeType}</td>
+                <td>{formatCurrency(fee.amountDue)}</td>
+                <td>{formatCurrency(fee.amountPaid)}</td>
+                <td style={{ color: fee.balance > 0 ? '#e74c3c' : '#27ae60' }}>
+                  {formatCurrency(fee.balance)}
+                </td>
+                <td>
+                  <span className={`status ${getPaymentStatus(fee)}`}>
+                    {getPaymentStatus(fee).toUpperCase()}
+                  </span>
+                </td>
+                <td>
+                  <button 
+                    className="btn btn-info btn-sm" 
+                    onClick={() => handleFeeClick(fee)}
+                    style={{ marginRight: '5px' }}
+                  >
+                    View
+                  </button>
+                  {fee.balance > 0 && (
+                    <button 
+                      className="btn btn-warning btn-sm" 
+                      onClick={() => handleRecordPayment(fee)}
+                    >
+                      Pay
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {fees.length === 0 && (
+          <div className="no-fees">
+            No fee records found for this class
+          </div>
+        )}
+      </div>
+
+      {/* Fee Details Modal */}
+      {showFeeModal && selectedFee && (
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editMode ? 'Edit Fee Record' : 'Fee Details'}</h3>
+              <div className="modal-actions">
+                {!editMode && (
+                  <>
+                    <button className="btn btn-warning btn-sm" onClick={() => setEditMode(true)}>
+                      Edit
+                    </button>
+                    {selectedFee.balance > 0 && (
+                      <button className="btn btn-primary btn-sm" onClick={() => handleRecordPayment(selectedFee)}>
+                        Record Payment
+                      </button>
+                    )}
+                  </>
+                )}
+                <button className="btn btn-light btn-sm" onClick={handleCloseModal}>
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              {editMode ? (
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Fee Type</label>
+                    <select
+                      value={selectedFee.feeType}
+                      onChange={(e) => setSelectedFee({...selectedFee, feeType: e.target.value})}
+                    >
+                      <option value="Tuition Fee">Tuition Fee</option>
+                      <option value="Transport Fee">Transport Fee</option>
+                      <option value="Activity Fee">Activity Fee</option>
+                      <option value="Library Fee">Library Fee</option>
+                      <option value="Exam Fee">Exam Fee</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Amount Due</label>
+                    <input
+                      type="number"
+                      value={selectedFee.amountDue}
+                      onChange={(e) => setSelectedFee({...selectedFee, amountDue: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Academic Year</label>
+                    <input
+                      type="text"
+                      value={selectedFee.academicYear}
+                      onChange={(e) => setSelectedFee({...selectedFee, academicYear: e.target.value})}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="details-grid">
+                  <div className="detail-item">
+                    <strong>Student:</strong> {selectedFee.student?.name || 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Class:</strong> {selectedFee.class ? `${selectedFee.class.className} ${selectedFee.class.section}` : 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Fee Type:</strong> {selectedFee.feeType}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Amount Due:</strong> {formatCurrency(selectedFee.amountDue)}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Amount Paid:</strong> {formatCurrency(selectedFee.amountPaid)}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Balance:</strong> 
+                    <span style={{ color: selectedFee.balance > 0 ? '#e74c3c' : '#27ae60', marginLeft: '8px' }}>
+                      {formatCurrency(selectedFee.balance)}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <strong>Academic Year:</strong> {selectedFee.academicYear}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Payment Status:</strong>
+                    <span className={`status ${getPaymentStatus(selectedFee)}`} style={{ marginLeft: '8px' }}>
+                      {getPaymentStatus(selectedFee).toUpperCase()}
+                    </span>
+                  </div>
+                  {selectedFee.paymentDate && (
+                    <div className="detail-item">
+                      <strong>Last Payment Date:</strong> {new Date(selectedFee.paymentDate).toLocaleDateString()}
+                    </div>
+                  )}
+                  {selectedFee.paymentMethod && (
+                    <div className="detail-item">
+                      <strong>Payment Method:</strong> {selectedFee.paymentMethod}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {editMode && (
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setEditMode(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={handleUpdateFee}>
+                  Save Changes
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPaymentModal && selectedFee && (
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Record Payment</h3>
+              <button className="btn btn-light btn-sm" onClick={handleCloseModal}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="details-grid" style={{ marginBottom: '20px' }}>
+                <div className="detail-item">
+                  <strong>Student:</strong> {selectedFee.student?.name}
+                </div>
+                <div className="detail-item">
+                  <strong>Fee Type:</strong> {selectedFee.feeType}
+                </div>
+                <div className="detail-item">
+                  <strong>Outstanding Balance:</strong> {formatCurrency(selectedFee.balance)}
+                </div>
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Payment Amount *</label>
+                  <input
+                    type="number"
+                    value={paymentData.paymentAmount}
+                    onChange={(e) => setPaymentData({...paymentData, paymentAmount: e.target.value})}
+                    max={selectedFee.balance}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Payment Method</label>
+                  <select
+                    value={paymentData.paymentMethod}
+                    onChange={(e) => setPaymentData({...paymentData, paymentMethod: e.target.value})}
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Online">Online</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Card">Card</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Payment Date</label>
+                  <input
+                    type="date"
+                    value={paymentData.paymentDate}
+                    onChange={(e) => setPaymentData({...paymentData, paymentDate: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={handleCloseModal}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleSubmitPayment}
+                disabled={!paymentData.paymentAmount || parseFloat(paymentData.paymentAmount) <= 0}
+              >
+                Record Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .class-header {
+          margin-bottom: 20px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 20px;
+        }
+        .academic-year-info {
+          background-color: #3498db;
+          color: white;
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-size: 0.9em;
         }
       `}</style>
     </div>

@@ -1,0 +1,170 @@
+/* FeeManagement.css - reuse patterns from StudentManagement.css for consistency */
+
+/* Table Styles */
+.table-container {
+  margin-top: 20px;
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.data-table thead {
+  background-color: #f8f9fa;
+}
+
+.data-table th {
+  padding: 15px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #2c3e50;
+  border-bottom: 2px solid #e0e6ed;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.data-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e0e6ed;
+  color: #5a6c7d;
+  font-size: 0.9em;
+}
+
+.data-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.data-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.status.paid { background-color: #d5f5d5; color: #27ae60; }
+.status.partial { background-color: #fff3cd; color: #f39c12; }
+.status.unpaid { background-color: #fde2e2; color: #e74c3c; }
+
+.no-fees {
+  text-align: center;
+  padding: 40px 20px;
+  color: #7f8c8d;
+  font-size: 1.1em;
+  background: white;
+}
+
+.class-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.academic-year-info span,
+.academic-year-info {
+  background: #f8f9fa;
+  padding: 5px 10px;
+  border-radius: 4px;
+  color: #5a6c7d;
+  font-size: 0.9em;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  max-width: 680px;
+  width: 92%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e6ed;
+  background: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+}
+
+.modal-header h3 { margin: 0; color: #2c3e50; font-size: 1.3em; }
+.modal-actions { display: flex; gap: 8px; align-items: center; }
+.modal-body { padding: 20px; }
+.modal-footer { padding: 15px 20px; border-top: 1px solid #e0e6ed; display: flex; justify-content: flex-end; gap: 10px; background: #f8f9fa; border-radius: 0 0 8px 8px; }
+
+/* Details Grid */
+.details-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.detail-item { padding: 10px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #3498db; }
+.detail-item strong { color: #2c3e50; margin-right: 8px; }
+
+/* Form Grid */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+.form-group { display: flex; flex-direction: column; }
+.form-group label { margin-bottom: 5px; font-weight: 500; color: #2c3e50; }
+.form-group input, .form-group textarea, .form-group select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; transition: border-color 0.3s ease; }
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,0.2); }
+.form-group textarea { resize: vertical; min-height: 80px; }
+
+/* Button Styles */
+.btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.3s ease; text-decoration: none; display: inline-block; text-align: center; }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-primary { background-color: #3498db; color: white; }
+.btn-primary:hover:not(:disabled) { background-color: #2980b9; }
+.btn-secondary { background-color: #95a5a6; color: white; }
+.btn-secondary:hover:not(:disabled) { background-color: #7f8c8d; }
+.btn-warning { background-color: #f39c12; color: white; }
+.btn-warning:hover:not(:disabled) { background-color: #e67e22; }
+.btn-danger { background-color: #e74c3c; color: white; }
+.btn-danger:hover:not(:disabled) { background-color: #c0392b; }
+.btn-info { background-color: #17a2b8; color: white; }
+.btn-info:hover:not(:disabled) { background-color: #138496; }
+.btn-light { background-color: #ecf0f1; color: #2c3e50; border: 1px solid #bdc3c7; }
+.btn-light:hover:not(:disabled) { background-color: #d5dbdb; }
+.btn-sm { padding: 4px 8px; font-size: 12px; }
+
+@media (max-width: 768px) {
+  .data-table { min-width: 600px; }
+  .modal-content { width: 95%; margin: 10px; }
+  .form-grid { grid-template-columns: 1fr; }
+}
