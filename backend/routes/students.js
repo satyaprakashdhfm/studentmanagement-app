@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/database');
 const { authenticateToken } = require('../utils/jwt');
+const { hashPassword } = require('../utils/password');
 const { 
   studentValidationRules, 
   updateStudentValidationRules,
@@ -313,8 +314,26 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
     });
 
     if (existingUser) {
-      return res.status(409).json({ error: 'Email already exists' });
+      return res.status(409).json({ 
+        success: false,
+        message: 'Email already exists' 
+      });
     }
+
+    // Check if username already exists
+    const existingUsername = await prisma.user.findUnique({
+      where: { username }
+    });
+
+    if (existingUsername) {
+      return res.status(409).json({ 
+        success: false,
+        message: 'Username already exists' 
+      });
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPassword(password);
 
     // Create user and student in a transaction
     const result = await prisma.$transaction(async (prisma) => {
@@ -323,7 +342,7 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
         data: {
           username,
           email,
-          password, // Should be hashed before storing
+          password: hashedPassword,
           firstName,
           lastName,
           role: 'student'
@@ -334,15 +353,15 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
     const newStudent = await prisma.student.create({
         data: {
           userId: newUser.id,
-          name: name || `${firstName} ${lastName}`,
+          name: name || `${firstName} ${lastName}`.trim(),
           address,
           email,
           phone,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-      fatherName,
-      fatherOccupation,
-      motherName,
-      motherOccupation,
+          fatherName,
+          fatherOccupation,
+          motherName,
+          motherOccupation,
           parentContact,
           classId: classId ? parseInt(classId) : null,
           section,
@@ -373,20 +392,27 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
     });
 
     res.status(201).json({
+      success: true,
+      message: 'Student created successfully',
       student: {
         ...result,
         id: Number(result.id),
         userId: Number(result.userId)
-      },
-      message: 'Student created successfully'
+      }
     });
 
   } catch (error) {
     console.error('Create student error:', error);
     if (error.code === 'P2002') { // Prisma unique constraint violation
-      return res.status(409).json({ error: 'Email or username already exists' });
+      return res.status(409).json({ 
+        success: false,
+        message: 'Email or username already exists' 
+      });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
   }
 });
 

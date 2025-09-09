@@ -45,15 +45,9 @@ const userValidationRules = () => {
   ];
 };
 
-// Student validation rules
+// Student validation rules (for creating new students - no ID required)
 const studentValidationRules = () => {
   return [
-    body('id')
-      .notEmpty()
-      .withMessage('Student ID is required')
-      .isNumeric()
-      .withMessage('Student ID must be a number'),
-    
     body('name')
       .notEmpty()
       .withMessage('Student name is required')
@@ -65,25 +59,72 @@ const studentValidationRules = () => {
       .withMessage('Please provide a valid email address')
       .normalizeEmail(),
     
-    body('course')
-      .optional()
-      .isLength({ max: 100 })
-      .withMessage('Course name must be less than 100 characters'),
+    body('username')
+      .notEmpty()
+      .withMessage('Username is required')
+      .isLength({ min: 3, max: 50 })
+      .withMessage('Username must be between 3 and 50 characters'),
     
-    body('age')
-      .optional()
-      .isInt({ min: 16, max: 100 })
-      .withMessage('Age must be between 16 and 100'),
+    body('password')
+      .notEmpty()
+      .withMessage('Password is required')
+      .isLength({ min: 6 })
+      .withMessage('Password must be at least 6 characters long'),
     
-    body('phoneNumber')
+    body('firstName')
+      .optional()
+      .isLength({ max: 50 })
+      .withMessage('First name must be less than 50 characters'),
+    
+    body('lastName')
+      .optional()
+      .isLength({ max: 50 })
+      .withMessage('Last name must be less than 50 characters'),
+    
+    body('phone')
       .optional()
       .matches(/^[\+]?[1-9][\d]{0,15}$/)
       .withMessage('Please provide a valid phone number'),
     
-    body('enrolled')
+    body('address')
       .optional()
-      .isBoolean()
-      .withMessage('Enrolled status must be boolean')
+      .isLength({ max: 255 })
+      .withMessage('Address must be less than 255 characters'),
+    
+    body('dateOfBirth')
+      .optional()
+      .isISO8601()
+      .withMessage('Please provide a valid date of birth'),
+    
+    body('fatherName')
+      .optional()
+      .isLength({ max: 100 })
+      .withMessage('Father name must be less than 100 characters'),
+    
+    body('fatherOccupation')
+      .optional()
+      .isLength({ max: 100 })
+      .withMessage('Father occupation must be less than 100 characters'),
+    
+    body('motherName')
+      .optional()
+      .isLength({ max: 100 })
+      .withMessage('Mother name must be less than 100 characters'),
+    
+    body('motherOccupation')
+      .optional()
+      .isLength({ max: 100 })
+      .withMessage('Mother occupation must be less than 100 characters'),
+    
+    body('parentContact')
+      .optional()
+      .matches(/^[\+]?[1-9][\d]{0,15}$/)
+      .withMessage('Please provide a valid parent contact number'),
+    
+    body('classId')
+      .optional()
+      .isNumeric()
+      .withMessage('Class ID must be a number')
   ];
 };
 
