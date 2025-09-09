@@ -350,7 +350,7 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
       });
 
       // Create student
-    const newStudent = await prisma.student.create({
+      const newStudent = await prisma.student.create({
         data: {
           userId: newUser.id,
           name: name || `${firstName} ${lastName}`.trim(),
@@ -387,6 +387,33 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
           }
         }
       });
+
+      // Create default fee records for all fee types
+      const defaultFeeTypes = [
+        'Tuition Fee',
+        'Transport Fee', 
+        'Activity Fee',
+        'Library Fee',
+        'Exam Fee'
+      ];
+
+      // Get the current academic year from the class or use current year
+      const academicYear = newStudent.class?.academicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+
+      // Create fee records for each type with zero amounts
+      for (const feeType of defaultFeeTypes) {
+        await prisma.fee.create({
+          data: {
+            studentId: newStudent.id,
+            classId: newStudent.classId,
+            feeType: feeType,
+            amountDue: 0,
+            amountPaid: 0,
+            balance: 0,
+            academicYear: academicYear
+          }
+        });
+      }
 
       return newStudent;
     });

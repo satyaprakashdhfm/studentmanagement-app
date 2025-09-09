@@ -337,29 +337,70 @@ async function main() {
 
     console.log('✅ Created marks records');
 
-    // Create sample fee records
-    const feeTypes = ['Tuition Fee', 'Transport Fee', 'Activity Fee', 'Library Fee'];
+    // Create sample fee records - all fee types for each student with zero balance initially
+    const feeTypes = ['Tuition Fee', 'Transport Fee', 'Activity Fee', 'Library Fee', 'Exam Fee'];
     
     for (const student of students) {
+      // Create all fee types with zero balance initially
       for (const feeType of feeTypes) {
-        const amountDue = Math.floor(Math.random() * 5000) + 10000; // 10000-15000 range
-        const amountPaid = Math.floor(amountDue * (Math.random() * 0.5 + 0.5)); // 50-100% paid
-        const balance = amountDue - amountPaid;
-        
         await prisma.fee.create({
           data: {
             studentId: student.id,
             classId: student.classId,
             feeType: feeType,
-            amountDue: amountDue,
-            amountPaid: amountPaid,
-            paymentDate: balance === 0 ? new Date() : null,
-            paymentMethod: balance === 0 ? 'Online' : null,
-            balance: balance,
+            amountDue: 0,
+            amountPaid: 0,
+            paymentDate: null,
+            paymentMethod: null,
+            balance: 0,
             academicYear: academicYear
           }
         });
       }
+    }
+
+    console.log('✅ Created fee records with zero balance for all students');
+
+    // Now add some sample fee amounts and payments to demonstrate the system
+    const allFees = await prisma.fee.findMany();
+    
+    for (const fee of allFees) {
+      // Set random fee amounts for demonstration
+      let amountDue = 0;
+      
+      switch (fee.feeType) {
+        case 'Tuition Fee':
+          amountDue = Math.floor(Math.random() * 5000) + 15000; // 15000-20000
+          break;
+        case 'Transport Fee':
+          amountDue = Math.floor(Math.random() * 2000) + 3000; // 3000-5000
+          break;
+        case 'Activity Fee':
+          amountDue = Math.floor(Math.random() * 1000) + 1000; // 1000-2000
+          break;
+        case 'Library Fee':
+          amountDue = Math.floor(Math.random() * 500) + 500; // 500-1000
+          break;
+        case 'Exam Fee':
+          amountDue = Math.floor(Math.random() * 1000) + 1000; // 1000-2000
+          break;
+      }
+
+      // Randomly make some payments (0-100% of due amount)
+      const paymentPercentage = Math.random();
+      const amountPaid = Math.floor(amountDue * paymentPercentage);
+      const balance = amountDue - amountPaid;
+
+      await prisma.fee.update({
+        where: { feeId: fee.feeId },
+        data: {
+          amountDue: amountDue,
+          amountPaid: amountPaid,
+          paymentDate: amountPaid > 0 ? new Date() : null,
+          paymentMethod: amountPaid > 0 ? (Math.random() > 0.5 ? 'Online' : 'Cash') : null,
+          balance: balance
+        }
+      });
     }
 
     console.log('✅ Created fee records');

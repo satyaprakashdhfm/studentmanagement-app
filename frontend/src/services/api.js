@@ -302,12 +302,6 @@ class ApiService {
     });
   }
 
-  async deleteFee(feeId) {
-    return this.request(`/fees/${feeId}`, {
-      method: 'DELETE',
-    });
-  }
-
   // Syllabus
   async getSyllabus(filters = {}) {
     const queryParams = new URLSearchParams(filters).toString();

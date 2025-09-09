@@ -265,13 +265,13 @@ router.post('/', authenticateToken, async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!studentId || !classId || !feeType || !amountDue || !academicYear) {
+    if (!studentId || !classId || !feeType || amountDue === undefined || !academicYear) {
       return res.status(400).json({ error: 'All required fields must be provided' });
     }
 
-    // Validate amount
-    if (parseFloat(amountDue) <= 0) {
-      return res.status(400).json({ error: 'Amount due must be greater than 0' });
+    // Validate amount (allow zero for initial fee creation)
+    if (parseFloat(amountDue) < 0) {
+      return res.status(400).json({ error: 'Amount due cannot be negative' });
     }
 
     // Check if student exists
@@ -457,8 +457,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Handle amount due update
     if (amountDue !== undefined) {
       const newAmountDue = parseFloat(amountDue);
-      if (newAmountDue <= 0) {
-        return res.status(400).json({ error: 'Amount due must be greater than 0' });
+      if (newAmountDue < 0) {
+        return res.status(400).json({ error: 'Amount due cannot be negative' });
       }
       
       const currentAmountPaid = Number(existingFee.amountPaid);
