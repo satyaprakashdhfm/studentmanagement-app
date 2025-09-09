@@ -404,9 +404,9 @@ const FeeManagement = () => {
               return (
                 <React.Fragment key={studentId}>
                   {/* Student Summary Row */}
-                  <tr className="student-summary-row" onClick={() => toggleStudentExpansion(studentId)}>
+                  <tr className="student-summary-row">
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
                         <span style={{ marginRight: '8px' }}>
                           {isExpanded ? '▼' : '▶'}
                         </span>
@@ -427,10 +427,7 @@ const FeeManagement = () => {
                     <td>
                       <button 
                         className="btn btn-info btn-sm" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleStudentExpansion(studentId);
-                        }}
+                        onClick={() => toggleStudentExpansion(studentId)}
                       >
                         {isExpanded ? 'Collapse' : 'View Details'}
                       </button>

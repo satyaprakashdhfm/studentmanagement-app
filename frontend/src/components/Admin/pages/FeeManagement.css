@@ -54,13 +54,11 @@
 .student-summary-row {
   background-color: #f8f9fa !important;
   border-left: 4px solid #3498db;
-  cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .student-summary-row:hover {
   background-color: #e9ecef !important;
-  transform: translateX(2px);
 }
 
 .student-summary-row td {
