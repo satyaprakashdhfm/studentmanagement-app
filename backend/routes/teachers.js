@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/database');
 const { authenticateToken } = require('../utils/jwt');
+const { hashPassword } = require('../utils/password');
 
 // GET /api/teachers - Get all teachers
 router.get('/', authenticateToken, async (req, res) => {
@@ -219,8 +220,26 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     if (existingUser) {
-      return res.status(409).json({ error: 'Email already exists' });
+      return res.status(409).json({ 
+        success: false,
+        message: 'Email already exists' 
+      });
     }
+
+    // Check if username already exists
+    const existingUsername = await prisma.user.findUnique({
+      where: { username }
+    });
+
+    if (existingUsername) {
+      return res.status(409).json({ 
+        success: false,
+        message: 'Username already exists' 
+      });
+    }
+
+    // Hash the password
+    const hashedPassword = await hashPassword(password);
 
     // Create user and teacher in a transaction
     const result = await prisma.$transaction(async (prisma) => {
@@ -229,7 +248,7 @@ router.post('/', authenticateToken, async (req, res) => {
         data: {
           username,
           email,
-          password, // Should be hashed before storing
+          password: hashedPassword,
           firstName,
           lastName,
           role: 'teacher'
@@ -268,21 +287,28 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     res.status(201).json({
+      success: true,
+      message: 'Teacher created successfully',
       teacher: {
         ...result,
         id: Number(result.id),
         userId: Number(result.userId),
         salary: result.salary ? Number(result.salary) : null
-      },
-      message: 'Teacher created successfully'
+      }
     });
 
   } catch (error) {
     console.error('Create teacher error:', error);
-    if (error.code === 'P2002') {
-      return res.status(409).json({ error: 'Email or username already exists' });
+    if (error.code === 'P2002') { // Prisma unique constraint violation
+      return res.status(409).json({ 
+        success: false,
+        message: 'Email or username already exists' 
+      });
     }
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
   }
 });
 

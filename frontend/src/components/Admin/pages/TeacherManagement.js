@@ -1,10 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import './TeacherManagement.css';
 
 const TeacherManagement = () => {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Modal states
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [showTeacherModal, setShowTeacherModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [newTeacher, setNewTeacher] = useState({
+    name: '',
+    email: '',
+    phoneNumber: '',
+    qualification: '',
+    subjectsHandled: '',
+    classesAssigned: '',
+    classTeacherOf: '',
+    hireDate: '',
+    salary: '',
+    username: '',
+    password: '',
+    firstName: '',
+    lastName: ''
+  });
 
   useEffect(() => {
     const fetchTeachers = async () => {
@@ -27,15 +49,17 @@ const TeacherManagement = () => {
     fetchTeachers();
   }, []);
 
-  const handleEditTeacher = (teacherId) => {
-    alert(`Edit teacher ${teacherId} - Feature coming soon`);
+  const handleEditTeacher = (teacher) => {
+    setSelectedTeacher(teacher);
+    setEditMode(true);
+    setShowTeacherModal(true);
   };
 
   const handleDeleteTeacher = async (teacherId) => {
     if (window.confirm('Are you sure you want to delete this teacher?')) {
       try {
         const response = await apiService.deleteTeacher(teacherId);
-        if (response.message && response.message.includes('successfully')) {
+        if (response.success || response.message?.includes('successfully')) {
           setTeachers(teachers.filter(teacher => teacher.id !== teacherId));
           alert('Teacher deleted successfully');
         } else {
@@ -45,6 +69,77 @@ const TeacherManagement = () => {
         console.error('Error deleting teacher:', error);
         alert('Failed to delete teacher');
       }
+    }
+  };
+
+  const handleTeacherClick = (teacher) => {
+    setSelectedTeacher(teacher);
+    setEditMode(false);
+    setShowTeacherModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowTeacherModal(false);
+    setShowAddModal(false);
+    setSelectedTeacher(null);
+    setEditMode(false);
+    setNewTeacher({
+      name: '',
+      email: '',
+      phoneNumber: '',
+      qualification: '',
+      subjectsHandled: '',
+      classesAssigned: '',
+      classTeacherOf: '',
+      hireDate: '',
+      salary: '',
+      username: '',
+      password: '',
+      firstName: '',
+      lastName: ''
+    });
+  };
+
+  const handleAddTeacher = async () => {
+    try {
+      const teacherData = {
+        ...newTeacher,
+        username: newTeacher.email.split('@')[0],
+        password: 'teacher123',
+        firstName: newTeacher.name.split(' ')[0],
+        lastName: newTeacher.name.split(' ').slice(1).join(' '),
+        subjectsHandled: newTeacher.subjectsHandled.split(',').map(s => s.trim()).filter(s => s),
+        classesAssigned: newTeacher.classesAssigned.split(',').map(s => s.trim()).filter(s => s),
+        salary: newTeacher.salary ? parseFloat(newTeacher.salary) : null
+      };
+      
+      const response = await apiService.createTeacher(teacherData);
+      if (response.teacher || response.success) {
+        setTeachers([...teachers, response.teacher || response.data]);
+        handleCloseModal();
+        alert('Teacher added successfully');
+      } else {
+        alert(response.message || 'Failed to add teacher');
+      }
+    } catch (error) {
+      console.error('Error adding teacher:', error);
+      alert('Failed to add teacher');
+    }
+  };
+
+  const handleUpdateTeacher = async () => {
+    try {
+      const response = await apiService.updateTeacher(selectedTeacher.id, selectedTeacher);
+      if (response.success || response.teacher) {
+        setTeachers(teachers.map(t => t.id === selectedTeacher.id ? selectedTeacher : t));
+        setEditMode(false);
+        alert('Teacher updated successfully');
+      } else {
+        alert(response.message || 'Failed to update teacher');
+      }
+    } catch (error) {
+      console.error('Error updating teacher:', error);
+      alert('Failed to update teacher');
     }
   };
 
@@ -70,44 +165,300 @@ const TeacherManagement = () => {
 
   return (
     <div className="content-card">
-      <h2>Teacher Management</h2>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Subjects</th>
-            <th>Classes</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {teachers.map(teacher => (
-            <tr key={teacher.id}>
-              <td>{teacher.name}</td>
-              <td>{teacher.email}</td>
-              <td>{teacher.phoneNumber || 'N/A'}</td>
-              <td>{teacher.subjectsHandled ? teacher.subjectsHandled.join(', ') : 'N/A'}</td>
-              <td>{teacher.classesAssigned ? teacher.classesAssigned.join(', ') : 'N/A'}</td>
-              <td>
-                <button 
-                  className="btn btn-warning" 
-                  onClick={() => handleEditTeacher(teacher.id)}
-                >
-                  Edit
-                </button>
-                <button 
-                  className="btn btn-danger" 
-                  onClick={() => handleDeleteTeacher(teacher.id)}
-                >
-                  Delete
-                </button>
-              </td>
+      <div className="teacher-header">
+        <h2>Teacher Management</h2>
+        <div className="header-actions">
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            Add Teacher
+          </button>
+        </div>
+      </div>
+
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Class Teacher</th>
+              <th>Subjects</th>
+              <th>Classes</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {teachers.map(teacher => (
+              <tr key={teacher.id}>
+                <td>{teacher.name}</td>
+                <td>{teacher.classTeacherOf || 'N/A'}</td>
+                <td>{teacher.subjectsHandled?.length > 0 ? teacher.subjectsHandled.join(', ') : 'N/A'}</td>
+                <td>{teacher.classesAssigned?.length > 0 ? teacher.classesAssigned.join(', ') : 'N/A'}</td>
+                <td>
+                  <button 
+                    className="btn btn-info btn-sm" 
+                    onClick={() => handleTeacherClick(teacher)}
+                  >
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {teachers.length === 0 && (
+          <div className="no-teachers">
+            No teachers found
+          </div>
+        )}
+      </div>
+
+      {/* Teacher Details Modal */}
+      {showTeacherModal && selectedTeacher && (
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editMode ? 'Edit Teacher' : 'Teacher Details'}</h3>
+              <div className="modal-actions">
+                {!editMode && (
+                  <>
+                    <button className="btn btn-warning btn-sm" onClick={() => setEditMode(true)}>
+                      Edit
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTeacher(selectedTeacher.id)}>
+                      Delete
+                    </button>
+                  </>
+                )}
+                <button className="btn btn-light btn-sm" onClick={handleCloseModal}>
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="modal-body">
+              {editMode ? (
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Name</label>
+                    <input
+                      type="text"
+                      value={selectedTeacher.name}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      value={selectedTeacher.email}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, email: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Phone</label>
+                    <input
+                      type="text"
+                      value={selectedTeacher.phoneNumber || ''}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, phoneNumber: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Qualification</label>
+                    <textarea
+                      value={selectedTeacher.qualification || ''}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, qualification: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Subjects Handled</label>
+                    <input
+                      type="text"
+                      value={selectedTeacher.subjectsHandled?.join(', ') || ''}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, subjectsHandled: e.target.value.split(',').map(s => s.trim())})}
+                      placeholder="Math, Science, English"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Classes Assigned</label>
+                    <input
+                      type="text"
+                      value={selectedTeacher.classesAssigned?.join(', ') || ''}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, classesAssigned: e.target.value.split(',').map(s => s.trim())})}
+                      placeholder="10A, 10B, 11A"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Class Teacher Of</label>
+                    <input
+                      type="text"
+                      value={selectedTeacher.classTeacherOf || ''}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, classTeacherOf: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Salary</label>
+                    <input
+                      type="number"
+                      value={selectedTeacher.salary || ''}
+                      onChange={(e) => setSelectedTeacher({...selectedTeacher, salary: e.target.value})}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="details-grid">
+                  <div className="detail-item">
+                    <strong>Name:</strong> {selectedTeacher.name}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Email:</strong> {selectedTeacher.email}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Phone:</strong> {selectedTeacher.phoneNumber || 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Qualification:</strong> {selectedTeacher.qualification || 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Subjects Handled:</strong> {selectedTeacher.subjectsHandled?.join(', ') || 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Classes Assigned:</strong> {selectedTeacher.classesAssigned?.join(', ') || 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Class Teacher Of:</strong> {selectedTeacher.classTeacherOf || 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Hire Date:</strong> {selectedTeacher.hireDate ? new Date(selectedTeacher.hireDate).toLocaleDateString() : 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Salary:</strong> {selectedTeacher.salary ? `₹${selectedTeacher.salary}` : 'N/A'}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Status:</strong> 
+                    <span className={`status ${selectedTeacher.active ? 'active' : 'inactive'}`}>
+                      {selectedTeacher.active ? 'ACTIVE' : 'INACTIVE'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            {editMode && (
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setEditMode(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" onClick={handleUpdateTeacher}>
+                  Save Changes
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Add Teacher Modal */}
+      {showAddModal && (
+        <div className="modal-overlay" onClick={handleCloseModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Add New Teacher</h3>
+              <button className="btn btn-light btn-sm" onClick={handleCloseModal}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Name *</label>
+                  <input
+                    type="text"
+                    value={newTeacher.name}
+                    onChange={(e) => setNewTeacher({...newTeacher, name: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Email *</label>
+                  <input
+                    type="email"
+                    value={newTeacher.email}
+                    onChange={(e) => setNewTeacher({...newTeacher, email: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input
+                    type="text"
+                    value={newTeacher.phoneNumber}
+                    onChange={(e) => setNewTeacher({...newTeacher, phoneNumber: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Qualification</label>
+                  <textarea
+                    value={newTeacher.qualification}
+                    onChange={(e) => setNewTeacher({...newTeacher, qualification: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Subjects Handled</label>
+                  <input
+                    type="text"
+                    value={newTeacher.subjectsHandled}
+                    onChange={(e) => setNewTeacher({...newTeacher, subjectsHandled: e.target.value})}
+                    placeholder="Math, Science, English"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Classes Assigned</label>
+                  <input
+                    type="text"
+                    value={newTeacher.classesAssigned}
+                    onChange={(e) => setNewTeacher({...newTeacher, classesAssigned: e.target.value})}
+                    placeholder="10A, 10B, 11A"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Class Teacher Of</label>
+                  <input
+                    type="text"
+                    value={newTeacher.classTeacherOf}
+                    onChange={(e) => setNewTeacher({...newTeacher, classTeacherOf: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Hire Date</label>
+                  <input
+                    type="date"
+                    value={newTeacher.hireDate}
+                    onChange={(e) => setNewTeacher({...newTeacher, hireDate: e.target.value})}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Salary</label>
+                  <input
+                    type="number"
+                    value={newTeacher.salary}
+                    onChange={(e) => setNewTeacher({...newTeacher, salary: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={handleCloseModal}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleAddTeacher}
+                disabled={!newTeacher.name || !newTeacher.email}
+              >
+                Add Teacher
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
