@@ -16,6 +16,7 @@ const StudentManagement = () => {
   const [showStudentModal, setShowStudentModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [expandedStudents, setExpandedStudents] = useState({});
   const [newStudent, setNewStudent] = useState({
     name: '',
     email: '',
@@ -78,6 +79,14 @@ const StudentManagement = () => {
       fetchData();
     }
   }, [classId, grade, classes, selectedAcademicYear]);
+
+  // Toggle student details expansion
+  const toggleStudentExpansion = (studentId) => {
+    setExpandedStudents(prev => ({
+      ...prev,
+      [String(studentId)]: !prev[String(studentId)]
+    }));
+  };
 
   const handleEditStudent = (student) => {
     setSelectedStudent(student);
@@ -395,35 +404,115 @@ const StudentManagement = () => {
               <th>Name</th>
               <th>Class</th>
               <th>Email</th>
-              <th>Phone</th>
-              <th>Address</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {students.map(student => (
-              <tr key={student.id}>
-                <td>{student.name}</td>
-                <td>{student.class ? `${student.class.className} ${student.class.section}` : 'N/A'}</td>
-                <td>{student.email}</td>
-                <td>{student.phone || 'N/A'}</td>
-                <td>{student.address || 'N/A'}</td>
-                <td>
-                  <span className={`status ${student.status}`}>
-                    {student.status?.toUpperCase() || 'N/A'}
-                  </span>
-                </td>
-                <td>
-                  <button 
-                    className="btn btn-info btn-sm" 
-                    onClick={() => handleStudentClick(student)}
-                  >
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {students.map(student => {
+              const studentId = String(student.id);
+              const isExpanded = expandedStudents[studentId] || false;
+              
+              return (
+                <React.Fragment key={studentId}>
+                  {/* Student Summary Row */}
+                  <tr className="student-summary-row">
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ marginRight: '8px' }}>
+                          {isExpanded ? '▼' : '▶'}
+                        </span>
+                        <strong>{student.name}</strong>
+                      </div>
+                    </td>
+                    <td><strong>{student.class ? `${student.class.className} ${student.class.section}` : 'N/A'}</strong></td>
+                    <td><strong>{student.email}</strong></td>
+                    <td>
+                      <span className={`status ${student.status}`}>
+                        <strong>{student.status?.toUpperCase() || 'N/A'}</strong>
+                      </span>
+                    </td>
+                    <td>
+                      <button 
+                        className="btn btn-info btn-sm" 
+                        onClick={() => toggleStudentExpansion(studentId)}
+                        style={{ marginRight: '5px' }}
+                      >
+                        {isExpanded ? 'Collapse' : 'View Details'}
+                      </button>
+                      <button 
+                        className="btn btn-warning btn-sm" 
+                        onClick={() => handleEditStudent(student)}
+                        style={{ marginRight: '5px' }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        className="btn btn-danger btn-sm" 
+                        onClick={() => handleDeleteStudent(student.id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                  
+                  {/* Student Detail Rows (shown when expanded) */}
+                  {isExpanded && (
+                    <>
+                      <tr className="student-detail-row">
+                        <td style={{ paddingLeft: '30px' }}>Phone</td>
+                        <td>-</td>
+                        <td>{student.phone || 'N/A'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                      </tr>
+                      <tr className="student-detail-row">
+                        <td style={{ paddingLeft: '30px' }}>Address</td>
+                        <td>-</td>
+                        <td>{student.address || 'N/A'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                      </tr>
+                      <tr className="student-detail-row">
+                        <td style={{ paddingLeft: '30px' }}>Date of Birth</td>
+                        <td>-</td>
+                        <td>{student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString() : 'N/A'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                      </tr>
+                      <tr className="student-detail-row">
+                        <td style={{ paddingLeft: '30px' }}>Father's Name</td>
+                        <td>-</td>
+                        <td>{student.fatherName || 'N/A'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                      </tr>
+                      <tr className="student-detail-row">
+                        <td style={{ paddingLeft: '30px' }}>Mother's Name</td>
+                        <td>-</td>
+                        <td>{student.motherName || 'N/A'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                      </tr>
+                      <tr className="student-detail-row">
+                        <td style={{ paddingLeft: '30px' }}>Parent Contact</td>
+                        <td>-</td>
+                        <td>{student.parentContact || 'N/A'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                      </tr>
+                      <tr className="student-detail-row">
+                        <td style={{ paddingLeft: '30px' }}>Admission Date</td>
+                        <td>-</td>
+                        <td>{student.admissionDate ? new Date(student.admissionDate).toLocaleDateString() : 'N/A'}</td>
+                        <td>-</td>
+                        <td>-</td>
+                      </tr>
+                    </>
+                  )}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
 
