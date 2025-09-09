@@ -16,6 +16,7 @@ const FeeManagement = () => {
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [expandedStudents, setExpandedStudents] = useState(new Set());
   const [paymentData, setPaymentData] = useState({
     paymentAmount: '',
     paymentMethod: 'Cash',
@@ -69,6 +70,40 @@ const FeeManagement = () => {
       fetchData();
     }
   }, [classId, grade, classes, selectedAcademicYear]);
+
+  // Group fees by student
+  const groupFeesByStudent = () => {
+    const grouped = {};
+    fees.forEach(fee => {
+      const studentKey = fee.student?.studentId || fee.studentId;
+      if (!grouped[studentKey]) {
+        grouped[studentKey] = {
+          student: fee.student,
+          class: fee.class,
+          fees: [],
+          totalDue: 0,
+          totalPaid: 0,
+          totalBalance: 0
+        };
+      }
+      grouped[studentKey].fees.push(fee);
+      grouped[studentKey].totalDue += parseFloat(fee.amountDue || 0);
+      grouped[studentKey].totalPaid += parseFloat(fee.amountPaid || 0);
+      grouped[studentKey].totalBalance += parseFloat(fee.balance || 0);
+    });
+    return Object.values(grouped);
+  };
+
+  // Toggle student expansion
+  const toggleStudentExpansion = (studentId) => {
+    const newExpanded = new Set(expandedStudents);
+    if (newExpanded.has(studentId)) {
+      newExpanded.delete(studentId);
+    } else {
+      newExpanded.add(studentId);
+    }
+    setExpandedStudents(newExpanded);
+  };
 
   // Handle clicking on a class section box
   const handleClassClick = (classId) => {
@@ -352,53 +387,97 @@ const FeeManagement = () => {
             <tr>
               <th>Student</th>
               <th>Class</th>
-              <th>Fee Type</th>
-              <th>Due Amount</th>
-              <th>Paid Amount</th>
-              <th>Balance</th>
+              <th>Total Due</th>
+              <th>Total Paid</th>
+              <th>Total Balance</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {fees.map(fee => (
-              <tr key={fee.feeId}>
-                <td>{fee.student?.name || 'N/A'}</td>
-                <td>{fee.class ? `${fee.class.className} ${fee.class.section}` : 'N/A'}</td>
-                <td>{fee.feeType}</td>
-                <td>{formatCurrency(fee.amountDue)}</td>
-                <td>{formatCurrency(fee.amountPaid)}</td>
-                <td style={{ color: fee.balance > 0 ? '#e74c3c' : '#27ae60' }}>
-                  {formatCurrency(fee.balance)}
-                </td>
-                <td>
-                  <span className={`status ${getPaymentStatus(fee)}`}>
-                    {getPaymentStatus(fee).toUpperCase()}
-                  </span>
-                </td>
-                <td>
-                  <button 
-                    className="btn btn-info btn-sm" 
-                    onClick={() => handleFeeClick(fee)}
-                    style={{ marginRight: '5px' }}
-                  >
-                    View
-                  </button>
-                  {fee.balance > 0 && (
-                    <button 
-                      className="btn btn-warning btn-sm" 
-                      onClick={() => handleRecordPayment(fee)}
-                    >
-                      Pay
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {groupFeesByStudent().map(studentGroup => {
+              const studentId = studentGroup.student?.studentId;
+              const isExpanded = expandedStudents.has(studentId);
+              const overallStatus = studentGroup.totalBalance === 0 ? 'PAID' : 
+                                   studentGroup.totalPaid === 0 ? 'PENDING' : 'PARTIAL';
+              
+              return (
+                <React.Fragment key={studentId}>
+                  {/* Student Summary Row */}
+                  <tr className="student-summary-row" onClick={() => toggleStudentExpansion(studentId)}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <span style={{ marginRight: '8px' }}>
+                          {isExpanded ? '▼' : '▶'}
+                        </span>
+                        <strong>{studentGroup.student?.name || 'N/A'}</strong>
+                      </div>
+                    </td>
+                    <td><strong>{studentGroup.class ? `${studentGroup.class.className} ${studentGroup.class.section}` : 'N/A'}</strong></td>
+                    <td><strong>{formatCurrency(studentGroup.totalDue)}</strong></td>
+                    <td><strong>{formatCurrency(studentGroup.totalPaid)}</strong></td>
+                    <td style={{ color: studentGroup.totalBalance > 0 ? '#e74c3c' : '#27ae60' }}>
+                      <strong>{formatCurrency(studentGroup.totalBalance)}</strong>
+                    </td>
+                    <td>
+                      <span className={`status ${overallStatus.toLowerCase()}`}>
+                        <strong>{overallStatus}</strong>
+                      </span>
+                    </td>
+                    <td>
+                      <button 
+                        className="btn btn-info btn-sm" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleStudentExpansion(studentId);
+                        }}
+                      >
+                        {isExpanded ? 'Collapse' : 'View Details'}
+                      </button>
+                    </td>
+                  </tr>
+                  
+                  {/* Individual Fee Rows (shown when expanded) */}
+                  {isExpanded && studentGroup.fees.map(fee => (
+                    <tr key={fee.feeId} className="fee-detail-row">
+                      <td style={{ paddingLeft: '30px' }}>{fee.feeType}</td>
+                      <td>-</td>
+                      <td>{formatCurrency(fee.amountDue)}</td>
+                      <td>{formatCurrency(fee.amountPaid)}</td>
+                      <td style={{ color: fee.balance > 0 ? '#e74c3c' : '#27ae60' }}>
+                        {formatCurrency(fee.balance)}
+                      </td>
+                      <td>
+                        <span className={`status ${getPaymentStatus(fee)}`}>
+                          {getPaymentStatus(fee).toUpperCase()}
+                        </span>
+                      </td>
+                      <td>
+                        <button 
+                          className="btn btn-info btn-sm" 
+                          onClick={() => handleFeeClick(fee)}
+                          style={{ marginRight: '5px' }}
+                        >
+                          View
+                        </button>
+                        {fee.balance > 0 && (
+                          <button 
+                            className="btn btn-warning btn-sm" 
+                            onClick={() => handleRecordPayment(fee)}
+                          >
+                            Pay
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
 
-        {fees.length === 0 && (
+        {groupFeesByStudent().length === 0 && (
           <div className="no-fees">
             No fee records found for this class
           </div>

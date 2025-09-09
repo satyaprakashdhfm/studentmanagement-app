@@ -50,6 +50,40 @@
   border-bottom: none;
 }
 
+/* Student Summary Row Styles */
+.student-summary-row {
+  background-color: #f8f9fa !important;
+  border-left: 4px solid #3498db;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.student-summary-row:hover {
+  background-color: #e9ecef !important;
+  transform: translateX(2px);
+}
+
+.student-summary-row td {
+  font-weight: 600;
+  color: #2c3e50;
+  padding: 15px 12px;
+}
+
+/* Fee Detail Row Styles */
+.fee-detail-row {
+  background-color: #fdfdfd;
+  border-left: 2px solid #e9ecef;
+}
+
+.fee-detail-row:hover {
+  background-color: #f1f3f5 !important;
+}
+
+.fee-detail-row td {
+  color: #6c757d;
+  font-size: 0.85em;
+}
+
 .status {
   padding: 4px 8px;
   border-radius: 4px;
