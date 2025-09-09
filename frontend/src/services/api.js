@@ -254,6 +254,11 @@ class ApiService {
     return this.request(`/fees${queryParams ? `?${queryParams}` : ''}`);
   }
   
+  async getFeeStats(filters = {}) {
+    const queryParams = new URLSearchParams(filters).toString();
+    return this.request(`/fees/stats/overview${queryParams ? `?${queryParams}` : ''}`);
+  }
+  
   async getFeesByClass(classId) {
     return this.request(`/fees?classId=${classId}`);
   }
