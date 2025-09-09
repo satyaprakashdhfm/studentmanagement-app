@@ -390,11 +390,12 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
 
       // Create default fee records for all fee types
       const defaultFeeTypes = [
-        'Tuition Fee',
-        'Transport Fee', 
-        'Activity Fee',
-        'Library Fee',
-        'Exam Fee'
+        'Term1_Tuition',
+        'Term2_Tuition',
+        'Term3_Tuition',
+        'Bus_Fee',
+        'Books_Fee',
+        'Dress_Fee'
       ];
 
       // Get the current academic year from the class or use current year

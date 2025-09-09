@@ -16,7 +16,7 @@ const FeeManagement = () => {
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [expandedStudents, setExpandedStudents] = useState(new Set());
+  const [expandedStudents, setExpandedStudents] = useState({});
   const [paymentData, setPaymentData] = useState({
     paymentAmount: '',
     paymentMethod: 'Cash',
@@ -74,8 +74,26 @@ const FeeManagement = () => {
   // Group fees by student
   const groupFeesByStudent = () => {
     const grouped = {};
-    fees.forEach(fee => {
-      const studentKey = fee.student?.studentId || fee.studentId;
+    console.log('Raw fees data:', fees.slice(0, 2)); // Debug: check first 2 fees
+    
+    fees.forEach((fee, index) => {
+      // Try multiple possible student ID fields
+      const studentKey = String(
+        fee.student?.studentId || 
+        fee.student?.id || 
+        fee.student?.student_id ||
+        fee.studentId ||
+        fee.student_id ||
+        `student_${index}` // fallback
+      );
+      
+      console.log('Processing fee:', {
+        feeId: fee.feeId,
+        studentFromFee: fee.student,
+        studentId: fee.studentId,
+        calculatedKey: studentKey
+      });
+      
       if (!grouped[studentKey]) {
         grouped[studentKey] = {
           student: fee.student,
@@ -91,18 +109,22 @@ const FeeManagement = () => {
       grouped[studentKey].totalPaid += parseFloat(fee.amountPaid || 0);
       grouped[studentKey].totalBalance += parseFloat(fee.balance || 0);
     });
-    return Object.values(grouped);
+    const result = Object.values(grouped);
+    console.log('Final grouped result:', result.map(g => ({ 
+      studentId: g.student?.studentId, 
+      name: g.student?.name,
+      feeCount: g.fees.length 
+    })));
+    return result;
   };
 
   // Toggle student expansion
   const toggleStudentExpansion = (studentId) => {
-    const newExpanded = new Set(expandedStudents);
-    if (newExpanded.has(studentId)) {
-      newExpanded.delete(studentId);
-    } else {
-      newExpanded.add(studentId);
-    }
-    setExpandedStudents(newExpanded);
+    console.log('Toggling student:', studentId, 'Current expanded:', expandedStudents);
+    setExpandedStudents(prev => ({
+      ...prev,
+      [String(studentId)]: !prev[String(studentId)]
+    }));
   };
 
   // Handle clicking on a class section box
@@ -395,11 +417,27 @@ const FeeManagement = () => {
             </tr>
           </thead>
           <tbody>
-            {groupFeesByStudent().map(studentGroup => {
-              const studentId = studentGroup.student?.studentId;
-              const isExpanded = expandedStudents.has(studentId);
+            {groupFeesByStudent().map((studentGroup, index) => {
+              // Try multiple possible student ID fields
+              const studentId = String(
+                studentGroup.student?.studentId || 
+                studentGroup.student?.id || 
+                studentGroup.student?.student_id ||
+                index // fallback to index if no ID found
+              );
+              
+              const isExpanded = expandedStudents[studentId] || false;
               const overallStatus = studentGroup.totalBalance === 0 ? 'PAID' : 
                                    studentGroup.totalPaid === 0 ? 'PENDING' : 'PARTIAL';
+              
+              console.log('Rendering student:', {
+                index,
+                studentId,
+                name: studentGroup.student?.name,
+                isExpanded,
+                expandedStudents,
+                fullStudent: studentGroup.student
+              });
               
               return (
                 <React.Fragment key={studentId}>

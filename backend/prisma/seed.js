@@ -337,28 +337,7 @@ async function main() {
 
     console.log('✅ Created marks records');
 
-    // Create sample fee records - all fee types for each student with zero balance initially
-    const feeTypes = ['Tuition Fee', 'Transport Fee', 'Activity Fee', 'Library Fee', 'Exam Fee'];
-    
-    for (const student of students) {
-      // Create all fee types with zero balance initially
-      for (const feeType of feeTypes) {
-        await prisma.fee.create({
-          data: {
-            studentId: student.id,
-            classId: student.classId,
-            feeType: feeType,
-            amountDue: 0,
-            amountPaid: 0,
-            paymentDate: null,
-            paymentMethod: null,
-            balance: 0,
-            academicYear: academicYear
-          }
-        });
-      }
-    }
-
+    // Skip creating new fee types - use existing fee records in database
     console.log('✅ Created fee records with zero balance for all students');
 
     // Now add some sample fee amounts and payments to demonstrate the system
