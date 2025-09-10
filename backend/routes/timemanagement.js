@@ -23,15 +23,11 @@ router.get('/timeslots', authenticateToken, async (req, res) => {
       ORDER BY slot_order ASC
     `;
 
-    console.log('🔍 TIME SLOTS FROM DATABASE:', timeSlots);
-
     // Convert BigInt fields to strings for JSON serialization
     const timeSlotsWithStringIds = timeSlots.map(slot => ({
       ...slot,
       slot_id: slot.slot_id.toString()
     }));
-
-    console.log('📤 TIME SLOTS BEING SENT TO FRONTEND:', timeSlotsWithStringIds);
 
     res.json(timeSlotsWithStringIds);
   } catch (error) {

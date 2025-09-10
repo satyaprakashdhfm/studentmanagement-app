@@ -24,18 +24,70 @@ const TimeManagement = () => {
 
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   
-  // Subject colors for visual identification
+  // Subject colors for visual identification - using prefixes for cleaner legend
   const subjectColors = {
+    // Subject prefixes with their colors
+    'MATH': '#FF6B6B',     // Red for Mathematics
+    'ENG': '#FFEAA7',      // Yellow for English
+    'SCI': '#81ECEC',      // Teal for Science
+    'HIN': '#DDA0DD',      // Purple for Hindi
+    'SOC': '#98D8C8',      // Green for Social Science
+    'TEL': '#FFA726',      // Orange for Telugu
+    
+    // Full subject names for backward compatibility
     'Mathematics': '#FF6B6B',
-    'Physics': '#4ECDC4', 
-    'Chemistry': '#45B7D1',
-    'Biology': '#96CEB4',
     'English': '#FFEAA7',
+    'Science': '#81ECEC',
     'Hindi': '#DDA0DD',
     'Social Science': '#98D8C8',
     'Social Studies': '#98D8C8',
     'Computer Science': '#6C5CE7',
-    'Science': '#81ECEC'
+    'Physics': '#4ECDC4',
+    'Chemistry': '#45B7D1',
+    'Biology': '#96CEB4',
+    'Telugu': '#FFA726'
+  };
+
+  // Function to get color for a subject (supports both prefix and full name matching)
+  const getSubjectColor = (subjectName) => {
+    if (!subjectName) return '#f8f9fa';
+    
+    // First try exact match
+    if (subjectColors[subjectName]) {
+      return subjectColors[subjectName];
+    }
+    
+    // Then try prefix match (e.g., "MATH Grade 8" -> "MATH")
+    const prefix = subjectName.split(' ')[0];
+    if (subjectColors[prefix]) {
+      return subjectColors[prefix];
+    }
+    
+    // Fallback to default
+    return '#f8f9fa';
+  };
+
+  // Get unique subject prefixes used in the current schedule for legend
+  const getLegendSubjects = () => {
+    const usedPrefixes = new Set();
+    
+    if (schedule && schedule.length > 0) {
+      schedule.forEach(item => {
+        if (item.subject?.subject_name) {
+          const prefix = item.subject.subject_name.split(' ')[0];
+          if (subjectColors[prefix]) {
+            usedPrefixes.add(prefix);
+          }
+        }
+      });
+    }
+    
+    // If no subjects found in schedule, show all available prefixes
+    if (usedPrefixes.size === 0) {
+      return ['MATH', 'ENG', 'SCI', 'HIN', 'SOC', 'TEL'];
+    }
+    
+    return Array.from(usedPrefixes).sort();
   };
 
   // Format slot time for display. Accepts ISO string or HH:MM:SS; returns HH:MM
@@ -112,22 +164,10 @@ const TimeManagement = () => {
 
   const fetchTimeSlots = async () => {
     try {
-      console.log('🔄 FETCHING TIME SLOTS FROM API...');
       const data = await apiService.getTimeSlots();
-      console.log('✅ RAW API RESPONSE:', data);
-
-      // Log formatted times for debugging
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('🕐 FORMATTED TIMES:');
-        data.forEach(slot => {
-          console.log(`${slot.slot_name}: ${formatSlotTime(slot.start_time)} - ${formatSlotTime(slot.end_time)}`);
-        });
-      }
-
-      console.log('📊 PROCESSED TIME SLOTS:', Array.isArray(data) ? data : []);
       setTimeSlots(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('❌ Error fetching time slots:', error);
+      console.error('Error fetching time slots:', error);
       setTimeSlots([]); // Ensure it's always an array
     }
   };
@@ -226,10 +266,10 @@ const TimeManagement = () => {
         <div className="schedule-legend">
           <h6>Subject Legend:</h6>
           <div className="legend-items">
-            {Object.entries(subjectColors).map(([subject, color]) => (
-              <span key={subject} className="legend-item">
-                <div className="legend-color" style={{ backgroundColor: color }}></div>
-                {subject}
+            {getLegendSubjects().map((prefix) => (
+              <span key={prefix} className="legend-item">
+                <div className="legend-color" style={{ backgroundColor: getSubjectColor(prefix) }}></div>
+                {prefix}
               </span>
             ))}
           </div>
@@ -278,8 +318,8 @@ const TimeManagement = () => {
                               <div 
                                 className="period-content filled"
                                 style={{ 
-                                  backgroundColor: subjectColors[scheduleItem.subject?.subject_name] || '#f8f9fa',
-                                  borderLeft: `4px solid ${subjectColors[scheduleItem.subject?.subject_name] || '#ddd'}`
+                                  backgroundColor: getSubjectColor(scheduleItem.subject?.subject_name),
+                                  borderLeft: `4px solid ${getSubjectColor(scheduleItem.subject?.subject_name)}`
                                 }}
                                 onClick={() => handleScheduleClick(day, slot.slot_id, scheduleItem)}
                               >
