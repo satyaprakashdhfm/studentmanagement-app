@@ -199,34 +199,21 @@ class ApiService {
   }
 
   // Attendance
-  async getAttendance(filters = {}) {
-    const queryParams = new URLSearchParams(filters).toString();
-    return this.request(`/attendance${queryParams ? `?${queryParams}` : ''}`);
+  async getAttendance() {
+    return this.request('/attendance');
   }
 
-  async markAttendance(attendanceData) {
-    return this.request('/attendance', {
-      method: 'POST',
-      body: JSON.stringify(attendanceData),
-    });
-  }
-
-  async updateAttendance(attendanceId, attendanceData) {
-    return this.request(`/attendance/${attendanceId}`, {
-      method: 'PUT',
-      body: JSON.stringify(attendanceData),
-    });
-  }
-
-  async getStudentAttendance(studentId, filters = {}) {
-    const queryParams = new URLSearchParams(filters).toString();
-    return this.request(`/attendance/student/${studentId}${queryParams ? `?${queryParams}` : ''}`);
+  async getAttendanceByClass(classId) {
+    return this.request(`/attendance?classId=${classId}`);
   }
 
   // Marks
-  async getMarks(filters = {}) {
-    const queryParams = new URLSearchParams(filters).toString();
-    return this.request(`/marks${queryParams ? `?${queryParams}` : ''}`);
+  async getMarks() {
+    return this.request('/marks');
+  }
+
+  async getMarksByStudent(studentId) {
+    return this.request(`/marks?studentId=${studentId}`);
   }
 
   async addMarks(marksData) {
@@ -389,3 +376,16 @@ class ApiService {
 // Export a singleton instance
 const apiService = new ApiService();
 export default apiService;
+
+export const getClasses = async () => {
+    try {
+        const response = await fetch('/api/classes');
+        if (!response.ok) {
+            throw new Error('Failed to fetch classes');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error in getClasses API:', error);
+        throw error;
+    }
+};

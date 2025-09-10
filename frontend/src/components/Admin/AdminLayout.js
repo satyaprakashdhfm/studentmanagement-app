@@ -251,6 +251,42 @@ const AdminLayout = ({ children }) => {
               )}
             </li>
 
+            {/* Class Management */}
+            <li>
+              <Link 
+                to="/admin/classes"
+                className={location.pathname === '/admin/classes' ? 'active' : ''}
+                onClick={handleSingleNavClick}
+              >
+                <span style={{ marginRight: '10px' }}>🏫</span>
+                Class Management
+              </Link>
+            </li>
+
+            {/* Attendance Management */}
+            <li>
+              <Link 
+                to="/admin/attendance"
+                className={location.pathname === '/admin/attendance' ? 'active' : ''}
+                onClick={handleSingleNavClick}
+              >
+                <span style={{ marginRight: '10px' }}>📋</span>
+                Attendance Management
+              </Link>
+            </li>
+
+            {/* Marks Management */}
+            <li>
+              <Link 
+                to="/admin/marks"
+                className={location.pathname === '/admin/marks' ? 'active' : ''}
+                onClick={handleSingleNavClick}
+              >
+                <span style={{ marginRight: '10px' }}>📊</span>
+                Marks Management
+              </Link>
+            </li>
+
             {/* System Configuration without Dropdown */}
             <li>
               <Link 
