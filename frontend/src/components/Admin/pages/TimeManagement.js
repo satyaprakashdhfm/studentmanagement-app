@@ -38,6 +38,25 @@ const TimeManagement = () => {
     'Science': '#81ECEC'
   };
 
+  // Format slot time for display. Accepts ISO string or HH:MM:SS; returns HH:MM
+  const formatSlotTime = (time) => {
+    if (!time) return '';
+    try {
+      // If time includes a 'T' or is a full ISO timestamp, parse and format
+      if (time.includes('T') || time.includes('-')) {
+        const d = new Date(time);
+        if (!isNaN(d.getTime())) {
+          return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+      }
+
+      // If format is HH:MM:SS or HH:MM, take first 5 chars
+      return time.substring(0,5);
+    } catch (err) {
+      return time.substring(0,5);
+    }
+  };
+
   const handleClassBoxClick = (cls) => {
     navigate(`/admin/time-management/${cls.classId}/${cls.section}`);
   };
@@ -226,13 +245,13 @@ const TimeManagement = () => {
                   timeSlots
                     .filter(slot => slot.slot_name !== 'Break' && slot.slot_name !== 'Lunch Break')
                     .map(slot => (
-                      <th key={slot.slot_id} className="period-header">
-                        <div className="period-title">{slot.slot_name}</div>
-                        <div className="period-time">
-                          {slot.start_time ? slot.start_time.substring(0, 5) : ''} - {slot.end_time ? slot.end_time.substring(0, 5) : ''}
-                        </div>
-                      </th>
-                    ))
+                          <th key={slot.slot_id} className="period-header">
+                            <div className="period-title">{slot.slot_name}</div>
+                            <div className="period-time">
+                              {formatSlotTime(slot.start_time)}{slot.start_time || slot.end_time ? ' - ' : ''}{formatSlotTime(slot.end_time)}
+                            </div>
+                          </th>
+                        ))
                   : 
                   <th colSpan="7" className="period-header">
                     <div className="loading-message">Loading time slots...</div>

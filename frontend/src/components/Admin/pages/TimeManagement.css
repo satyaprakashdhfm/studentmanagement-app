@@ -241,29 +241,29 @@
 .schedule-table th {
   background: linear-gradient(90deg, #3498db 60%, #6dd5fa 100%);
   color: #fff;
-  padding: 16px 10px;
+  padding: 10px 6px;
   text-align: center;
   font-weight: 700;
-  font-size: 1rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.15);
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(52,152,219,0.08);
+  font-size: 0.9rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  letter-spacing: 0.4px;
+  box-shadow: 0 1px 2px rgba(52,152,219,0.06);
 }
 .schedule-table th:last-child {
   border-right: none;
 }
 .day-header {
-  min-width: 120px;
+  min-width: 100px;
   background: #f8f9fa !important;
   color: #3498db;
   font-weight: 600;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   border-right: 1px solid #e0e6ed;
 }
 .schedule-table td {
   border: 1px solid #e0e6ed;
   vertical-align: top;
-  height: 70px;
+  height: 64px;
   background: #fff;
   padding: 0;
 }
