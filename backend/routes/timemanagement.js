@@ -109,14 +109,12 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
       const exceptionDate = weekDates[dayOfWeek];
 
       // Find matching exception
-      const matchingException = exceptions.find(exc => {
-        // Compare dates by converting both to YYYY-MM-DD format
-        const excDate = new Date(exc.exception_date).toISOString().split('T')[0];
-        return excDate === exceptionDate && 
-               String(exc.slot_id) === String(slotId) &&
-               (exc.class_id === null || String(exc.class_id) === String(classId)) &&
-               (exc.section === null || exc.section === section);
-      });
+      const matchingException = exceptions.find(exc => 
+        exc.exception_date === exceptionDate && 
+        String(exc.slot_id) === String(slotId) &&
+        (exc.class_id === null || String(exc.class_id) === String(classId)) &&
+        (exc.section === null || exc.section === section)
+      );
 
       if (matchingException) {
         // Override with exception data
