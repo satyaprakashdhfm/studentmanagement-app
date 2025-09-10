@@ -10,7 +10,9 @@ import StudentSummary from './pages/StudentSummary';
 import { AcademicYearProvider } from '../../context/AcademicYearContext';
 import ClassManagement from './pages/ClassManagement';
 import AttendanceManagement from './pages/AttendanceManagement';
+import AttendanceSummary from './pages/AttendanceSummary';
 import MarksManagement from './pages/MarksManagement';
+import MarksSummary from './pages/MarksSummary';
 import { useEffect } from 'react';
 import apiService from '../../services/api';
 
@@ -54,8 +56,12 @@ const AdminDashboard = () => {
             <Route path="/fees/grade/:grade" element={<FeeManagement />} />
             {/* New admin routes */}
             <Route path="/classes" element={<ClassManagement />} />
-            <Route path="/attendance" element={<AttendanceManagement />} />
-            <Route path="/marks" element={<MarksManagement />} />
+            <Route path="/attendance" element={<AttendanceSummary />} />
+            <Route path="/attendance/grade/:grade" element={<AttendanceManagement />} />
+            <Route path="/attendance/class/:classId" element={<AttendanceManagement />} />
+            <Route path="/marks" element={<MarksSummary />} />
+            <Route path="/marks/grade/:grade" element={<MarksManagement />} />
+            <Route path="/marks/class/:classId" element={<MarksManagement />} />
             <Route path="/teachers" element={<TeacherManagement />} />
             <Route path="/time-management" element={<TimeManagement />} />
             <Route path="/time-management/grade/:grade" element={<TimeManagement />} />

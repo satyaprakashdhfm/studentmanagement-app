@@ -207,9 +207,33 @@ class ApiService {
     return this.request(`/attendance?classId=${classId}`);
   }
 
+  async addAttendance(attendanceData) {
+    return this.request('/attendance', {
+      method: 'POST',
+      body: JSON.stringify(attendanceData),
+    });
+  }
+
+  async updateAttendance(attendanceId, attendanceData) {
+    return this.request(`/attendance/${attendanceId}`, {
+      method: 'PUT',
+      body: JSON.stringify(attendanceData),
+    });
+  }
+
+  async deleteAttendance(attendanceId) {
+    return this.request(`/attendance/${attendanceId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Marks
   async getMarks() {
     return this.request('/marks');
+  }
+
+  async getMarksByClass(classId) {
+    return this.request(`/marks?classId=${classId}`);
   }
 
   async getMarksByStudent(studentId) {
@@ -227,6 +251,12 @@ class ApiService {
     return this.request(`/marks/${marksId}`, {
       method: 'PUT',
       body: JSON.stringify(marksData),
+    });
+  }
+
+  async deleteMarks(marksId) {
+    return this.request(`/marks/${marksId}`, {
+      method: 'DELETE',
     });
   }
 
