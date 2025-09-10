@@ -165,15 +165,9 @@ const TimeManagement = () => {
           <p>Manage weekly schedule for this class</p>
         </div>
         <div className="header-actions">
-          <div className="academic-year-info">
-            <span>Academic Year: {selectedAcademicYear}</span>
+          <div className="academic-year-info small">
+            <span>AY: {selectedAcademicYear}</span>
           </div>
-          <button 
-            className="btn btn-secondary" 
-            onClick={() => navigate('/admin/time-management')}
-          >
-            Back to All Classes
-          </button>
         </div>
       </div>
     );
@@ -740,37 +734,19 @@ const TimeManagement = () => {
           <>
             {renderClassHeader()}
             
-            <ul className="nav nav-tabs mb-3">
-              <li className="nav-item">
-                <button 
-                  className={`nav-link ${activeTab === 'schedule' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('schedule')}
-                >
-                  Class Schedule
-                </button>
-              </li>
-              <li className="nav-item">
-                <button 
-                  className={`nav-link ${activeTab === 'events' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('events')}
-                >
-                  Events & Exams
-                </button>
-              </li>
-            </ul>
+            <div className="inner-top-nav">
+              <div className={`top-nav-item ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>Class Schedule</div>
+              <div className={`top-nav-item ${activeTab === 'events' ? 'active' : ''}`} onClick={() => setActiveTab('events')}>Events & Exams</div>
+              <div className="top-nav-spacer" />
+              <div className="top-actions">
+                <button className="btn btn-outline-primary btn-sm me-2"><i className="fas fa-copy"></i> Copy</button>
+                <button className="btn btn-outline-success btn-sm me-2" onClick={() => window.print()}><i className="fas fa-print"></i> Print</button>
+                <button className="btn btn-outline-info btn-sm"><i className="fas fa-download"></i> Export</button>
+              </div>
+            </div>
 
             <div className="tab-content">
-              {activeTab === 'schedule' && (
-                <div className="tab-pane fade show active">
-                  {renderScheduleGrid()}
-                </div>
-              )}
-              
-              {activeTab === 'events' && (
-                <div className="tab-pane fade show active">
-                  {renderEventsTab()}
-                </div>
-              )}
+              {activeTab === 'schedule' ? renderScheduleGrid() : renderEventsTab()}
             </div>
           </>
         ) : (

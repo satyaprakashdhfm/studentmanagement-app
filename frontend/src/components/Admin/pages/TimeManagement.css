@@ -225,6 +225,42 @@
   font-size: 1.1rem;
 }
 
+/* Inner top navigation inside content card */
+.inner-top-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color);
+  background: transparent;
+}
+
+.top-nav-item {
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.top-nav-item.active {
+  color: var(--primary-color);
+  background: var(--primary-light);
+  border: 1px solid rgba(52,152,219,0.12);
+}
+
+.top-nav-spacer { flex: 1; }
+
+.top-actions { display: flex; gap: 8px; align-items: center; }
+
+.academic-year-info.small { padding: 6px 10px; font-size: 0.85rem; border-radius: 10px; }
+
+/* Legend improvements */
+.schedule-legend { padding: 12px 18px; display: flex; align-items: center; gap: 16px; }
+.legend-items { display: flex; gap: 10px; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; color: var(--text-secondary); }
+.legend-color { width: 18px; height: 18px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+
 /* Schedule Grid */
 .schedule-grid {
   overflow-x: auto;
