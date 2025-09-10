@@ -634,7 +634,7 @@ const TimeManagement = () => {
           {grade ? (
             <div className="grade-section">
               <h3>Classes for Grade {grade}</h3>
-              <div className="class-boxes">
+              <div className="class-boxes horizontal">
                 {filteredByGrade && filteredByGrade.length > 0 ? (
                   filteredByGrade.map(cls => (
                     <div 
@@ -649,12 +649,17 @@ const TimeManagement = () => {
                         cursor: 'pointer',
                         transition: 'transform 0.2s, box-shadow 0.2s',
                         marginBottom: '10px',
+                        marginRight: '16px',
+                        minWidth: '240px',
+                        flex: '0 0 auto',
                       }}
                       onClick={() => handleClassBoxClick(cls)}
                     >
-                      <h4 style={{ fontSize: '1.2em', marginBottom: '10px', color: '#3498db' }}>{cls.className} {cls.section}</h4>
+                      <div style={{ position: 'relative' }}>
+                        <span className="ay-badge">{cls.academicYear}</span>
+                        <h4 style={{ fontSize: '1.2em', marginBottom: '10px', color: '#3498db' }}>{cls.className} {cls.section}</h4>
+                      </div>
                       <div className="class-info" style={{ fontSize: '0.9em', color: '#7f8c8d' }}>
-                        <p style={{ marginBottom: '5px' }}>Academic Year: {cls.academicYear}</p>
                         {cls.maxStudents && <p style={{ marginBottom: '5px' }}>Max Students: {cls.maxStudents}</p>}
                       </div>
                     </div>
@@ -671,7 +676,7 @@ const TimeManagement = () => {
             Object.keys(classGroups).map(gr => (
               <div key={gr} className="grade-section">
                 <h3>Grade {gr}</h3>
-                <div className="class-boxes">
+                <div className="class-boxes horizontal">
                   {classGroups[gr].map(cls => (
                     <div 
                       key={`${cls.classId}-${cls.section}`}
@@ -685,12 +690,17 @@ const TimeManagement = () => {
                         cursor: 'pointer',
                         transition: 'transform 0.2s, box-shadow 0.2s',
                         marginBottom: '10px',
+                        marginRight: '16px',
+                        minWidth: '240px',
+                        flex: '0 0 auto',
                       }}
                       onClick={() => handleClassBoxClick(cls)}
                     >
-                      <h4 style={{ fontSize: '1.2em', marginBottom: '10px', color: '#3498db' }}>{cls.className} {cls.section}</h4>
+                      <div style={{ position: 'relative' }}>
+                        <span className="ay-badge">{cls.academicYear}</span>
+                        <h4 style={{ fontSize: '1.2em', marginBottom: '10px', color: '#3498db' }}>{cls.className} {cls.section}</h4>
+                      </div>
                       <div className="class-info" style={{ fontSize: '0.9em', color: '#7f8c8d' }}>
-                        <p style={{ marginBottom: '5px' }}>Academic Year: {cls.academicYear}</p>
                         {cls.maxStudents && <p style={{ marginBottom: '5px' }}>Max Students: {cls.maxStudents}</p>}
                       </div>
                     </div>
