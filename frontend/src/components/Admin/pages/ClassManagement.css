@@ -1,0 +1,76 @@
+/* Minimal styles for ClassManagement — adjust as needed */
+.content-area {
+  padding: 20px;
+}
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.grades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.grade-block {
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.sections {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.section-card {
+  border: 1px solid #eee;
+  padding: 10px;
+  border-radius: 6px;
+  min-width: 180px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.meta {
+  font-size: 12px;
+  color: #666;
+}
+.actions button {
+  margin-left: 6px;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal {
+  background: #fff;
+  padding: 20px;
+  border-radius: 6px;
+  width: 420px;
+  max-width: 90%;
+}
+.form-row {
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.form-row label {
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.form-row input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+.form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
