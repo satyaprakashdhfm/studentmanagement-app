@@ -7,31 +7,72 @@ const { hashPassword } = require('../utils/password');
 // GET /api/teachers - Get all teachers
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { search, active, page = 1, limit = 50 } = req.query;
-    
-    // Get teachers with simple query
-    const teachers = await prisma.$queryRaw`
-      SELECT * FROM teachers 
-      WHERE active = true
-      ORDER BY name ASC
-    `;
+    const { search, active = 'true', page = 1, limit = 50 } = req.query;
 
-    // Convert BigInt fields to strings for JSON serialization
-    const teachersWithStringIds = teachers.map(teacher => ({
-      ...teacher,
-      teacher_id: teacher.teacher_id.toString(),
-      user_id: teacher.user_id.toString(),
-      salary: teacher.salary ? teacher.salary.toString() : null
+    const where = {};
+    if (active !== undefined) {
+      where.active = String(active) === 'true';
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: String(search), mode: 'insensitive' } },
+        { email: { contains: String(search), mode: 'insensitive' } },
+        { qualification: { contains: String(search), mode: 'insensitive' } },
+      ];
+    }
+
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [teachers, total] = await Promise.all([
+      prisma.teacher.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip,
+        take: limitNum,
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+          email: true,
+          phoneNumber: true,
+          qualification: true,
+          subjectsHandled: true,
+          classesAssigned: true,
+          classTeacherOf: true,
+          hireDate: true,
+          salary: true,
+          active: true,
+        },
+      }),
+      prisma.teacher.count({ where }),
+    ]);
+
+    // Map BigInt/Decimal to JS types and provide defaults for arrays
+    const normalized = teachers.map(t => ({
+      id: Number(t.id),
+      userId: Number(t.userId),
+      name: t.name,
+      email: t.email,
+      phoneNumber: t.phoneNumber || null,
+      qualification: t.qualification || null,
+      subjectsHandled: Array.isArray(t.subjectsHandled) ? t.subjectsHandled : [],
+      classesAssigned: Array.isArray(t.classesAssigned) ? t.classesAssigned : [],
+      classTeacherOf: t.classTeacherOf || null,
+      hireDate: t.hireDate,
+      salary: t.salary ? Number(t.salary) : null,
+      active: t.active,
     }));
 
     res.json({
-      teachers: teachersWithStringIds,
+      teachers: normalized,
       pagination: {
-        page: 1,
-        limit: teachersWithStringIds.length,
-        total: teachersWithStringIds.length,
-        pages: 1
-      }
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum) || 1,
+      },
     });
 
   } catch (error) {
