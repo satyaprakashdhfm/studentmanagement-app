@@ -51,16 +51,16 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Map BigInt/Decimal to JS types and provide defaults for arrays
     const normalized = teachers.map(t => ({
-      id: Number(t.id),
-      userId: Number(t.userId),
+      teacher_id: Number(t.id),
+      user_id: Number(t.userId),
       name: t.name,
       email: t.email,
-      phoneNumber: t.phoneNumber || null,
+      phone_number: t.phoneNumber || null,
       qualification: t.qualification || null,
-      subjectsHandled: Array.isArray(t.subjectsHandled) ? t.subjectsHandled : [],
-      classesAssigned: Array.isArray(t.classesAssigned) ? t.classesAssigned : [],
-      classTeacherOf: t.classTeacherOf || null,
-      hireDate: t.hireDate,
+      subjects_handled: Array.isArray(t.subjectsHandled) ? t.subjectsHandled : [],
+      classes_assigned: Array.isArray(t.classesAssigned) ? t.classesAssigned : [],
+      class_teacher_of: t.classTeacherOf || null,
+      hire_date: t.hireDate,
       salary: t.salary ? Number(t.salary) : null,
       active: t.active,
     }));

@@ -130,10 +130,127 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       `;
     }
 
-    res.json(scheduleEntry[0] || scheduleEntry);
+    // Convert BigInt fields to strings for JSON serialization
+    const normalizedResult = scheduleEntry[0] || scheduleEntry;
+    if (normalizedResult) {
+      normalizedResult.schedule_id = normalizedResult.schedule_id ? normalizedResult.schedule_id.toString() : null;
+      normalizedResult.class_id = normalizedResult.class_id ? normalizedResult.class_id.toString() : null;
+      normalizedResult.slot_id = normalizedResult.slot_id ? normalizedResult.slot_id.toString() : null;
+      normalizedResult.subject_id = normalizedResult.subject_id ? normalizedResult.subject_id.toString() : null;
+      normalizedResult.teacher_id = normalizedResult.teacher_id ? normalizedResult.teacher_id.toString() : null;
+    }
+
+    res.json(normalizedResult);
   } catch (error) {
     console.error('Error creating/updating schedule:', error);
     res.status(500).json({ error: 'Failed to create/update schedule' });
+  }
+});
+
+// Update schedule entry (PUT method for frontend compatibility)
+router.put('/schedule', authenticateToken, async (req, res) => {
+  try {
+    const {
+      classId,
+      section,
+      dayOfWeek,
+      slotId,
+      subjectId,
+      teacherId,
+      academicYear,
+      scheduleId
+    } = req.body;
+
+    console.log('PUT Schedule Update Request:', {
+      classId,
+      section,
+      dayOfWeek,
+      slotId,
+      subjectId,
+      teacherId,
+      academicYear,
+      scheduleId
+    });
+
+    // Handle teacherId - if it's a string (teacher name), find the teacher ID
+    let finalTeacherId = teacherId;
+    if (teacherId && isNaN(teacherId)) {
+      // teacherId is a string (teacher name), find the actual teacher ID
+      const teacher = await prisma.$queryRaw`
+        SELECT teacher_id FROM teachers WHERE name = ${teacherId}
+      `;
+      if (teacher.length > 0) {
+        finalTeacherId = teacher[0].teacher_id;
+      } else {
+        return res.status(400).json({ error: 'Teacher not found' });
+      }
+    }
+
+    // If scheduleId is provided, update that specific entry
+    if (scheduleId) {
+      const updateQuery = await prisma.$queryRaw`
+        UPDATE class_schedule
+        SET subject_id = ${subjectId ? parseInt(subjectId) : null},
+            teacher_id = ${finalTeacherId ? BigInt(finalTeacherId) : null},
+            updated_at = NOW()
+        WHERE schedule_id = ${BigInt(scheduleId)}
+        RETURNING *
+      `;
+
+      if (updateQuery.length === 0) {
+        return res.status(404).json({ error: 'Schedule entry not found' });
+      }
+
+      // Convert BigInt fields to strings for JSON serialization
+      const normalizedResult = {
+        ...updateQuery[0],
+        schedule_id: updateQuery[0].schedule_id ? updateQuery[0].schedule_id.toString() : null,
+        class_id: updateQuery[0].class_id ? updateQuery[0].class_id.toString() : null,
+        slot_id: updateQuery[0].slot_id ? updateQuery[0].slot_id.toString() : null,
+        subject_id: updateQuery[0].subject_id ? updateQuery[0].subject_id.toString() : null,
+        teacher_id: updateQuery[0].teacher_id ? updateQuery[0].teacher_id.toString() : null,
+      };
+
+      return res.json(normalizedResult);
+    }
+
+    // Otherwise, find by class/section/day/slot and update
+    const existingSchedule = await prisma.$queryRaw`
+      SELECT * FROM class_schedule
+      WHERE class_id = ${parseInt(classId)}
+        AND section = ${section}
+        AND day_of_week = ${parseInt(dayOfWeek)}
+        AND slot_id = ${parseInt(slotId)}
+        AND academic_year = ${academicYear || '2024-2025'}
+    `;
+
+    if (existingSchedule.length === 0) {
+      return res.status(404).json({ error: 'Schedule entry not found' });
+    }
+
+    const updateQuery = await prisma.$queryRaw`
+      UPDATE class_schedule
+      SET subject_id = ${subjectId ? parseInt(subjectId) : null},
+          teacher_id = ${finalTeacherId ? BigInt(finalTeacherId) : null},
+          updated_at = NOW()
+      WHERE schedule_id = ${existingSchedule[0].schedule_id}
+      RETURNING *
+    `;
+
+    // Convert BigInt fields to strings for JSON serialization
+    const normalizedResult = {
+      ...updateQuery[0],
+      schedule_id: updateQuery[0].schedule_id ? updateQuery[0].schedule_id.toString() : null,
+      class_id: updateQuery[0].class_id ? updateQuery[0].class_id.toString() : null,
+      slot_id: updateQuery[0].slot_id ? updateQuery[0].slot_id.toString() : null,
+      subject_id: updateQuery[0].subject_id ? updateQuery[0].subject_id.toString() : null,
+      teacher_id: updateQuery[0].teacher_id ? updateQuery[0].teacher_id.toString() : null,
+    };
+
+    res.json(normalizedResult);
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    res.status(500).json({ error: 'Failed to update schedule' });
   }
 });
 
