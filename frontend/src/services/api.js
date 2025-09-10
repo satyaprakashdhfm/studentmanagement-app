@@ -353,8 +353,12 @@ class ApiService {
     return this.request('/timemanagement/timeslots');
   }
 
-  async getClassSchedule(classId, section, academicYear = '2024-2025') {
-    return this.request(`/timemanagement/schedule/${classId}/${section}?academicYear=${academicYear}`);
+  async getClassSchedule(classId, section, academicYear = '2024-2025', startDate = null) {
+    let url = `/timemanagement/schedule/${classId}/${section}?academicYear=${academicYear}`;
+    if (startDate) {
+      url += `&startDate=${startDate}`;
+    }
+    return this.request(url);
   }
 
   async createScheduleEntry(scheduleData) {

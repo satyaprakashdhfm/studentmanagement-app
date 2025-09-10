@@ -40,7 +40,7 @@ router.get('/timeslots', authenticateToken, async (req, res) => {
 router.get('/schedule/:classId/:section', authenticateToken, async (req, res) => {
   try {
     const { classId, section } = req.params;
-    const { academicYear } = req.query;
+    const { academicYear, startDate } = req.query;
 
     const schedule = await prisma.$queryRaw`
       SELECT cs.*, 
@@ -58,25 +58,110 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
       ORDER BY cs.day_of_week ASC, ts.slot_order ASC
     `;
 
-    // Transform the data to match frontend expectations
-    const transformedSchedule = schedule.map(item => ({
-      ...item,
-      schedule_id: item.schedule_id ? item.schedule_id.toString() : null,
-      class_id: item.class_id ? item.class_id.toString() : null,
-      slot_id: item.slot_id ? item.slot_id.toString() : null,
-      subject_id: item.subject_id ? item.subject_id.toString() : null,
-      teacher_id: item.teacher_id ? item.teacher_id.toString() : null,
-      subject: item.subject_id ? {
-        subject_id: item.subject_id.toString(),
-        subject_name: item.subject_name
-      } : null,
-      teacher: item.teacher_id ? {
-        teacher_id: item.teacher_id.toString(),
-        name: item.teacher_name
-      } : null
-    }));
+    let exceptions = [];
+    let weekDates = {};
 
-    res.json({ schedule: transformedSchedule, exceptions: [] });
+    // If startDate is provided, calculate week dates and fetch exceptions
+    if (startDate) {
+      const start = new Date(startDate);
+      // Calculate dates for the week (Monday to Sunday)
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(start);
+        date.setDate(start.getDate() + i);
+        const dayOfWeek = (date.getDay() === 0 ? 7 : date.getDay()); // Convert Sunday (0) to 7
+        weekDates[dayOfWeek] = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
+
+      // Fetch exceptions for this week
+      exceptions = await prisma.$queryRaw`
+        SELECT se.*, 
+               s.subject_name, s.subject_id,
+               t.name as teacher_name, t.teacher_id,
+               ts.slot_name, ts.start_time, ts.end_time, ts.slot_order
+        FROM schedule_exceptions se
+        LEFT JOIN subjects s ON se.subject_id = s.subject_id
+        LEFT JOIN teachers t ON se.teacher_id = t.teacher_id
+        LEFT JOIN time_slots ts ON se.slot_id = ts.slot_id
+        WHERE se.exception_date >= ${weekDates[1]}::date
+          AND se.exception_date <= ${weekDates[7]}::date
+          AND se.academic_year = ${academicYear || '2024-2025'}
+          AND (se.class_id IS NULL OR se.class_id = ${parseInt(classId)})
+          AND (se.section IS NULL OR se.section = ${section})
+        ORDER BY se.exception_date ASC, ts.slot_order ASC
+      `;
+
+      // Convert BigInt fields to strings
+      exceptions = exceptions.map(exc => ({
+        ...exc,
+        exception_id: exc.exception_id ? exc.exception_id.toString() : null,
+        class_id: exc.class_id ? exc.class_id.toString() : null,
+        slot_id: exc.slot_id ? exc.slot_id.toString() : null,
+        subject_id: exc.subject_id ? exc.subject_id.toString() : null,
+        teacher_id: exc.teacher_id ? exc.teacher_id.toString() : null,
+        created_by: exc.created_by ? exc.created_by.toString() : null
+      }));
+    }
+
+    // Transform the schedule data
+    const transformedSchedule = schedule.map(item => {
+      const dayOfWeek = item.day_of_week;
+      const slotId = item.slot_id;
+      const exceptionDate = weekDates[dayOfWeek];
+
+      // Find matching exception
+      const matchingException = exceptions.find(exc => {
+        // Compare dates by converting both to YYYY-MM-DD format
+        const excDate = new Date(exc.exception_date).toISOString().split('T')[0];
+        return excDate === exceptionDate && 
+               String(exc.slot_id) === String(slotId) &&
+               (exc.class_id === null || String(exc.class_id) === String(classId)) &&
+               (exc.section === null || exc.section === section);
+      });
+
+      if (matchingException) {
+        // Override with exception data
+        return {
+          ...item,
+          schedule_id: item.schedule_id ? item.schedule_id.toString() : null,
+          class_id: item.class_id ? item.class_id.toString() : null,
+          slot_id: item.slot_id ? item.slot_id.toString() : null,
+          subject_id: matchingException.subject_id ? matchingException.subject_id.toString() : null,
+          teacher_id: matchingException.teacher_id ? matchingException.teacher_id.toString() : null,
+          subject: matchingException.subject_id ? {
+            subject_id: matchingException.subject_id.toString(),
+            subject_name: matchingException.exception_type === 'exam' ? 'EXAM' : (matchingException.subject_name || matchingException.title)
+          } : null,
+          teacher: matchingException.teacher_id ? {
+            teacher_id: matchingException.teacher_id.toString(),
+            name: matchingException.teacher_name
+          } : null,
+          is_exception: true,
+          exception_type: matchingException.exception_type,
+          exception_title: matchingException.title
+        };
+      } else {
+        // Regular schedule
+        return {
+          ...item,
+          schedule_id: item.schedule_id ? item.schedule_id.toString() : null,
+          class_id: item.class_id ? item.class_id.toString() : null,
+          slot_id: item.slot_id ? item.slot_id.toString() : null,
+          subject_id: item.subject_id ? item.subject_id.toString() : null,
+          teacher_id: item.teacher_id ? item.teacher_id.toString() : null,
+          subject: item.subject_id ? {
+            subject_id: item.subject_id.toString(),
+            subject_name: item.subject_name
+          } : null,
+          teacher: item.teacher_id ? {
+            teacher_id: item.teacher_id.toString(),
+            name: item.teacher_name
+          } : null,
+          is_exception: false
+        };
+      }
+    });
+
+    res.json({ schedule: transformedSchedule, exceptions: exceptions, weekDates: weekDates });
   } catch (error) {
     console.error('Error fetching class schedule:', error);
     res.status(500).json({ error: 'Failed to fetch class schedule' });
@@ -316,6 +401,70 @@ router.get('/exceptions', authenticateToken, async (req, res) => {
   }
 });
 
+// Get schedule exceptions
+router.get('/exceptions', authenticateToken, async (req, res) => {
+  try {
+    const { academicYear, classId, section, startDate, endDate } = req.query;
+
+    let whereClause = {
+      academicYear: academicYear || '2024-2025'
+    };
+
+    if (classId) {
+      whereClause.classId = parseInt(classId);
+    }
+
+    if (section) {
+      whereClause.section = section;
+    }
+
+    if (startDate && endDate) {
+      whereClause.exceptionDate = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+
+    const exceptions = await prisma.scheduleException.findMany({
+      where: whereClause,
+      include: {
+        class: true,
+        timeSlot: true,
+        subject: true,
+        teacher: true,
+        creator: {
+          select: {
+            username: true,
+            firstName: true,
+            lastName: true
+          }
+        }
+      },
+      orderBy: [
+        { exceptionDate: 'asc' },
+        { slotId: 'asc' }
+      ]
+    });
+
+    // Convert BigInt fields to strings for JSON serialization
+    const exceptionsWithStringIds = exceptions.map(exc => ({
+      ...exc,
+      exception_id: exc.exceptionId.toString(),
+      class_id: exc.classId ? exc.classId.toString() : null,
+      slot_id: exc.slotId ? exc.slotId.toString() : null,
+      subject_id: exc.subjectId ? exc.subjectId.toString() : null,
+      teacher_id: exc.teacherId ? exc.teacherId.toString() : null,
+      created_by: exc.createdBy.toString(),
+      exception_date: exc.exceptionDate.toISOString().split('T')[0] // Format date
+    }));
+
+    res.json(exceptionsWithStringIds);
+  } catch (error) {
+    console.error('Error fetching exceptions:', error);
+    res.status(500).json({ error: 'Failed to fetch exceptions' });
+  }
+});
+
 // Create schedule exception (exam/event)
 router.post('/exceptions', authenticateToken, async (req, res) => {
   try {
@@ -356,7 +505,18 @@ router.post('/exceptions', authenticateToken, async (req, res) => {
       }
     });
 
-    res.json(exception);
+    // Convert BigInt fields to strings for JSON serialization
+    const exceptionWithStringIds = {
+      ...exception,
+      exceptionId: exception.exceptionId.toString(),
+      classId: exception.classId ? exception.classId.toString() : null,
+      slotId: exception.slotId ? exception.slotId.toString() : null,
+      subjectId: exception.subjectId ? exception.subjectId.toString() : null,
+      teacherId: exception.teacherId ? exception.teacherId.toString() : null,
+      createdBy: exception.createdBy.toString()
+    };
+
+    res.json(exceptionWithStringIds);
   } catch (error) {
     console.error('Error creating exception:', error);
     res.status(500).json({ error: 'Failed to create exception' });
@@ -394,7 +554,18 @@ router.put('/exceptions/:exceptionId', authenticateToken, async (req, res) => {
       }
     });
 
-    res.json(exception);
+    // Convert BigInt fields to strings for JSON serialization
+    const exceptionWithStringIds = {
+      ...exception,
+      exceptionId: exception.exceptionId.toString(),
+      classId: exception.classId ? exception.classId.toString() : null,
+      slotId: exception.slotId ? exception.slotId.toString() : null,
+      subjectId: exception.subjectId ? exception.subjectId.toString() : null,
+      teacherId: exception.teacherId ? exception.teacherId.toString() : null,
+      createdBy: exception.createdBy.toString()
+    };
+
+    res.json(exceptionWithStringIds);
   } catch (error) {
     console.error('Error updating exception:', error);
     res.status(500).json({ error: 'Failed to update exception' });

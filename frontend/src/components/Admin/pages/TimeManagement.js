@@ -21,6 +21,8 @@ const TimeManagement = () => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [modalData, setModalData] = useState({});
   const [loading, setLoading] = useState(false);
+  const [currentWeekStart, setCurrentWeekStart] = useState(null);
+  const [examDates, setExamDates] = useState([]);
 
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   
@@ -162,6 +164,13 @@ const TimeManagement = () => {
     }
   }, [selectedClass, selectedAcademicYear]);
 
+  // Fetch schedule when week changes
+  useEffect(() => {
+    if (selectedClass && currentWeekStart) {
+      fetchSchedule();
+    }
+  }, [currentWeekStart]);
+
   const fetchTimeSlots = async () => {
     try {
       const data = await apiService.getTimeSlots();
@@ -175,10 +184,25 @@ const TimeManagement = () => {
   const fetchSchedule = async () => {
     try {
       setLoading(true);
+      
+      // Use currentWeekStart if available, otherwise calculate start of current week (Monday)
+      let startDate;
+      if (currentWeekStart) {
+        startDate = currentWeekStart.toISOString().split('T')[0];
+      } else {
+        const today = new Date();
+        const startOfWeek = new Date(today);
+        const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust for Sunday
+        startOfWeek.setDate(diff);
+        startDate = startOfWeek.toISOString().split('T')[0]; // YYYY-MM-DD format
+      }
+      
       const data = await apiService.getClassSchedule(
         selectedClass.classId, 
         selectedClass.section, 
-        selectedAcademicYear
+        selectedAcademicYear,
+        startDate
       );
       console.log('Schedule data fetched:', data); // Debug
       setSchedule(data.schedule || []);
@@ -211,6 +235,59 @@ const TimeManagement = () => {
     }
   };
 
+  // Fetch exam dates for the current week
+  const fetchExamDates = async () => {
+    try {
+      const data = await apiService.getEvents(selectedAcademicYear);
+      const examEvents = data.filter(event => event.exception_type === 'exam');
+      setExamDates(examEvents.map(event => event.exception_date));
+    } catch (error) {
+      console.error('Error fetching exam dates:', error);
+      setExamDates([]);
+    }
+  };
+
+  // Get week dates starting from Monday
+  const getWeekDates = (startDate) => {
+    const dates = [];
+    const start = new Date(startDate);
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      dates.push({
+        date: date.toISOString().split('T')[0],
+        dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
+        dayNumber: date.getDate(),
+        isExam: examDates.includes(date.toISOString().split('T')[0])
+      });
+    }
+    
+    return dates;
+  };
+
+  // Navigate to previous/next week
+  const navigateWeek = (direction) => {
+    const newStartDate = new Date(currentWeekStart);
+    newStartDate.setDate(newStartDate.getDate() + (direction * 7));
+    setCurrentWeekStart(newStartDate);
+  };
+
+  // Initialize current week start
+  useEffect(() => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    const dayOfWeek = today.getDay();
+    const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    setCurrentWeekStart(startOfWeek);
+  }, []);
+
+  // Fetch exam dates when component mounts
+  useEffect(() => {
+    fetchExamDates();
+  }, [selectedAcademicYear]);
+
   const renderClassHeader = () => {
     if (!selectedClass) return null;
     
@@ -223,6 +300,91 @@ const TimeManagement = () => {
         <div className="header-actions">
           <div className="academic-year-info small">
             <span>AY: {selectedAcademicYear}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCalendarView = () => {
+    if (!currentWeekStart) return <div>Loading calendar...</div>;
+
+    const weekDates = getWeekDates(currentWeekStart);
+    const weekRange = `${weekDates[0].date} to ${weekDates[6].date}`;
+
+    return (
+      <div className="calendar-view">
+        <div className="calendar-header">
+          <div className="calendar-navigation">
+            <button 
+              className="btn btn-outline-secondary btn-sm" 
+              onClick={() => navigateWeek(-1)}
+            >
+              <i className="fas fa-chevron-left"></i> Previous Week
+            </button>
+            <h4 className="calendar-title">
+              Week of {new Date(currentWeekStart).toLocaleDateString('en-US', { 
+                month: 'long', 
+                day: 'numeric', 
+                year: 'numeric' 
+              })}
+            </h4>
+            <button 
+              className="btn btn-outline-secondary btn-sm" 
+              onClick={() => navigateWeek(1)}
+            >
+              Next Week <i className="fas fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <div className="calendar-grid">
+          {weekDates.map((dayInfo, index) => (
+            <div 
+              key={dayInfo.date} 
+              className={`calendar-day ${dayInfo.isExam ? 'exam-day' : ''}`}
+            >
+              <div className="day-header">
+                <div className="day-name">{dayInfo.dayName}</div>
+                <div className="day-number">{dayInfo.dayNumber}</div>
+                {dayInfo.isExam && (
+                  <div className="exam-indicator">
+                    <i className="fas fa-graduation-cap"></i>
+                    <span>EXAM</span>
+                  </div>
+                )}
+              </div>
+              <div className="day-content">
+                {dayInfo.isExam ? (
+                  <div className="exam-schedule">
+                    <div className="exam-icon">
+                      <i className="fas fa-book-open"></i>
+                    </div>
+                    <div className="exam-details">
+                      <h5>Final Exam</h5>
+                      <p>All periods scheduled for exams</p>
+                      <small>Regular schedule overridden</small>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="regular-day">
+                    <i className="fas fa-calendar-check"></i>
+                    <p>Regular schedule</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="calendar-legend">
+          <div className="legend-item">
+            <div className="legend-color regular"></div>
+            <span>Regular Schedule</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color exam"></div>
+            <span>Exam Day</span>
           </div>
         </div>
       </div>
@@ -243,8 +405,48 @@ const TimeManagement = () => {
       schedule: schedule?.length || 0
     });
 
+    const weekDates = currentWeekStart ? getWeekDates(currentWeekStart) : [];
+    const examDays = weekDates.filter(day => day.isExam);
+
     return (
       <div className="schedule-container">
+        {/* Week Navigation and Exam Info */}
+        <div className="week-navigation">
+          <div className="week-nav-controls">
+            <button 
+              className="btn btn-outline-secondary btn-sm" 
+              onClick={() => navigateWeek(-1)}
+            >
+              <i className="fas fa-chevron-left"></i> Previous Week
+            </button>
+            <h5 className="week-title">
+              Week of {currentWeekStart ? new Date(currentWeekStart).toLocaleDateString('en-US', { 
+                month: 'long', 
+                day: 'numeric', 
+                year: 'numeric' 
+              }) : 'Current Week'}
+            </h5>
+            <button 
+              className="btn btn-outline-secondary btn-sm" 
+              onClick={() => navigateWeek(1)}
+            >
+              Next Week <i className="fas fa-chevron-right"></i>
+            </button>
+          </div>
+          
+          {examDays.length > 0 && (
+            <div className="exam-alert">
+              <div className="exam-alert-icon">
+                <i className="fas fa-graduation-cap"></i>
+              </div>
+              <div className="exam-alert-content">
+                <strong>Exam Week:</strong> {examDays.map(day => day.dayName).join(', ')} 
+                ({examDays.length} exam day{examDays.length > 1 ? 's' : ''})
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="schedule-header">
           <div className="schedule-title">
             <h4>Weekly Schedule - Class {selectedClass.className} Section {selectedClass.section}</h4>
@@ -300,57 +502,72 @@ const TimeManagement = () => {
             </thead>
             <tbody>
               {timeSlots && timeSlots.length > 0 ? 
-                dayNames.slice(0, 6).map((day, dayIndex) => (
-                  <tr key={day} className="schedule-row">
-                    <td className="day-cell">
-                      <div className="day-name">{day}</div>
-                    </td>
-                    {timeSlots
-                      .filter(slot => slot.slot_name !== 'Break' && slot.slot_name !== 'Lunch Break')
-                      .map(slot => {
-                        const scheduleItem = schedule.find(
-                          s => s.day_of_week === (dayIndex + 1) && s.slot_id === slot.slot_id
-                        );
-                        
-                        return (
-                          <td key={`${day}-${slot.slot_id}`} className="period-cell">
-                            {scheduleItem ? (
-                              <div 
-                                className="period-content filled"
-                                style={{ 
-                                  backgroundColor: getSubjectColor(scheduleItem.subject?.subject_name),
-                                  borderLeft: `4px solid ${getSubjectColor(scheduleItem.subject?.subject_name)}`
-                                }}
-                                onClick={() => handleScheduleClick(day, slot.slot_id, scheduleItem)}
-                              >
-                                <div className="subject-name">
-                                  {scheduleItem.subject?.subject_name || 'Unknown'}
-                                </div>
-                                <div className="teacher-name">
-                                  <i className="fas fa-user"></i> {scheduleItem.teacher?.name || 'No Teacher'}
-                                </div>
-                                {scheduleItem.room && (
-                                  <div className="room-info">
-                                    <i className="fas fa-door-open"></i> {scheduleItem.room}
+                dayNames.slice(0, 6).map((day, dayIndex) => {
+                  const dayOfWeek = dayIndex + 1;
+                  const dayDate = weekDates.find(d => d.dayOfWeek === dayOfWeek);
+                  const isExamDay = dayDate && dayDate.isExam;
+                  
+                  return (
+                    <tr key={day} className="schedule-row">
+                      <td className={`day-cell ${isExamDay ? 'exam-day-header' : ''}`}>
+                        <div className="day-name">
+                          {day}
+                          {isExamDay && <span className="exam-badge">📚</span>}
+                        </div>
+                      </td>
+                      {timeSlots
+                        .filter(slot => slot.slot_name !== 'Break' && slot.slot_name !== 'Lunch Break')
+                        .map(slot => {
+                          const scheduleItem = schedule.find(
+                            s => s.day_of_week === (dayIndex + 1) && s.slot_id === slot.slot_id
+                          );
+                          
+                          return (
+                            <td key={`${day}-${slot.slot_id}`} className="period-cell">
+                              {scheduleItem ? (
+                                <div 
+                                  className={`period-content filled ${scheduleItem.is_exception && scheduleItem.exception_type === 'exam' ? 'exam-slot' : ''}`}
+                                  style={{ 
+                                    backgroundColor: scheduleItem.is_exception && scheduleItem.exception_type === 'exam' 
+                                      ? '#ffeaa7' 
+                                      : getSubjectColor(scheduleItem.subject?.subject_name),
+                                    borderLeft: `4px solid ${scheduleItem.is_exception && scheduleItem.exception_type === 'exam' 
+                                      ? '#e17055' 
+                                      : getSubjectColor(scheduleItem.subject?.subject_name)}`
+                                  }}
+                                  onClick={() => handleScheduleClick(day, slot.slot_id, scheduleItem)}
+                                >
+                                  <div className="subject-name">
+                                    {scheduleItem.is_exception && scheduleItem.exception_type === 'exam' 
+                                      ? 'EXAM' 
+                                      : (scheduleItem.subject?.subject_name || 'Unknown')}
                                   </div>
-                                )}
-                              </div>
-                            ) : (
-                              <div 
-                                className="period-content empty"
-                                onClick={() => handleScheduleClick(day, slot.slot_id, null)}
-                              >
-                                <div className="empty-content">
-                                  <i className="fas fa-plus-circle"></i>
-                                  <span>Add Subject</span>
+                                  <div className="teacher-name">
+                                    <i className="fas fa-user"></i> {scheduleItem.teacher?.name || 'No Teacher'}
+                                  </div>
+                                  {scheduleItem.room && (
+                                    <div className="room-info">
+                                      <i className="fas fa-door-open"></i> {scheduleItem.room}
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                  </tr>
-                ))
+                              ) : (
+                                <div 
+                                  className="period-content empty"
+                                  onClick={() => handleScheduleClick(day, slot.slot_id, null)}
+                                >
+                                  <div className="empty-content">
+                                    <i className="fas fa-plus-circle"></i>
+                                    <span>Add Subject</span>
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                    </tr>
+                  );
+                })
                 :
                 <tr>
                   <td colSpan="8" className="text-center p-4">
