@@ -125,6 +125,16 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 
+/* Ensure card container creates the positioning context for the AY badge */
+.class-box {
+  position: relative;
+  overflow: visible;
+}
+
+.class-box .ay-badge {
+  z-index: 5;
+}
+
 .grade-group {
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -462,10 +472,13 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  /* slightly darker backdrop for legibility */
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 1100;
   align-items: center;
   justify-content: center;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
 }
 
 .modal.show {
@@ -473,13 +486,27 @@
 }
 
 .modal-content {
-  background: var(--card-background);
+  /* stronger solid background to avoid transparent look on some themes */
+  background: var(--card-background, #ffffff);
   border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
+  width: 95%;
+  max-width: 720px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(0,0,0,0.06);
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
+  transform-origin: center top;
+}
+
+.modal.show .modal-content {
+  animation: modalPop 180ms ease-out;
+  opacity: 1;
+}
+
+@keyframes modalPop {
+  from { transform: translateY(-6px) scale(0.99); opacity: 0.0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 .modal-header {
@@ -518,8 +545,42 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Custom close button for this modal to ensure visibility on all backgrounds */
+.btn-close-custom {
+  color: rgba(255,255,255,0.95);
+  background: rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.06);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.btn-close-custom i { font-size: 0.95rem; }
+
+/* Modal footer primary button: visible even when disabled, but muted */
+.modal-footer .btn-primary {
+  opacity: 1;
+}
+.modal-footer .btn-primary[disabled], .modal-footer .btn[disabled] {
+  background-color: #d1d7db;
+  color: #ffffff;
+  cursor: not-allowed;
+  opacity: 0.95;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Make modal footer actions stand out */
+.modal-footer .btn {
+  min-width: 96px;
+}
+
 .modal-body {
-  padding: 20px;
+  padding: 22px 20px;
+  background: transparent;
 }
 
 .form-group {
@@ -563,6 +624,78 @@
   justify-content: flex-end;
   padding: 20px;
   border-top: 1px solid var(--border-color);
+}
+
+/* Improve the events & exams main body */
+.events-container {
+  background: linear-gradient(180deg, var(--card-background), rgba(247, 252, 255, 0.9));
+  border: 1px solid rgba(52,152,219,0.06);
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(52,152,219,0.04);
+}
+
+.events-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.events-title h4 {
+  margin: 0 0 4px 0;
+  font-size: 1.15rem;
+}
+
+.event-type-card {
+  padding: 18px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #fbfeff);
+  border: 1px solid rgba(0,0,0,0.04);
+  box-shadow: 0 6px 18px rgba(10,30,60,0.04);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  text-align: center;
+}
+
+.event-type-card:hover { transform: translateY(-6px); box-shadow: 0 14px 36px rgba(10,30,60,0.07); }
+
+.event-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px auto;
+  font-size: 1.15rem;
+  color: white;
+}
+
+.event-icon.exam { background: #ff6b6b; }
+.event-icon.holiday { background: #4ecdc4; }
+.event-icon.event { background: #45b7d1; }
+
+.upcoming-events {
+  margin-top: 18px;
+}
+
+.events-list .no-events {
+  padding: 24px;
+  background: linear-gradient(180deg,#fff,#f8fbff);
+  border: 1px dashed rgba(52,152,219,0.06);
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: none;
+}
+
+.events-list .no-events i { font-size: 2rem; color: rgba(52,152,219,0.85); margin-bottom: 8px; }
+
+/* Tighten mobile presentation */
+@media (max-width: 768px) {
+  .modal-content { max-width: 92%; }
+  .event-type-card { padding: 14px; }
+  .event-icon { width: 48px; height: 48px; }
 }
 
 /* Button styles */

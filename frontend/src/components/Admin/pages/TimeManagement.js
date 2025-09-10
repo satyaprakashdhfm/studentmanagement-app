@@ -204,17 +204,6 @@ const TimeManagement = () => {
               </span>
             </div>
           </div>
-          <div className="schedule-actions">
-            <button className="btn btn-outline-primary btn-sm me-2">
-              <i className="fas fa-copy"></i> Copy Schedule
-            </button>
-            <button className="btn btn-outline-success btn-sm me-2" onClick={() => window.print()}>
-              <i className="fas fa-print"></i> Print
-            </button>
-            <button className="btn btn-outline-info btn-sm">
-              <i className="fas fa-download"></i> Export
-            </button>
-          </div>
         </div>
 
         {/* Legend for subjects */}
@@ -395,11 +384,14 @@ const TimeManagement = () => {
             <h5 className="modal-title">
               {modalData.isEdit ? 'Edit' : 'Add'} Schedule - {selectedDay} {timeSlots.find(t => t.slot_id === selectedSlot)?.slot_name}
             </h5>
-            <button 
-              type="button" 
-              className="btn-close" 
+            <button
+              type="button"
+              className="close-btn btn-close-custom"
+              aria-label="Close"
               onClick={() => setShowScheduleModal(false)}
-            ></button>
+            >
+              <i className="fas fa-times" aria-hidden="true"></i>
+            </button>
           </div>
           
           <div className="modal-body">
