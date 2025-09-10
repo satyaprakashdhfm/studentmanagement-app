@@ -384,6 +384,84 @@ class ApiService {
   async getEvents(academicYear = '2024-2025') {
     return this.request(`/timemanagement/exceptions?academicYear=${academicYear}`);
   }
+
+  // Calendar
+  async getCalendars(academicYear) {
+    const params = academicYear ? `?academicYear=${academicYear}` : '';
+    return this.request(`/calendar${params}`);
+  }
+
+  async getCalendar(calendarId) {
+    return this.request(`/calendar/${calendarId}`);
+  }
+
+  async createCalendar(calendarData) {
+    return this.request('/calendar', {
+      method: 'POST',
+      body: JSON.stringify(calendarData),
+    });
+  }
+
+  async updateCalendar(calendarId, calendarData) {
+    return this.request(`/calendar/${calendarId}`, {
+      method: 'PUT',
+      body: JSON.stringify(calendarData),
+    });
+  }
+
+  async deleteCalendar(calendarId) {
+    return this.request(`/calendar/${calendarId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Schedule Exceptions
+  async getScheduleExceptions(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        queryParams.append(key, value);
+      }
+    });
+    const queryString = queryParams.toString();
+    return this.request(`/calendar/exceptions${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getScheduleException(exceptionId) {
+    return this.request(`/calendar/exceptions/${exceptionId}`);
+  }
+
+  async createScheduleException(exceptionData) {
+    return this.request('/calendar/exceptions', {
+      method: 'POST',
+      body: JSON.stringify(exceptionData),
+    });
+  }
+
+  async updateScheduleException(exceptionId, exceptionData) {
+    return this.request(`/calendar/exceptions/${exceptionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(exceptionData),
+    });
+  }
+
+  async deleteScheduleException(exceptionId) {
+    return this.request(`/calendar/exceptions/${exceptionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Combined Calendar Events (Academic Calendar + Schedule Exceptions)
+  async getCalendarEvents(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        queryParams.append(key, value);
+      }
+    });
+    const queryString = queryParams.toString();
+    return this.request(`/calendar/events${queryString ? `?${queryString}` : ''}`);
+  }
 }
 
 // Export a singleton instance
