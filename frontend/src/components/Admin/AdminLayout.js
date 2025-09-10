@@ -10,6 +10,8 @@ const AdminLayout = ({ children }) => {
   const [showFeeDropdown, setShowFeeDropdown] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
+  const [showAttendanceDropdown, setShowAttendanceDropdown] = useState(false);
+  const [showMarksDropdown, setShowMarksDropdown] = useState(false);
   
   // Use the academic year context
   const { 
@@ -55,6 +57,12 @@ const AdminLayout = ({ children }) => {
     if (location.pathname.includes('/admin/fees')) {
       setShowFeeDropdown(true);
     }
+    if (location.pathname.includes('/admin/attendance')) {
+      setShowAttendanceDropdown(true);
+    }
+    if (location.pathname.includes('/admin/marks')) {
+      setShowMarksDropdown(true);
+    }
   }, [location.pathname]);
 
   const handleStudentDropdownToggle = () => {
@@ -81,6 +89,30 @@ const AdminLayout = ({ children }) => {
     if (!showTimeDropdown) {
       setShowStudentDropdown(false);
       setShowFeeDropdown(false);
+      setShowAttendanceDropdown(false);
+      setShowMarksDropdown(false);
+    }
+  };
+
+  const handleAttendanceDropdownToggle = () => {
+    setShowAttendanceDropdown(!showAttendanceDropdown);
+    // Close other dropdowns when attendance dropdown is opened
+    if (!showAttendanceDropdown) {
+      setShowStudentDropdown(false);
+      setShowFeeDropdown(false);
+      setShowTimeDropdown(false);
+      setShowMarksDropdown(false);
+    }
+  };
+
+  const handleMarksDropdownToggle = () => {
+    setShowMarksDropdown(!showMarksDropdown);
+    // Close other dropdowns when marks dropdown is opened
+    if (!showMarksDropdown) {
+      setShowStudentDropdown(false);
+      setShowFeeDropdown(false);
+      setShowTimeDropdown(false);
+      setShowAttendanceDropdown(false);
     }
   };
 
@@ -89,6 +121,8 @@ const AdminLayout = ({ children }) => {
     setShowStudentDropdown(false);
     setShowFeeDropdown(false);
     setShowTimeDropdown(false);
+    setShowAttendanceDropdown(false);
+    setShowMarksDropdown(false);
   };
 
   // Function to handle navigation without closing dropdown for Time Management
@@ -104,6 +138,9 @@ const AdminLayout = ({ children }) => {
     // Close dropdowns when academic year changes
     setShowFeeDropdown(false);
     setShowStudentDropdown(false);
+    setShowTimeDropdown(false);
+    setShowAttendanceDropdown(false);
+    setShowMarksDropdown(false);
   };
 
   const handleLogout = () => {
@@ -263,28 +300,66 @@ const AdminLayout = ({ children }) => {
               </Link>
             </li>
 
-            {/* Attendance Management */}
+            {/* Attendance Management with Dropdown */}
             <li>
-              <Link 
-                to="/admin/attendance"
-                className={location.pathname === '/admin/attendance' ? 'active' : ''}
-                onClick={handleSingleNavClick}
+              <div 
+                className={`dropdown-header ${location.pathname.includes('/admin/attendance') ? 'active' : ''}`}
+                onClick={handleAttendanceDropdownToggle}
               >
                 <span style={{ marginRight: '10px' }}>📋</span>
                 Attendance Management
-              </Link>
+                <span style={{ marginLeft: '10px' }}>{showAttendanceDropdown ? '▲' : '▼'}</span>
+              </div>
+              {showAttendanceDropdown && (
+                <ul className="dropdown-menu">
+                  <li>
+                    <Link to="/admin/attendance" className={location.pathname === '/admin/attendance' ? 'active' : ''}>
+                      All Attendance
+                    </Link>
+                  </li>
+                  {uniqueGrades.map(grade => (
+                    <li key={grade}>
+                      <Link 
+                        to={`/admin/attendance/grade/${grade}`} 
+                        className={location.pathname === `/admin/attendance/grade/${grade}` ? 'active' : ''}
+                      >
+                        Grade {grade}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
 
-            {/* Marks Management */}
+            {/* Marks Management with Dropdown */}
             <li>
-              <Link 
-                to="/admin/marks"
-                className={location.pathname === '/admin/marks' ? 'active' : ''}
-                onClick={handleSingleNavClick}
+              <div 
+                className={`dropdown-header ${location.pathname.includes('/admin/marks') ? 'active' : ''}`}
+                onClick={handleMarksDropdownToggle}
               >
                 <span style={{ marginRight: '10px' }}>📊</span>
                 Marks Management
-              </Link>
+                <span style={{ marginLeft: '10px' }}>{showMarksDropdown ? '▲' : '▼'}</span>
+              </div>
+              {showMarksDropdown && (
+                <ul className="dropdown-menu">
+                  <li>
+                    <Link to="/admin/marks" className={location.pathname === '/admin/marks' ? 'active' : ''}>
+                      All Marks
+                    </Link>
+                  </li>
+                  {uniqueGrades.map(grade => (
+                    <li key={grade}>
+                      <Link 
+                        to={`/admin/marks/grade/${grade}`} 
+                        className={location.pathname === `/admin/marks/grade/${grade}` ? 'active' : ''}
+                      >
+                        Grade {grade}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
 
             {/* System Configuration without Dropdown */}

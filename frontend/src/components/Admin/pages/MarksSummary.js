@@ -186,6 +186,16 @@ const MarksSummary = () => {
                     <span className="section-count">
                       {section.count} records • Avg: {section.averageMarks}%
                     </span>
+                    <div className="capacity-bar">
+                      <div
+                        className="capacity-fill"
+                        style={{
+                          width: `${Math.min((section.count / (section.maxStudents || 40)) * 100, 100)}%`,
+                          backgroundColor: (section.count / (section.maxStudents || 40)) > 0.9 ? '#e74c3c' :
+                                         (section.count / (section.maxStudents || 40)) > 0.7 ? '#f39c12' : '#27ae60'
+                        }}
+                      ></div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -331,10 +341,11 @@ const MarksSummary = () => {
         }
 
         .section-info {
+          position: relative;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 8px 12px;
+          padding: 8px 12px 20px 12px;
           background: #f8f9fa;
           border-radius: 6px;
           font-size: 0.9rem;
@@ -348,6 +359,23 @@ const MarksSummary = () => {
         .section-count {
           color: #7f8c8d;
           font-weight: 500;
+        }
+
+        .capacity-bar {
+          position: absolute;
+          bottom: 8px;
+          left: 12px;
+          right: 12px;
+          height: 4px;
+          background: #ecf0f1;
+          border-radius: 2px;
+          overflow: hidden;
+        }
+
+        .capacity-fill {
+          height: 100%;
+          border-radius: 2px;
+          transition: width 0.3s ease;
         }
 
         .loading-container {
