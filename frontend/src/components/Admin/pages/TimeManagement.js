@@ -640,12 +640,22 @@ const TimeManagement = () => {
                     <div 
                       key={`${cls.classId}-${cls.section}`}
                       className="class-box"
+                      style={{
+                        padding: '20px',
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        width: '250px',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        marginBottom: '10px',
+                      }}
                       onClick={() => handleClassBoxClick(cls)}
                     >
-                      <h4>{cls.className} {cls.section}</h4>
-                      <div className="class-info">
-                        <p>Academic Year: {cls.academicYear}</p>
-                        {cls.maxStudents && <p>Max Students: {cls.maxStudents}</p>}
+                      <h4 style={{ fontSize: '1.2em', marginBottom: '10px', color: '#3498db' }}>{cls.className} {cls.section}</h4>
+                      <div className="class-info" style={{ fontSize: '0.9em', color: '#7f8c8d' }}>
+                        <p style={{ marginBottom: '5px' }}>Academic Year: {cls.academicYear}</p>
+                        {cls.maxStudents && <p style={{ marginBottom: '5px' }}>Max Students: {cls.maxStudents}</p>}
                       </div>
                     </div>
                   ))
@@ -666,12 +676,22 @@ const TimeManagement = () => {
                     <div 
                       key={`${cls.classId}-${cls.section}`}
                       className="class-box"
+                      style={{
+                        padding: '20px',
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        width: '250px',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s, box-shadow 0.2s',
+                        marginBottom: '10px',
+                      }}
                       onClick={() => handleClassBoxClick(cls)}
                     >
-                      <h4>{cls.className} {cls.section}</h4>
-                      <div className="class-info">
-                        <p>Academic Year: {cls.academicYear}</p>
-                        {cls.maxStudents && <p>Max Students: {cls.maxStudents}</p>}
+                      <h4 style={{ fontSize: '1.2em', marginBottom: '10px', color: '#3498db' }}>{cls.className} {cls.section}</h4>
+                      <div className="class-info" style={{ fontSize: '0.9em', color: '#7f8c8d' }}>
+                        <p style={{ marginBottom: '5px' }}>Academic Year: {cls.academicYear}</p>
+                        {cls.maxStudents && <p style={{ marginBottom: '5px' }}>Max Students: {cls.maxStudents}</p>}
                       </div>
                     </div>
                   ))}

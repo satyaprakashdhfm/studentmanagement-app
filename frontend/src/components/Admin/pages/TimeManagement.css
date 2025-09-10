@@ -209,106 +209,92 @@
   min-width: 800px;
 }
 
-.schedule-table th {
-  background: var(--primary-color);
-  color: white;
-  padding: 12px 8px;
-  text-align: center;
-  font-weight: 600;
-  font-size: 0.9rem;
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-}
 
+/* Improved Timetable Table Styles */
+.schedule-table th {
+  background: linear-gradient(90deg, #3498db 60%, #6dd5fa 100%);
+  color: #fff;
+  padding: 16px 10px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(52,152,219,0.08);
+}
 .schedule-table th:last-child {
   border-right: none;
 }
-
-.time-header {
-  min-width: 120px;
-  background: var(--primary-dark) !important;
-}
-
 .day-header {
   min-width: 120px;
-}
-
-.schedule-table td {
-  border: 1px solid var(--border-color);
-  vertical-align: top;
-  height: 80px;
-}
-
-.time-slot {
-  background: var(--card-background);
-  padding: 8px;
-  text-align: center;
-  min-width: 120px;
-}
-
-.slot-time {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.slot-time strong {
-  color: var(--text-color);
-  font-size: 0.9rem;
-}
-
-.slot-time span {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-}
-
-.schedule-cell {
-  padding: 8px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-  position: relative;
-}
-
-.schedule-cell:hover {
-  background-color: var(--hover-bg);
-}
-
-.schedule-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  height: 100%;
-  justify-content: center;
-}
-
-.subject-name {
+  background: #f8f9fa !important;
+  color: #3498db;
   font-weight: 600;
-  color: var(--text-color);
-  font-size: 0.85rem;
-  text-align: center;
+  font-size: 1.05rem;
+  border-right: 1px solid #e0e6ed;
 }
-
+.schedule-table td {
+  border: 1px solid #e0e6ed;
+  vertical-align: top;
+  height: 70px;
+  background: #fff;
+  padding: 0;
+}
+.period-content.filled {
+  height: 100%;
+  border-radius: 6px;
+  margin: 2px;
+  padding: 8px 4px 6px 8px;
+  box-shadow: 0 1px 4px rgba(52,152,219,0.07);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.period-content.filled:hover {
+  box-shadow: 0 4px 12px rgba(52,152,219,0.13);
+  filter: brightness(1.04);
+}
+.subject-name {
+  font-weight: 700;
+  font-size: 1em;
+  margin-bottom: 2px;
+  color: #222;
+}
 .teacher-name {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  text-align: center;
+  font-size: 0.92em;
+  color: #555;
+  margin-top: 2px;
 }
-
-.empty-slot {
+.period-content.empty {
+  height: 100%;
+  border-radius: 6px;
+  margin: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  border: 2px dashed var(--border-color);
-  border-radius: 4px;
-  transition: all 0.3s ease;
+  color: #b0b0b0;
+  background: #f8f9fa;
+  border: 2px dashed #e0e6ed;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
 }
-
-.empty-slot:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-  background-color: var(--primary-light);
+.period-content.empty:hover {
+  border-color: #3498db;
+  background: #eaf6fb;
+  color: #3498db;
+}
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.95em;
+}
+.empty-content i {
+  font-size: 1.2em;
+  margin-bottom: 2px;
 }
 
 /* Events Container */
