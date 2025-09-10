@@ -9,17 +9,30 @@ const prisma = new PrismaClient();
 router.get('/timeslots', authenticateToken, async (req, res) => {
   try {
     const timeSlots = await prisma.$queryRaw`
-      SELECT * FROM time_slots 
-      WHERE is_active = true 
+      SELECT
+        slot_id,
+        slot_name,
+        TO_CHAR(start_time, 'HH24:MI:SS') as start_time,
+        TO_CHAR(end_time, 'HH24:MI:SS') as end_time,
+        slot_order,
+        is_active,
+        created_at,
+        updated_at
+      FROM time_slots
+      WHERE is_active = true
       ORDER BY slot_order ASC
     `;
-    
+
+    console.log('🔍 TIME SLOTS FROM DATABASE:', timeSlots);
+
     // Convert BigInt fields to strings for JSON serialization
     const timeSlotsWithStringIds = timeSlots.map(slot => ({
       ...slot,
       slot_id: slot.slot_id.toString()
     }));
-    
+
+    console.log('📤 TIME SLOTS BEING SENT TO FRONTEND:', timeSlotsWithStringIds);
+
     res.json(timeSlotsWithStringIds);
   } catch (error) {
     console.error('Error fetching time slots:', error);

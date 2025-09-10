@@ -350,7 +350,7 @@ class ApiService {
 
   // Time Management
   async getTimeSlots() {
-    return this.request('/timemanagement/timeslots');
+    return this.request('/timemanagement/timeslots?t=' + Date.now());
   }
 
   async getClassSchedule(classId, section, academicYear = '2024-2025') {

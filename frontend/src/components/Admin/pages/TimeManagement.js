@@ -50,9 +50,14 @@ const TimeManagement = () => {
         }
       }
 
-      // If format is HH:MM:SS or HH:MM, take first 5 chars
-      return time.substring(0,5);
+      // If format is HH:MM:SS or HH:MM, take first 5 chars (HH:MM)
+      if (time.length >= 5) {
+        return time.substring(0,5);
+      }
+
+      return time;
     } catch (err) {
+      console.error('Error formatting time:', time, err);
       return time.substring(0,5);
     }
   };
@@ -107,11 +112,22 @@ const TimeManagement = () => {
 
   const fetchTimeSlots = async () => {
     try {
+      console.log('🔄 FETCHING TIME SLOTS FROM API...');
       const data = await apiService.getTimeSlots();
-      console.log('Time slots fetched:', data); // Debug
+      console.log('✅ RAW API RESPONSE:', data);
+
+      // Log formatted times for debugging
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('🕐 FORMATTED TIMES:');
+        data.forEach(slot => {
+          console.log(`${slot.slot_name}: ${formatSlotTime(slot.start_time)} - ${formatSlotTime(slot.end_time)}`);
+        });
+      }
+
+      console.log('📊 PROCESSED TIME SLOTS:', Array.isArray(data) ? data : []);
       setTimeSlots(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching time slots:', error);
+      console.error('❌ Error fetching time slots:', error);
       setTimeSlots([]); // Ensure it's always an array
     }
   };
