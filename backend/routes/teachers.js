@@ -51,16 +51,16 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Map BigInt/Decimal to JS types and provide defaults for arrays
     const normalized = teachers.map(t => ({
-      id: Number(t.id),
-      userId: Number(t.userId),
+      teacher_id: Number(t.id),
+      user_id: Number(t.userId),
       name: t.name,
       email: t.email,
-      phoneNumber: t.phoneNumber || null,
+      phone_number: t.phoneNumber || null,
       qualification: t.qualification || null,
-      subjectsHandled: Array.isArray(t.subjectsHandled) ? t.subjectsHandled : [],
-      classesAssigned: Array.isArray(t.classesAssigned) ? t.classesAssigned : [],
-      classTeacherOf: t.classTeacherOf || null,
-      hireDate: t.hireDate,
+      subjects_handled: Array.isArray(t.subjectsHandled) ? t.subjectsHandled : [],
+      classes_assigned: Array.isArray(t.classesAssigned) ? t.classesAssigned : [],
+      class_teacher_of: t.classTeacherOf || null,
+      hire_date: t.hireDate,
       salary: t.salary ? Number(t.salary) : null,
       active: t.active,
     }));
@@ -161,31 +161,21 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Teacher not found' });
     }
 
-    // Convert BigInt IDs to Numbers and normalize field names
+    // Convert BigInt IDs to Numbers
     const teacherWithNumericIds = {
+      ...teacher,
       id: Number(teacher.id),
       userId: Number(teacher.userId),
-      name: teacher.name,
-      email: teacher.email,
-      phoneNumber: teacher.phoneNumber || null,
-      qualification: teacher.qualification || null,
-      subjectsHandled: Array.isArray(teacher.subjectsHandled) ? teacher.subjectsHandled : [],
-      classesAssigned: Array.isArray(teacher.classesAssigned) ? teacher.classesAssigned : [],
-      classTeacherOf: teacher.classTeacherOf || null,
-      hireDate: teacher.hireDate,
       salary: teacher.salary ? Number(teacher.salary) : null,
-      active: teacher.active,
-      user: teacher.user,
-      classesTeaching: teacher.classesTeaching,
       marks: teacher.marks.map(mark => ({
         ...mark,
-        id: Number(mark.id),
+        marksId: Number(mark.marksId),
         studentId: Number(mark.studentId),
         teacherId: Number(mark.teacherId)
       })),
       attendance: teacher.attendance.map(att => ({
         ...att,
-        id: Number(att.id),
+        attendanceId: Number(att.attendanceId),
         studentId: Number(att.studentId),
         markedBy: Number(att.markedBy)
       }))

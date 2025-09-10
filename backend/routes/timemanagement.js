@@ -1,7 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../utils/jwt');
-const { convertBigIntToNumber } = require('../utils/bigint');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -393,8 +392,7 @@ router.get('/exceptions', authenticateToken, async (req, res) => {
       orderBy: { exceptionDate: 'asc' }
     });
 
-    const normalizedExceptions = convertBigIntToNumber(exceptions);
-    res.json(normalizedExceptions);
+    res.json(exceptions);
   } catch (error) {
     console.error('Error fetching exceptions:', error);
     res.status(500).json({ error: 'Failed to fetch exceptions' });
@@ -446,9 +444,19 @@ router.get('/exceptions', authenticateToken, async (req, res) => {
       ]
     });
 
-    // Convert BigInt fields to numbers for JSON serialization
-    const normalizedExceptions = convertBigIntToNumber(exceptions);
-    res.json(normalizedExceptions);
+    // Convert BigInt fields to strings for JSON serialization
+    const exceptionsWithStringIds = exceptions.map(exc => ({
+      ...exc,
+      exception_id: exc.exceptionId.toString(),
+      class_id: exc.classId ? exc.classId.toString() : null,
+      slot_id: exc.slotId ? exc.slotId.toString() : null,
+      subject_id: exc.subjectId ? exc.subjectId.toString() : null,
+      teacher_id: exc.teacherId ? exc.teacherId.toString() : null,
+      created_by: exc.createdBy.toString(),
+      exception_date: exc.exceptionDate.toISOString().split('T')[0] // Format date
+    }));
+
+    res.json(exceptionsWithStringIds);
   } catch (error) {
     console.error('Error fetching exceptions:', error);
     res.status(500).json({ error: 'Failed to fetch exceptions' });
@@ -495,9 +503,18 @@ router.post('/exceptions', authenticateToken, async (req, res) => {
       }
     });
 
-    // Convert BigInt fields to numbers for JSON serialization
-    const normalizedException = convertBigIntToNumber(exception);
-    res.json(normalizedException);
+    // Convert BigInt fields to strings for JSON serialization
+    const exceptionWithStringIds = {
+      ...exception,
+      exceptionId: exception.exceptionId.toString(),
+      classId: exception.classId ? exception.classId.toString() : null,
+      slotId: exception.slotId ? exception.slotId.toString() : null,
+      subjectId: exception.subjectId ? exception.subjectId.toString() : null,
+      teacherId: exception.teacherId ? exception.teacherId.toString() : null,
+      createdBy: exception.createdBy.toString()
+    };
+
+    res.json(exceptionWithStringIds);
   } catch (error) {
     console.error('Error creating exception:', error);
     res.status(500).json({ error: 'Failed to create exception' });
@@ -535,9 +552,18 @@ router.put('/exceptions/:exceptionId', authenticateToken, async (req, res) => {
       }
     });
 
-    // Convert BigInt fields to numbers for JSON serialization
-    const normalizedException = convertBigIntToNumber(exception);
-    res.json(normalizedException);
+    // Convert BigInt fields to strings for JSON serialization
+    const exceptionWithStringIds = {
+      ...exception,
+      exceptionId: exception.exceptionId.toString(),
+      classId: exception.classId ? exception.classId.toString() : null,
+      slotId: exception.slotId ? exception.slotId.toString() : null,
+      subjectId: exception.subjectId ? exception.subjectId.toString() : null,
+      teacherId: exception.teacherId ? exception.teacherId.toString() : null,
+      createdBy: exception.createdBy.toString()
+    };
+
+    res.json(exceptionWithStringIds);
   } catch (error) {
     console.error('Error updating exception:', error);
     res.status(500).json({ error: 'Failed to update exception' });
@@ -584,8 +610,7 @@ router.get('/bulk-schedule', authenticateToken, async (req, res) => {
       }
     });
 
-    const normalizedClasses = convertBigIntToNumber(classes);
-    res.json(normalizedClasses);
+    res.json(classes);
   } catch (error) {
     console.error('Error fetching bulk schedule:', error);
     res.status(500).json({ error: 'Failed to fetch bulk schedule' });
