@@ -724,6 +724,77 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to calculate student performance across all subjects
+CREATE OR REPLACE FUNCTION calculate_student_performance(
+    p_student_id VARCHAR(20),
+    p_academic_year VARCHAR(20) DEFAULT NULL
+)
+RETURNS TABLE (
+    student_id VARCHAR(20),
+    total_subjects INT,
+    subjects_passed INT,
+    average_percentage DECIMAL(5,2),
+    overall_grade VARCHAR(5),
+    performance_category VARCHAR(20)
+) AS $$
+DECLARE
+    total_marks DECIMAL(10,2) := 0;
+    total_max_marks DECIMAL(10,2) := 0;
+    subject_count INT := 0;
+    passed_count INT := 0;
+    avg_percentage DECIMAL(5,2) := 0;
+    final_grade VARCHAR(5);
+    category VARCHAR(20);
+BEGIN
+    -- Calculate totals from marks table
+    SELECT
+        COALESCE(SUM(m.marks_obtained), 0),
+        COALESCE(SUM(m.max_marks), 0),
+        COUNT(*),
+        COUNT(CASE WHEN m.grade NOT IN ('F', 'D') THEN 1 END)
+    INTO total_marks, total_max_marks, subject_count, passed_count
+    FROM marks m
+    WHERE m.student_id = p_student_id
+    AND (p_academic_year IS NULL OR m.academic_year = p_academic_year);
+
+    -- Calculate average percentage
+    IF total_max_marks > 0 THEN
+        avg_percentage := (total_marks / total_max_marks) * 100;
+    END IF;
+
+    -- Determine overall grade
+    final_grade := CASE
+        WHEN avg_percentage >= 90 THEN 'A+'
+        WHEN avg_percentage >= 80 THEN 'A'
+        WHEN avg_percentage >= 70 THEN 'B+'
+        WHEN avg_percentage >= 60 THEN 'B'
+        WHEN avg_percentage >= 50 THEN 'C+'
+        WHEN avg_percentage >= 40 THEN 'C'
+        WHEN avg_percentage >= 33 THEN 'D'
+        ELSE 'F'
+    END CASE;
+
+    -- Determine performance category
+    category := CASE
+        WHEN avg_percentage >= 90 THEN 'Excellent'
+        WHEN avg_percentage >= 80 THEN 'Very Good'
+        WHEN avg_percentage >= 70 THEN 'Good'
+        WHEN avg_percentage >= 60 THEN 'Satisfactory'
+        WHEN avg_percentage >= 40 THEN 'Needs Improvement'
+        ELSE 'Poor'
+    END CASE;
+
+    -- Return the performance data
+    RETURN QUERY SELECT
+        p_student_id,
+        subject_count,
+        passed_count,
+        ROUND(avg_percentage, 2),
+        final_grade,
+        category;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ============================================================================
 -- ADDITIONAL BUSINESS LOGIC TRIGGERS
 -- ============================================================================
@@ -831,6 +902,7 @@ ON CONFLICT DO NOTHING;
 --    - get_available_teachers_for_class(): Filter teachers by qualified_subjects
 --    - get_class_utilization(): Monitor class capacity usage
 --    - generate_schedule_id(): Auto-generate meaningful schedule IDs
+--    - calculate_student_performance(): Calculate overall student performance
 --
 -- ✅ ADDITIONAL AUTOMATION:
 --    - Auto-updates student fees when class changes
