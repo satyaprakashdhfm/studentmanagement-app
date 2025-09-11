@@ -541,24 +541,41 @@ const TimeManagement = () => {
                             <td key={`${day}-${slot.slot_id}`} className="period-cell">
                               {scheduleItem ? (
                                 <div 
-                                  className={`period-content filled ${scheduleItem.is_exception && scheduleItem.exception_type === 'exam' ? 'exam-slot' : ''}`}
+                                  className={`period-content filled ${
+                                    scheduleItem.is_exception && scheduleItem.exception_type === 'exam' ? 'exam-slot' : 
+                                    scheduleItem.is_exception && scheduleItem.exception_type === 'holiday' ? 'holiday-slot' : ''
+                                  }`}
                                   style={{ 
                                     backgroundColor: scheduleItem.is_exception && scheduleItem.exception_type === 'exam' 
                                       ? '#ffeaa7' 
+                                      : scheduleItem.is_exception && scheduleItem.exception_type === 'holiday'
+                                      ? '#fab1a0'
                                       : getSubjectColor(scheduleItem.subject?.subject_name),
-                                    borderLeft: `4px solid ${scheduleItem.is_exception && scheduleItem.exception_type === 'exam' 
+                                    borderLeft: `4px solid ${
+                                      scheduleItem.is_exception && scheduleItem.exception_type === 'exam' 
                                       ? '#e17055' 
-                                      : getSubjectColor(scheduleItem.subject?.subject_name)}`
+                                      : scheduleItem.is_exception && scheduleItem.exception_type === 'holiday'
+                                      ? '#e84393'
+                                      : getSubjectColor(scheduleItem.subject?.subject_name)
+                                    }`
                                   }}
                                   onClick={() => handleScheduleClick(day, slot.slot_id, scheduleItem)}
                                 >
                                   <div className="subject-name">
                                     {scheduleItem.is_exception && scheduleItem.exception_type === 'exam' 
                                       ? 'EXAM' 
+                                      : scheduleItem.is_exception && scheduleItem.exception_type === 'holiday'
+                                      ? 'HOLIDAY'
                                       : (scheduleItem.subject?.subject_name || 'Unknown')}
                                   </div>
                                   <div className="teacher-name">
-                                    <i className="fas fa-user"></i> {scheduleItem.teacher?.name || 'No Teacher'}
+                                    <i className="fas fa-user"></i> {
+                                      scheduleItem.is_exception && scheduleItem.exception_type === 'exam'
+                                      ? (scheduleItem.exception_title || 'Exam Session')
+                                      : scheduleItem.is_exception && scheduleItem.exception_type === 'holiday'
+                                      ? (scheduleItem.exception_title || 'Holiday')
+                                      : (scheduleItem.teacher?.name || 'No Teacher')
+                                    }
                                   </div>
                                   {scheduleItem.room && (
                                     <div className="room-info">

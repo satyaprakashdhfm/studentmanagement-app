@@ -1020,3 +1020,28 @@
   color: #636e72;
   font-size: 0.8rem;
 }
+
+/* Holiday Slot Styling */
+.holiday-slot {
+  border: 2px solid #e84393 !important;
+  box-shadow: 0 0 10px rgba(232, 67, 147, 0.3);
+  animation: holidayGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes holidayGlow {
+  from { box-shadow: 0 0 10px rgba(232, 67, 147, 0.3); }
+  to { box-shadow: 0 0 20px rgba(232, 67, 147, 0.5); }
+}
+
+.holiday-slot .subject-name {
+  color: #e84393;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+}
+
+.holiday-slot .teacher-name,
+.holiday-slot .room-info {
+  color: #636e72;
+  font-size: 0.8rem;
+}

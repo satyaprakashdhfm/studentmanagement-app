@@ -71,21 +71,22 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
       }
 
       // Fetch exceptions for this week
+      console.log('🔍 Week dates for exception filtering:', weekDates);
+      console.log('🔍 Looking for exceptions between:', weekDates[1], 'and', weekDates[7]);
+      
       exceptions = await prisma.$queryRaw`
-        SELECT se.*, 
-               s.subject_name, s.subject_code,
-               t.name as teacher_name, t.teacher_id,
-               ts.slot_name, ts.start_time, ts.end_time, ts.slot_order
+        SELECT se.exception_id, se.exception_date, se.day_of_week, se.exception_type, se.title,
+               se.description, se.academic_year, se.class_id, se.slot_id,
+               se.subject_code, se.teacher_id
         FROM schedule_exceptions se
-        LEFT JOIN subjects s ON se.subject_code = s.subject_code
-        LEFT JOIN teachers t ON se.teacher_id = t.teacher_id
-        LEFT JOIN time_slots ts ON se.slot_id = ts.slot_id
-        WHERE se.exception_date >= ${weekDates[1]}::date
-          AND se.exception_date <= ${weekDates[7]}::date
+        WHERE DATE(se.exception_date) >= ${weekDates[1]}::date
+          AND DATE(se.exception_date) <= ${weekDates[7]}::date
           AND se.academic_year = ${academicYear || '2024-2025'}
           AND (se.class_id IS NULL OR se.class_id = ${parseInt(classId)})
-        ORDER BY se.exception_date ASC, ts.slot_order ASC
+        ORDER BY se.exception_date ASC
       `;
+      
+      console.log('🔍 Found exceptions for week:', exceptions.length);
 
       // Convert BigInt fields to strings
       exceptions = exceptions.map(exc => ({
@@ -179,35 +180,61 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
 
     // Now handle exceptions by overriding the schedule
     if (startDate && exceptions.length > 0) {
+      // Create reverse mapping from date to day_of_week
+      const dateToDayOfWeek = {};
+      for (const [dayOfWeek, date] of Object.entries(weekDates)) {
+        dateToDayOfWeek[date] = parseInt(dayOfWeek);
+      }
+
       for (const exception of exceptions) {
-        const exceptionDate = exception.exception_date;
-        const dayOfWeek = new Date(exceptionDate).getDay();
-        const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday (0) to 7
+        // Use day_of_week from database instead of calculating from date
+        const adjustedDayOfWeek = exception.day_of_week;
 
-        // Find the schedule item to override
-        const scheduleIndex = transformedSchedule.findIndex(
-          s => s.day_of_week === adjustedDayOfWeek && s.slot_id === exception.slot_id
-        );
+        if (adjustedDayOfWeek) {
+          // Handle multiple slot_ids (comma-separated)
+          const slotIds = exception.slot_id ? exception.slot_id.split(',') : [];
 
-        if (scheduleIndex !== -1) {
-          transformedSchedule[scheduleIndex] = {
-            ...transformedSchedule[scheduleIndex],
-            schedule_id: exception.exception_id ? exception.exception_id.toString() : null,
-            subject_code: exception.subject_code ? exception.subject_code.toString() : null,
-            teacher_id: exception.teacher_id ? exception.teacher_id.toString() : null,
-            subject: exception.subject_code ? {
-              subject_code: exception.subject_code.toString(),
-              subject_name: exception.exception_type === 'exam' ? 'EXAM' : (exception.subject_name || exception.title)
-            } : null,
-            teacher: exception.teacher_id ? {
-              teacher_id: exception.teacher_id.toString(),
-              name: exception.teacher_name
-            } : null,
-            is_exception: true,
-            exception_type: exception.exception_type,
-            exception_title: exception.title,
-            period_type: 'teaching'
-          };
+          for (const slotId of slotIds) {
+            const trimmedSlotId = slotId.trim();
+
+            // Find the schedule item to override
+            const scheduleIndex = transformedSchedule.findIndex(
+              s => s.day_of_week === adjustedDayOfWeek && s.slot_id === trimmedSlotId
+            );
+
+            if (scheduleIndex !== -1) {
+              // Determine display text based on exception type
+              let displaySubject = exception.title;
+              let displayTeacher = exception.teacher_id ? 'Scheduled' : 'No Teacher';
+
+              if (exception.exception_type === 'exam') {
+                displaySubject = 'EXAM';
+                displayTeacher = exception.description || 'Exam Session';
+              } else if (exception.exception_type === 'holiday') {
+                displaySubject = exception.title;
+                displayTeacher = 'Holiday';
+              }
+
+              transformedSchedule[scheduleIndex] = {
+                ...transformedSchedule[scheduleIndex],
+                schedule_id: exception.exception_id ? exception.exception_id.toString() : null,
+                subject_code: exception.subject_code ? exception.subject_code.toString() : null,
+                teacher_id: exception.teacher_id ? exception.teacher_id.toString() : null,
+                subject: {
+                  subject_code: exception.subject_code ? exception.subject_code.toString() : null,
+                  subject_name: displaySubject
+                },
+                teacher: exception.teacher_id ? {
+                  teacher_id: exception.teacher_id.toString(),
+                  name: displayTeacher
+                } : null,
+                is_exception: true,
+                exception_type: exception.exception_type,
+                exception_title: exception.title,
+                period_type: exception.exception_type === 'exam' ? 'exam' : 'holiday'
+              };
+            }
+          }
         }
       }
     }
