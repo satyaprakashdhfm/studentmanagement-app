@@ -7,10 +7,12 @@ const router = express.Router();
 // Get all time slots
 router.get('/timeslots', authenticateToken, async (req, res) => {
   try {
-    const timeSlots = await prisma.timeSlot.findMany({
-      where: { isActive: true },
-      orderBy: { slotOrder: 'asc' }
-    });
+    const timeSlots = await prisma.$queryRaw`
+      SELECT slot_id, slot_name, start_time, end_time, slot_order, is_active
+      FROM time_slots 
+      WHERE is_active = true 
+      ORDER BY slot_order ASC
+    `;
 
     res.json(timeSlots);
   } catch (error) {
@@ -68,7 +70,6 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
           AND se.exception_date <= ${weekDates[7]}::date
           AND se.academic_year = ${academicYear || '2024-2025'}
           AND (se.class_id IS NULL OR se.class_id = ${parseInt(classId)})
-          AND (se.section IS NULL OR se.section = ${section})
         ORDER BY se.exception_date ASC, ts.slot_order ASC
       `;
 
@@ -94,8 +95,7 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
       const matchingException = exceptions.find(exc => 
         exc.exception_date === exceptionDate && 
         String(exc.slot_id) === String(slotId) &&
-        (exc.class_id === null || String(exc.class_id) === String(classId)) &&
-        (exc.section === null || exc.section === section)
+        (exc.class_id === null || String(exc.class_id) === String(classId))
       );
 
       if (matchingException) {
@@ -394,9 +394,6 @@ router.get('/exceptions', authenticateToken, async (req, res) => {
       whereClause.classId = parseInt(classId);
     }
 
-    if (section) {
-      whereClause.section = section;
-    }
 
     if (startDate && endDate) {
       whereClause.exceptionDate = {

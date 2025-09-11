@@ -96,11 +96,12 @@ const TimeManagement = () => {
   const formatSlotTime = (time) => {
     if (!time) return '';
     try {
-      // If time includes a 'T' or is a full ISO timestamp, parse and format
+      // If time includes a 'T' or is a full ISO timestamp, parse and format as UTC
       if (time.includes('T') || time.includes('-')) {
         const d = new Date(time);
         if (!isNaN(d.getTime())) {
-          return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+          // Use UTC methods to avoid timezone conversion
+          return `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}`;
         }
       }
 
@@ -174,6 +175,20 @@ const TimeManagement = () => {
   const fetchTimeSlots = async () => {
     try {
       const data = await apiService.getTimeSlots();
+      console.log('🕐 RAW TIME SLOTS DATA FROM API:', data);
+      console.log('🕐 TIME SLOTS ARRAY CHECK:', Array.isArray(data));
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('🕐 FIRST TIME SLOT:', data[0]);
+        data.forEach((slot, index) => {
+          console.log(`🕐 SLOT ${index + 1}:`, {
+            slot_name: slot.slot_name,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            formatted_start: formatSlotTime(slot.start_time),
+            formatted_end: formatSlotTime(slot.end_time)
+          });
+        });
+      }
       setTimeSlots(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching time slots:', error);
