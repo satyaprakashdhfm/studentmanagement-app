@@ -27,19 +27,33 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
     const { classId, section } = req.params;
     const { academicYear, startDate } = req.query;
 
-    const schedule = await prisma.$queryRaw`
-      SELECT cs.*, 
-             s.subject_name, s.subject_code,
-             t.name as teacher_name, t.teacher_id,
-             ts.slot_name, ts.start_time, ts.end_time, ts.slot_order
+    // Get all active time slots
+    const timeSlots = await prisma.$queryRaw`
+      SELECT slot_id, slot_name, start_time, end_time, slot_order
+      FROM time_slots 
+      WHERE is_active = true 
+      ORDER BY slot_order ASC
+    `;
+
+    // Get all schedule entries for this class
+    const scheduleEntries = await prisma.$queryRaw`
+      SELECT
+        cs.schedule_id,
+        cs.class_id,
+        cs.day_of_week,
+        cs.slot_id,
+        cs.subject_code,
+        cs.teacher_id,
+        cs.academic_year,
+        cs.is_active,
+        s.subject_name,
+        t.name as teacher_name
       FROM class_schedule cs
       LEFT JOIN subjects s ON cs.subject_code = s.subject_code
       LEFT JOIN teachers t ON cs.teacher_id = t.teacher_id
-      LEFT JOIN time_slots ts ON cs.slot_id = ts.slot_id
       WHERE cs.class_id = ${parseInt(classId)}
         AND cs.academic_year = ${academicYear || '2024-2025'}
         AND cs.is_active = true
-      ORDER BY cs.day_of_week ASC, ts.slot_order ASC
     `;
 
     let exceptions = [];
@@ -85,61 +99,118 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
       }));
     }
 
-    // Transform the schedule data
-    const transformedSchedule = schedule.map(item => {
-      const dayOfWeek = item.day_of_week;
-      const slotId = item.slot_id;
-      const exceptionDate = weekDates[dayOfWeek];
+    // Create the full schedule matrix (all days x all time slots)
+    const transformedSchedule = [];
+    
+    // For each day of the week (1-7, Monday-Sunday)
+    for (let dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
+      // For each time slot
+      for (const slot of timeSlots) {
+        // Find if there's a schedule entry for this day and slot
+        const scheduleEntry = scheduleEntries.find(
+          s => s.day_of_week === dayOfWeek && s.slot_id === slot.slot_id
+        );
 
-      // Find matching exception
-      const matchingException = exceptions.find(exc => 
-        exc.exception_date === exceptionDate && 
-        String(exc.slot_id) === String(slotId) &&
-        (exc.class_id === null || String(exc.class_id) === String(classId))
-      );
+        if (scheduleEntry) {
+          // Regular schedule entry
+          transformedSchedule.push({
+            schedule_id: scheduleEntry.schedule_id ? scheduleEntry.schedule_id.toString() : null,
+            class_id: scheduleEntry.class_id ? scheduleEntry.class_id.toString() : null,
+            day_of_week: dayOfWeek,
+            slot_id: scheduleEntry.slot_id ? scheduleEntry.slot_id.toString() : null,
+            subject_code: scheduleEntry.subject_code ? scheduleEntry.subject_code.toString() : null,
+            teacher_id: scheduleEntry.teacher_id ? scheduleEntry.teacher_id.toString() : null,
+            academic_year: scheduleEntry.academic_year,
+            is_active: scheduleEntry.is_active,
+            subject: scheduleEntry.subject_code ? {
+              subject_code: scheduleEntry.subject_code.toString(),
+              subject_name: scheduleEntry.subject_name
+            } : null,
+            teacher: scheduleEntry.teacher_id ? {
+              teacher_id: scheduleEntry.teacher_id.toString(),
+              name: scheduleEntry.teacher_name
+            } : null,
+            slot_name: slot.slot_name,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            slot_order: slot.slot_order,
+            period_type: 'teaching',
+            is_exception: false
+          });
+        } else {
+          // No schedule entry - create blank period
+          let periodType = 'free';
+          let displaySubject = 'FREE PERIOD';
+          let displayTeacher = null;
 
-      if (matchingException) {
-        // Override with exception data
-        return {
-          ...item,
-          schedule_id: item.schedule_id ? item.schedule_id.toString() : null,
-          class_id: item.class_id ? item.class_id.toString() : null,
-          slot_id: item.slot_id ? item.slot_id.toString() : null,
-          subject_code: matchingException.subject_code ? matchingException.subject_code.toString() : null,
-          teacher_id: matchingException.teacher_id ? matchingException.teacher_id.toString() : null,
-          subject: matchingException.subject_code ? {
-            subject_code: matchingException.subject_code.toString(),
-            subject_name: matchingException.exception_type === 'exam' ? 'EXAM' : (matchingException.subject_name || matchingException.title)
-          } : null,
-          teacher: matchingException.teacher_id ? {
-            teacher_id: matchingException.teacher_id.toString(),
-            name: matchingException.teacher_name
-          } : null,
-          is_exception: true,
-          exception_type: matchingException.exception_type,
-          exception_title: matchingException.title
-        };
-      } else {
-        // Regular schedule
-        return {
-          ...item,
-          schedule_id: item.schedule_id ? item.schedule_id.toString() : null,
-          class_id: item.class_id ? item.class_id.toString() : null,
-          slot_id: item.slot_id ? item.slot_id.toString() : null,
-          subject_code: item.subject_code ? item.subject_code.toString() : null,
-          teacher_id: item.teacher_id ? item.teacher_id.toString() : null,
-          subject: item.subject_code ? {
-            subject_code: item.subject_code.toString(),
-            subject_name: item.subject_name
-          } : null,
-          teacher: item.teacher_id ? {
-            teacher_id: item.teacher_id.toString(),
-            name: item.teacher_name
-          } : null,
-          is_exception: false
-        };
+          // Special handling for known periods
+          if (slot.slot_id === 'Lunch_1140_1220') {
+            periodType = 'break';
+            displaySubject = 'LUNCH BREAK';
+          } else if (slot.slot_id && slot.slot_id.startsWith('P')) {
+            periodType = 'study';
+            displaySubject = 'STUDY HALL';
+          }
+
+          transformedSchedule.push({
+            schedule_id: null,
+            class_id: classId.toString(),
+            day_of_week: dayOfWeek,
+            slot_id: slot.slot_id,
+            subject_code: null,
+            teacher_id: null,
+            academic_year: academicYear || '2024-2025',
+            is_active: true,
+            subject: {
+              subject_code: null,
+              subject_name: displaySubject
+            },
+            teacher: null,
+            slot_name: slot.slot_name,
+            start_time: slot.start_time,
+            end_time: slot.end_time,
+            slot_order: slot.slot_order,
+            period_type: periodType,
+            is_exception: false
+          });
+        }
       }
-    });
+    }
+
+    // Now handle exceptions by overriding the schedule
+    if (startDate && exceptions.length > 0) {
+      for (const exception of exceptions) {
+        const exceptionDate = exception.exception_date;
+        const dayOfWeek = new Date(exceptionDate).getDay();
+        const adjustedDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert Sunday (0) to 7
+
+        // Find the schedule item to override
+        const scheduleIndex = transformedSchedule.findIndex(
+          s => s.day_of_week === adjustedDayOfWeek && s.slot_id === exception.slot_id
+        );
+
+        if (scheduleIndex !== -1) {
+          transformedSchedule[scheduleIndex] = {
+            ...transformedSchedule[scheduleIndex],
+            schedule_id: exception.exception_id ? exception.exception_id.toString() : null,
+            subject_code: exception.subject_code ? exception.subject_code.toString() : null,
+            teacher_id: exception.teacher_id ? exception.teacher_id.toString() : null,
+            subject: exception.subject_code ? {
+              subject_code: exception.subject_code.toString(),
+              subject_name: exception.exception_type === 'exam' ? 'EXAM' : (exception.subject_name || exception.title)
+            } : null,
+            teacher: exception.teacher_id ? {
+              teacher_id: exception.teacher_id.toString(),
+              name: exception.teacher_name
+            } : null,
+            is_exception: true,
+            exception_type: exception.exception_type,
+            exception_title: exception.title,
+            period_type: 'teaching'
+          };
+        }
+      }
+    }
 
     res.json({ schedule: transformedSchedule, exceptions: exceptions, weekDates: weekDates });
   } catch (error) {
