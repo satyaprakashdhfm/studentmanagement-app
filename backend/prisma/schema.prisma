@@ -14,7 +14,7 @@ datasource db {
 // BUSINESS LOGIC FUNCTIONS & TRIGGERS (DEFINED IN setup.sql)
 // ============================================================================
 //
-// ✅ BUSINESS LOGIC FUNCTIONS (15 functions):
+// ✅ BUSINESS LOGIC FUNCTIONS (16 functions):
 //    - create_student_fees() - Auto-creates fee records for new students
 //    - check_teacher_schedule_conflict() - Prevents teacher double-booking
 //    - validate_teacher_subject_qualification() - Validates teacher qualifications
@@ -31,7 +31,7 @@ datasource db {
 //    - update_student_fees_on_class_change() - Updates fees when student class changes
 //    - calculate_student_performance() - Calculates overall student performance
 //
-// ✅ DATABASE TRIGGERS (18 triggers):
+// ✅ DATABASE TRIGGERS (22 triggers):
 //    - trigger_create_student_fees - AFTER INSERT on students
 //    - trigger_check_teacher_schedule_conflict - BEFORE INSERT/UPDATE on class_schedule
 //    - trigger_validate_teacher_qualification - BEFORE INSERT/UPDATE on class_schedule
@@ -48,6 +48,11 @@ datasource db {
 //    - User role validation, student status validation
 //    - Class capacity checks, subject validation
 //    - Time slot ordering, schedule day validation
+//
+// ✅ ACADEMIC YEAR STANDARDIZATION:
+//    - All academic_year fields use "YYYY-YYYY" format (e.g., "2024-2025")
+//    - Consistent across all tables: classes, fees, marks, attendance, etc.
+//    - Ensures reliable queries and reporting across the system
 //    - Attendance period/status validation
 //    - Marks validation and grade calculations
 //    - Fee type and amount validation

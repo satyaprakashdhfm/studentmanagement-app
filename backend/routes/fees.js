@@ -21,7 +21,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     // Add filters
     if (studentId) {
-      where.studentId = BigInt(studentId);
+      where.studentId = studentId;
     }
     
     if (classId) {
@@ -128,7 +128,7 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
     
     // Build where clause
     const where = {
-      studentId: BigInt(studentId)
+      studentId: studentId
     };
     
     // Add filters
@@ -234,15 +234,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Fee record not found' });
     }
 
-    // Convert BigInt IDs and Decimals to Numbers
-    const feeWithNumericIds = {
-      ...fee,
-      feeId: Number(fee.feeId),
-      studentId: Number(fee.studentId),
-      amountDue: Number(fee.amountDue),
-      amountPaid: Number(fee.amountPaid),
-      balance: Number(fee.balance)
-    };
+    // Convert Decimals to Numbers for JSON serialization
+    const feeWithNumericIds = JSON.parse(JSON.stringify(fee, (key, value) => {
+      if (value && value.constructor && value.constructor.name === 'Decimal') return Number(value.toString());
+      return value;
+    }));
 
     res.json(feeWithNumericIds);
 
@@ -333,15 +329,14 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     });
 
+    // Convert Decimals to Numbers for JSON serialization
+    const feeResponse = JSON.parse(JSON.stringify(newFee, (key, value) => {
+      if (value && value.constructor && value.constructor.name === 'Decimal') return Number(value.toString());
+      return value;
+    }));
+
     res.status(201).json({
-      fee: {
-        ...newFee,
-        feeId: Number(newFee.feeId),
-        studentId: Number(newFee.studentId),
-        amountDue: Number(newFee.amountDue),
-        amountPaid: Number(newFee.amountPaid),
-        balance: Number(newFee.balance)
-      },
+      fee: feeResponse,
       message: 'Fee record created successfully'
     });
 
@@ -410,15 +405,14 @@ router.post('/:id/payment', authenticateToken, async (req, res) => {
       }
     });
 
+    // Convert Decimals to Numbers for JSON serialization
+    const feeResponse = JSON.parse(JSON.stringify(updatedFee, (key, value) => {
+      if (value && value.constructor && value.constructor.name === 'Decimal') return Number(value.toString());
+      return value;
+    }));
+
     res.json({
-      fee: {
-        ...updatedFee,
-        feeId: Number(updatedFee.feeId),
-        studentId: Number(updatedFee.studentId),
-        amountDue: Number(updatedFee.amountDue),
-        amountPaid: Number(updatedFee.amountPaid),
-        balance: Number(updatedFee.balance)
-      },
+      fee: feeResponse,
       payment: {
         amount: parseFloat(amountPaid),
         method: paymentMethod,
@@ -486,15 +480,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
     });
 
+    // Convert Decimals to Numbers for JSON serialization
+    const feeResponse = JSON.parse(JSON.stringify(updatedFee, (key, value) => {
+      if (value && value.constructor && value.constructor.name === 'Decimal') return Number(value.toString());
+      return value;
+    }));
+
     res.json({
-      fee: {
-        ...updatedFee,
-        feeId: Number(updatedFee.feeId),
-        studentId: Number(updatedFee.studentId),
-        amountDue: Number(updatedFee.amountDue),
-        amountPaid: Number(updatedFee.amountPaid),
-        balance: Number(updatedFee.balance)
-      },
+      fee: feeResponse,
       message: 'Fee record updated successfully'
     });
 

@@ -2,6 +2,11 @@
 -- STUDENT MANAGEMENT SYSTEM - PRODUCTION READY DATABASE SETUP
 -- ============================================================================
 --
+-- ✅ ACADEMIC YEAR STANDARDIZATION:
+--    All academic_year fields use "YYYY-YYYY" format (e.g., "2024-2025")
+--    Consistent across all tables: classes, fees, marks, attendance, etc.
+--    Ensures reliable queries and reporting across the system
+--
 -- This script creates a complete, production-ready database schema for a
 -- comprehensive student management system with meaningful IDs and proper
 -- relationships.
@@ -39,7 +44,7 @@
 -- TABLES CREATED: 13
 -- RELATIONSHIPS: 25+ Foreign Key Constraints
 -- CHECK CONSTRAINTS: 20+ Data Validation Rules
--- BUSINESS LOGIC TRIGGERS: 12+ Automation Rules
+-- BUSINESS LOGIC TRIGGERS: 22 Automation Rules
 -- INDEXES: 15+ Performance Optimizations
 --
 -- ============================================================================
