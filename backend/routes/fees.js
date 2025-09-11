@@ -199,13 +199,13 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/fees/:id - Get fee record by ID
+// GET /api/fees/:id - Get fee by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const feeId = req.params.id;
 
     const fee = await prisma.fee.findUnique({
-      where: { feeId: BigInt(id) },
+      where: { feeId },
       include: {
         student: {
           select: {
@@ -255,30 +255,25 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST /api/fees - Create new fee record
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const {
-      studentId,
-      classId,
-      feeType,
-      amountDue,
-      academicYear,
-      dueDate
+    const { 
+      studentId, 
+      classId, 
+      feeType, 
+      amountDue, 
+      academicYear 
     } = req.body;
 
     // Validate required fields
     if (!studentId || !classId || !feeType || amountDue === undefined || !academicYear) {
-      return res.status(400).json({ error: 'All required fields must be provided' });
-    }
-
-    // Validate amount (allow zero for initial fee creation)
-    if (parseFloat(amountDue) < 0) {
-      return res.status(400).json({ error: 'Amount due cannot be negative' });
+      return res.status(400).json({ 
+        error: 'Missing required fields: studentId, classId, feeType, amountDue, academicYear' 
+      });
     }
 
     // Check if student exists
     const student = await prisma.student.findUnique({
-      where: { id: BigInt(studentId) }
+      where: { studentId }
     });
-
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -287,15 +282,14 @@ router.post('/', authenticateToken, async (req, res) => {
     const classExists = await prisma.class.findUnique({
       where: { classId: parseInt(classId) }
     });
-
     if (!classExists) {
       return res.status(404).json({ error: 'Class not found' });
     }
 
-    // Check if fee record already exists for this combination
+    // Check for duplicate fee record
     const existingFee = await prisma.fee.findFirst({
       where: {
-        studentId: BigInt(studentId),
+        studentId,
         classId: parseInt(classId),
         feeType,
         academicYear
@@ -303,20 +297,24 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     if (existingFee) {
-      return res.status(409).json({ error: 'Fee record already exists for this student, class, fee type, and academic year' });
+      return res.status(409).json({ 
+        error: 'Fee record already exists for this student, class, fee type, and academic year' 
+      });
     }
 
-    const amountDueDecimal = parseFloat(amountDue);
+    // Generate fee ID
+    const feeId = `FEE${Date.now()}`;
 
-    // Create new fee record
+    // Create fee record
     const newFee = await prisma.fee.create({
       data: {
-        studentId: BigInt(studentId),
+        feeId,
+        studentId,
         classId: parseInt(classId),
         feeType,
-        amountDue: amountDueDecimal,
+        amountDue: parseFloat(amountDue),
         amountPaid: 0,
-        balance: amountDueDecimal,
+        balance: parseFloat(amountDue),
         academicYear
       },
       include: {
@@ -356,55 +354,57 @@ router.post('/', authenticateToken, async (req, res) => {
 // POST /api/fees/:id/payment - Record fee payment
 router.post('/:id/payment', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { paymentAmount, paymentMethod, paymentDate } = req.body;
+    const feeId = req.params.id;
+    const { amountPaid, paymentMethod = 'cash' } = req.body;
 
-    // Validate required fields
-    if (!paymentAmount || paymentAmount <= 0) {
+    if (!amountPaid || amountPaid <= 0) {
       return res.status(400).json({ error: 'Valid payment amount is required' });
     }
 
-    // Check if fee record exists
-    const existingFee = await prisma.fee.findUnique({
-      where: { feeId: BigInt(id) }
-    });
-
-    if (!existingFee) {
-      return res.status(404).json({ error: 'Fee record not found' });
-    }
-
-    const paymentAmountDecimal = parseFloat(paymentAmount);
-    const currentBalance = Number(existingFee.balance);
-
-    // Validate payment amount
-    if (paymentAmountDecimal > currentBalance) {
-      return res.status(400).json({ error: 'Payment amount cannot exceed balance amount' });
-    }
-
-    // Calculate new amounts
-    const newAmountPaid = Number(existingFee.amountPaid) + paymentAmountDecimal;
-    const newBalance = currentBalance - paymentAmountDecimal;
-
-    // Update fee record
-    const updatedFee = await prisma.fee.update({
-      where: { feeId: BigInt(id) },
-      data: {
-        amountPaid: newAmountPaid,
-        balance: newBalance,
-        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-        paymentMethod: paymentMethod || 'Cash'
-      },
+    // Get current fee record
+    const fee = await prisma.fee.findUnique({
+      where: { feeId },
       include: {
         student: {
           select: {
             name: true,
             email: true
           }
-        },
-        class: {
+        }
+      }
+    });
+
+    if (!fee) {
+      return res.status(404).json({ error: 'Fee record not found' });
+    }
+
+    const newAmountPaid = parseFloat(fee.amountPaid) + parseFloat(amountPaid);
+    const newBalance = parseFloat(fee.amountDue) - newAmountPaid;
+
+    // Validate payment doesn't exceed due amount
+    if (newAmountPaid > parseFloat(fee.amountDue)) {
+      return res.status(400).json({ 
+        error: 'Payment amount exceeds the due amount',
+        currentDue: Number(fee.amountDue),
+        currentPaid: Number(fee.amountPaid),
+        remainingBalance: Number(fee.balance)
+      });
+    }
+
+    // Update fee record
+    const updatedFee = await prisma.fee.update({
+      where: { feeId },
+      data: {
+        amountPaid: newAmountPaid,
+        balance: newBalance,
+        paymentDate: new Date(),
+        paymentMethod
+      },
+      include: {
+        student: {
           select: {
-            className: true,
-            section: true
+            name: true,
+            email: true
           }
         }
       }
@@ -420,9 +420,9 @@ router.post('/:id/payment', authenticateToken, async (req, res) => {
         balance: Number(updatedFee.balance)
       },
       payment: {
-        amount: paymentAmountDecimal,
-        method: paymentMethod || 'Cash',
-        date: paymentDate || new Date().toISOString()
+        amount: parseFloat(amountPaid),
+        method: paymentMethod,
+        date: new Date().toISOString()
       },
       message: 'Payment recorded successfully'
     });
@@ -436,12 +436,12 @@ router.post('/:id/payment', authenticateToken, async (req, res) => {
 // PUT /api/fees/:id - Update fee record
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { feeType, amountDue, academicYear } = req.body;
+    const feeId = req.params.id;
+    const updateData = req.body;
 
-    // Check if fee record exists
+    // Check if fee exists
     const existingFee = await prisma.fee.findUnique({
-      where: { feeId: BigInt(id) }
+      where: { feeId }
     });
 
     if (!existingFee) {
@@ -449,27 +449,27 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // Prepare update data
-    const updateData = {};
+    const data = {};
     
-    if (feeType) updateData.feeType = feeType;
-    if (academicYear) updateData.academicYear = academicYear;
+    if (updateData.feeType) data.feeType = updateData.feeType;
+    if (updateData.academicYear) data.academicYear = updateData.academicYear;
     
     // Handle amount due update
-    if (amountDue !== undefined) {
-      const newAmountDue = parseFloat(amountDue);
+    if (updateData.amountDue !== undefined) {
+      const newAmountDue = parseFloat(updateData.amountDue);
       if (newAmountDue < 0) {
         return res.status(400).json({ error: 'Amount due cannot be negative' });
       }
       
       const currentAmountPaid = Number(existingFee.amountPaid);
-      updateData.amountDue = newAmountDue;
-      updateData.balance = newAmountDue - currentAmountPaid;
+      data.amountDue = newAmountDue;
+      data.balance = newAmountDue - currentAmountPaid;
     }
 
     // Update fee record
     const updatedFee = await prisma.fee.update({
-      where: { feeId: BigInt(id) },
-      data: updateData,
+      where: { feeId },
+      data,
       include: {
         student: {
           select: {
@@ -507,27 +507,27 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // DELETE /api/fees/:id - Delete fee record
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const feeId = req.params.id;
 
-    // Check if fee record exists
+    // Check if fee exists
     const existingFee = await prisma.fee.findUnique({
-      where: { feeId: BigInt(id) }
+      where: { feeId }
     });
 
     if (!existingFee) {
       return res.status(404).json({ error: 'Fee record not found' });
     }
 
-    // Check if any payment has been made
-    if (Number(existingFee.amountPaid) > 0) {
+    // Check if any payments have been made
+    if (parseFloat(existingFee.amountPaid) > 0) {
       return res.status(400).json({ 
-        error: 'Cannot delete fee record with payments. Please contact administrator.' 
+        error: 'Cannot delete fee record with payments. Amount paid: ' + Number(existingFee.amountPaid)
       });
     }
 
     // Delete fee record
     await prisma.fee.delete({
-      where: { feeId: BigInt(id) }
+      where: { feeId }
     });
 
     res.json({ message: 'Fee record deleted successfully' });

@@ -1,35 +1,18 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../config/database');
 const { authenticateToken } = require('../utils/jwt');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Get all time slots
 router.get('/timeslots', authenticateToken, async (req, res) => {
   try {
-    const timeSlots = await prisma.$queryRaw`
-      SELECT
-        slot_id,
-        slot_name,
-        TO_CHAR(start_time, 'HH24:MI:SS') as start_time,
-        TO_CHAR(end_time, 'HH24:MI:SS') as end_time,
-        slot_order,
-        is_active,
-        created_at,
-        updated_at
-      FROM time_slots
-      WHERE is_active = true
-      ORDER BY slot_order ASC
-    `;
+    const timeSlots = await prisma.timeSlot.findMany({
+      where: { isActive: true },
+      orderBy: { slotOrder: 'asc' }
+    });
 
-    // Convert BigInt fields to strings for JSON serialization
-    const timeSlotsWithStringIds = timeSlots.map(slot => ({
-      ...slot,
-      slot_id: slot.slot_id.toString()
-    }));
-
-    res.json(timeSlotsWithStringIds);
+    res.json(timeSlots);
   } catch (error) {
     console.error('Error fetching time slots:', error);
     res.status(500).json({ error: 'Failed to fetch time slots' });
@@ -490,10 +473,10 @@ router.post('/exceptions', authenticateToken, async (req, res) => {
         title: title,
         description: description || null,
         subjectId: subjectId ? parseInt(subjectId) : null,
-        teacherId: teacherId ? BigInt(teacherId) : null,
+        teacherId: teacherId || null,
         academicYear: academicYear || '2024-25',
         affectsAllClasses: affectsAllClasses || false,
-        createdBy: BigInt(req.user.id)
+        createdBy: req.user.username
       },
       include: {
         class: true,

@@ -45,14 +45,8 @@ router.get('/', authenticateToken, async (req, res) => {
     // Get total count
     const total = await prisma.academicCalendar.count({ where });
 
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const calendarsWithNumericIds = calendars.map(calendar => ({
-      ...calendar,
-      createdBy: Number(calendar.createdBy)
-    }));
-
     res.json({
-      calendars: calendarsWithNumericIds,
+      calendars,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -90,13 +84,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Calendar record not found' });
     }
 
-    // Convert BigInt IDs to Numbers
-    const calendarWithNumericIds = {
-      ...calendar,
-      createdBy: Number(calendar.createdBy)
-    };
-
-    res.json(calendarWithNumericIds);
+    res.json(calendar);
 
   } catch (error) {
     console.error('Get calendar record error:', error);
@@ -131,10 +119,7 @@ router.get('/current/:year', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'No active calendar found for the specified year' });
     }
 
-    res.json({
-      ...calendar,
-      createdBy: Number(calendar.createdBy)
-    });
+    res.json(calendar);
 
   } catch (error) {
     console.error('Get current calendar error:', error);
@@ -169,7 +154,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Check if creator exists
     const creator = await prisma.user.findUnique({
-      where: { id: BigInt(createdBy) }
+      where: { username: createdBy }
     });
 
     if (!creator) {
@@ -213,7 +198,7 @@ router.post('/', authenticateToken, async (req, res) => {
         endDate: end,
         holidays: holidaysData,
         examinationDates: examinationDatesData,
-        createdBy: BigInt(createdBy)
+        createdBy
       },
       include: {
         creator: {
@@ -228,10 +213,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     res.status(201).json({
-      calendar: {
-        ...newCalendar,
-        createdBy: Number(newCalendar.createdBy)
-      },
+      calendar: newCalendar,
       message: 'Calendar created successfully'
     });
 
@@ -317,10 +299,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     });
 
     res.json({
-      calendar: {
-        ...updatedCalendar,
-        createdBy: Number(updatedCalendar.createdBy)
-      },
+      calendar: updatedCalendar,
       message: 'Calendar updated successfully'
     });
 

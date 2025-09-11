@@ -35,7 +35,7 @@ router.get('/', authenticateToken, async (req, res) => {
       include: {
         classTeacher: {
           select: {
-            id: true,
+            teacherId: true,
             name: true,
             email: true,
             phoneNumber: true
@@ -43,7 +43,7 @@ router.get('/', authenticateToken, async (req, res) => {
         },
         students: {
           select: {
-            id: true,
+            studentId: true,
             name: true,
             email: true,
             status: true
@@ -52,7 +52,7 @@ router.get('/', authenticateToken, async (req, res) => {
         _count: {
           select: {
             students: true,
-            attendance: true,
+            attendances: true,
             marks: true,
             fees: true
           }
@@ -69,20 +69,13 @@ router.get('/', authenticateToken, async (req, res) => {
     // Get total count
     const total = await prisma.class.count({ where });
 
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const classesWithNumericIds = classes.map(classItem => {
-      return JSON.parse(JSON.stringify(classItem, (key, value) =>
-        typeof value === 'bigint' ? Number(value) : value
-      ));
-    });
-
     res.json({
-      classes: classesWithNumericIds,
+      classes,
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total: Number(total),
-        pages: Math.ceil(Number(total) / limitNum)
+        total,
+        pages: Math.ceil(total / limitNum)
       }
     });
 
@@ -102,7 +95,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       include: {
         classTeacher: {
           select: {
-            id: true,
+            teacherId: true,
             name: true,
             email: true,
             phoneNumber: true,
@@ -203,45 +196,18 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Class not found' });
     }
 
-    // Convert BigInt IDs and Decimals to Numbers
-    const classWithNumericIds = {
+    // Convert Decimal fields to numbers for JSON serialization
+    const classWithSerializedData = {
       ...classItem,
-      classTeacher: classItem.classTeacher ? {
-        ...classItem.classTeacher,
-        id: Number(classItem.classTeacher.id)
-      } : null,
-      students: classItem.students.map(student => ({
-        ...student,
-        id: Number(student.id),
-        userId: Number(student.userId)
-      })),
-      attendance: classItem.attendance.map(att => ({
-        ...att,
-        attendanceId: Number(att.attendanceId),
-        studentId: Number(att.studentId),
-        markedBy: Number(att.markedBy)
-      })),
-      marks: classItem.marks.map(mark => ({
-        ...mark,
-        marksId: Number(mark.marksId),
-        studentId: Number(mark.studentId),
-        teacherId: Number(mark.teacherId)
-      })),
       fees: classItem.fees.map(fee => ({
         ...fee,
-        feeId: Number(fee.feeId),
-        studentId: Number(fee.studentId),
         amountDue: Number(fee.amountDue),
         amountPaid: Number(fee.amountPaid),
         balance: Number(fee.balance)
-      })),
-      syllabus: classItem.syllabus.map(syl => ({
-        ...syl,
-        teacherId: Number(syl.teacherId)
       }))
     };
 
-    res.json(classWithNumericIds);
+    res.json(classWithSerializedData);
 
   } catch (error) {
     console.error('Get class error:', error);
@@ -273,7 +239,7 @@ router.post('/', authenticateToken, async (req, res) => {
     // Check if class teacher exists
     if (classTeacherId) {
       const teacher = await prisma.teacher.findUnique({
-        where: { id: BigInt(classTeacherId) }
+        where: { teacherId: classTeacherId }
       });
 
       if (!teacher) {
@@ -287,7 +253,7 @@ router.post('/', authenticateToken, async (req, res) => {
         classId: parseInt(classId),
         className,
         section,
-        classTeacherId: classTeacherId ? BigInt(classTeacherId) : null,
+        classTeacherId: classTeacherId || null,
         academicYear,
         maxStudents: maxStudents ? parseInt(maxStudents) : null
       },
@@ -303,13 +269,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     res.status(201).json({
-      class: {
-        ...newClass,
-        classTeacher: newClass.classTeacher ? {
-          ...newClass.classTeacher,
-          id: Number(newClass.classTeacher.id)
-        } : null
-      },
+      class: newClass,
       message: 'Class created successfully'
     });
 
@@ -340,7 +300,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Validate class teacher if provided
     if (updateData.classTeacherId) {
       const teacher = await prisma.teacher.findUnique({
-        where: { id: BigInt(updateData.classTeacherId) }
+        where: { teacherId: updateData.classTeacherId }
       });
 
       if (!teacher) {
@@ -351,7 +311,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Prepare update data
     const dataToUpdate = {
       ...updateData,
-      classTeacherId: updateData.classTeacherId ? BigInt(updateData.classTeacherId) : null,
+      classTeacherId: updateData.classTeacherId || null,
       maxStudents: updateData.maxStudents ? parseInt(updateData.maxStudents) : updateData.maxStudents
     };
 
@@ -374,13 +334,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     });
 
     res.json({
-      class: {
-        ...updatedClass,
-        classTeacher: updatedClass.classTeacher ? {
-          ...updatedClass.classTeacher,
-          id: Number(updatedClass.classTeacher.id)
-        } : null
-      },
+      class: updatedClass,
       message: 'Class updated successfully'
     });
 

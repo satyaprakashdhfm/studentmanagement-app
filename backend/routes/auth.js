@@ -29,53 +29,59 @@ router.post('/login', loginValidationRules(), handleValidationErrors, async (req
   try {
     const { username, password } = req.body;
 
-    // Find user by username with related data
-    const user = await prisma.user.findFirst({
-      where: {
-        username: username,
-        active: true
-      },
-      include: {
-        student: true,
-        teacher: true
-      }
+    // Find user by username
+    const user = await prisma.user.findUnique({
+      where: { username }
     });
 
     if (!user) {
       return res.status(401).json({ 
         success: false,
-        message: 'Invalid credentials' 
+        message: 'Invalid username or password' 
       });
     }
 
-    // Check password
-    const isPasswordValid = await comparePassword(password, user.password);
-    if (!isPasswordValid) {
+    // Check if user is active
+    if (!user.active) {
       return res.status(401).json({ 
         success: false,
-        message: 'Invalid credentials' 
+        message: 'Account is deactivated' 
       });
     }
 
-    // Generate JWT token
-    const token = generateToken({
-      id: Number(user.id), // Convert BigInt to Number for JWT
-      username: user.username,
-      email: user.email,
-      role: user.role
+    // Verify password
+    const isValidPassword = await comparePassword(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ 
+        success: false,
+        message: 'Invalid username or password' 
+      });
+    }
+
+    // Update last login
+    await prisma.user.update({
+      where: { username: user.username },
+      data: { lastLogin: new Date() }
     });
 
-    // Return token and user info (without password)
-    const { password: _, ...userWithoutPassword } = user;
-    
-    // Convert all BigInt values to Numbers for JSON serialization
-    const safeUser = convertBigIntToNumber(userWithoutPassword);
-    
+    // Generate JWT token
+    const token = generateToken({ 
+      username: user.username, 
+      role: user.role 
+    });
+
     res.json({
       success: true,
+      message: 'Login successful',
       token,
-      user: safeUser,
-      message: 'Login successful'
+      user: {
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        lastLogin: user.lastLogin
+      }
     });
 
   } catch (error) {
@@ -90,7 +96,7 @@ router.post('/login', loginValidationRules(), handleValidationErrors, async (req
 // POST /api/auth/register
 router.post('/register', userValidationRules(), handleValidationErrors, async (req, res) => {
   try {
-    const { username, email, password, firstName, lastName } = req.body;
+    const { username, email, password, firstName, lastName, role = 'student' } = req.body;
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
@@ -117,14 +123,15 @@ router.post('/register', userValidationRules(), handleValidationErrors, async (r
         password: hashedPassword,
         firstName: firstName || null,
         lastName: lastName || null,
+        role,
         active: true
       },
       select: {
-        id: true,
         username: true,
         email: true,
         firstName: true,
         lastName: true,
+        role: true,
         active: true,
         createdAt: true
       }
@@ -132,17 +139,13 @@ router.post('/register', userValidationRules(), handleValidationErrors, async (r
 
     // Generate JWT token
     const token = generateToken({
-      id: Number(newUser.id), // Convert BigInt to Number
       username: newUser.username,
-      email: newUser.email
+      role: newUser.role
     });
 
     res.status(201).json({
       token,
-      user: {
-        ...newUser,
-        id: Number(newUser.id) // Convert BigInt to Number
-      },
+      user: newUser,
       message: 'User registered successfully'
     });
 
@@ -155,16 +158,16 @@ router.post('/register', userValidationRules(), handleValidationErrors, async (r
 // GET /api/auth/profile (protected route)
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
-    const userId = BigInt(req.user.id); // Convert to BigInt for Prisma
+    const username = req.user.username;
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { username },
       select: {
-        id: true,
         username: true,
         email: true,
         firstName: true,
         lastName: true,
+        role: true,
         active: true,
         createdAt: true
       }
@@ -174,12 +177,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ 
-      user: {
-        ...user,
-        id: Number(user.id) // Convert BigInt to Number for JSON
-      }
-    });
+    res.json({ user });
 
   } catch (error) {
     console.error('Profile error:', error);
@@ -198,7 +196,7 @@ router.post('/logout', authenticateToken, (req, res) => {
 router.post('/change-password', authenticateToken, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const userId = BigInt(req.user.id); // Convert to BigInt
+    const username = req.user.username;
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ error: 'Current password and new password are required' });
@@ -206,7 +204,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     // Get current user
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { username },
       select: { password: true }
     });
 
@@ -225,7 +223,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
 
     // Update password
     await prisma.user.update({
-      where: { id: userId },
+      where: { username },
       data: { password: hashedNewPassword }
     });
 

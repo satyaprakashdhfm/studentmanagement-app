@@ -32,8 +32,7 @@ router.get('/', authenticateToken, async (req, res) => {
         skip,
         take: limitNum,
         select: {
-          id: true,
-          userId: true,
+          teacherId: true,
           name: true,
           email: true,
           phoneNumber: true,
@@ -51,16 +50,15 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Map BigInt/Decimal to JS types and provide defaults for arrays
     const normalized = teachers.map(t => ({
-      teacher_id: Number(t.id),
-      user_id: Number(t.userId),
+      teacherId: t.teacherId,
       name: t.name,
       email: t.email,
-      phone_number: t.phoneNumber || null,
+      phoneNumber: t.phoneNumber || null,
       qualification: t.qualification || null,
-      subjects_handled: Array.isArray(t.subjectsHandled) ? t.subjectsHandled : [],
-      classes_assigned: Array.isArray(t.classesAssigned) ? t.classesAssigned : [],
-      class_teacher_of: t.classTeacherOf || null,
-      hire_date: t.hireDate,
+      subjectsHandled: Array.isArray(t.subjectsHandled) ? t.subjectsHandled : [],
+      classesAssigned: Array.isArray(t.classesAssigned) ? t.classesAssigned : [],
+      classTeacherOf: t.classTeacherOf || null,
+      hireDate: t.hireDate,
       salary: t.salary ? Number(t.salary) : null,
       active: t.active,
     }));
@@ -84,10 +82,10 @@ router.get('/', authenticateToken, async (req, res) => {
 // GET /api/teachers/:id - Get teacher by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const teacherId = req.params.id;
 
     const teacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(id) },
+      where: { teacherId },
       include: {
         user: {
           select: {
@@ -192,20 +190,20 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST /api/teachers - Create new teacher
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const {
-      username,
-      email,
-      password,
-      firstName,
-      lastName,
-      name,
-      phoneNumber,
-      qualification,
-      subjectsHandled,
-      classesAssigned,
-      classTeacherOf,
-      hireDate,
-      salary
+    const { 
+      username, 
+      email, 
+      password, 
+      firstName, 
+      lastName, 
+      name, 
+      phoneNumber, 
+      qualification, 
+      subjectsHandled, 
+      classesAssigned, 
+      classTeacherOf, 
+      hireDate, 
+      salary 
     } = req.body;
 
     // Check if user email already exists
@@ -232,6 +230,9 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    // Generate teacher ID
+    const teacherId = `TCH${Date.now()}`;
+
     // Hash the password
     const hashedPassword = await hashPassword(password);
 
@@ -245,35 +246,25 @@ router.post('/', authenticateToken, async (req, res) => {
           password: hashedPassword,
           firstName,
           lastName,
-          role: 'teacher'
+          role: 'teacher',
+          active: true
         }
       });
 
       // Create teacher
       const newTeacher = await prisma.teacher.create({
         data: {
-          userId: newUser.id,
-          name: name || `${firstName} ${lastName}`,
+          teacherId,
+          name: name || `${firstName} ${lastName}`.trim(),
           email,
           phoneNumber,
           qualification,
           subjectsHandled: subjectsHandled || [],
           classesAssigned: classesAssigned || [],
           classTeacherOf,
-          hireDate: hireDate ? new Date(hireDate) : new Date(),
+          hireDate: hireDate ? new Date(hireDate) : null,
           salary: salary ? parseFloat(salary) : null,
           active: true
-        },
-        include: {
-          user: {
-            select: {
-              username: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true
-            }
-          }
         }
       });
 
@@ -285,8 +276,6 @@ router.post('/', authenticateToken, async (req, res) => {
       message: 'Teacher created successfully',
       teacher: {
         ...result,
-        id: Number(result.id),
-        userId: Number(result.userId),
         salary: result.salary ? Number(result.salary) : null
       }
     });
@@ -309,13 +298,12 @@ router.post('/', authenticateToken, async (req, res) => {
 // PUT /api/teachers/:id - Update teacher
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const teacherId = req.params.id;
     const updateData = req.body;
 
     // Check if teacher exists
     const existingTeacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(id) },
-      include: { user: true }
+      where: { teacherId }
     });
 
     if (!existingTeacher) {
@@ -396,28 +384,20 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // DELETE /api/teachers/:id - Delete teacher
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const teacherId = req.params.id;
 
     // Check if teacher exists
     const existingTeacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(id) }
+      where: { teacherId }
     });
 
     if (!existingTeacher) {
       return res.status(404).json({ error: 'Teacher not found' });
     }
 
-    // Delete teacher and associated user in transaction
-    await prisma.$transaction(async (prisma) => {
-      // Delete teacher first
-      await prisma.teacher.delete({
-        where: { id: BigInt(id) }
-      });
-
-      // Delete associated user
-      await prisma.user.delete({
-        where: { id: existingTeacher.userId }
-      });
+    // Delete teacher (related records will be handled by database constraints)
+    await prisma.teacher.delete({
+      where: { teacherId }
     });
 
     res.json({ message: 'Teacher deleted successfully' });

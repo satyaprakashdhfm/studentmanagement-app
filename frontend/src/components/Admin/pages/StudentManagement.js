@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import apiService from '../../../services/api';
+import logger from '../../../utils/logger';
 import { useAcademicYear } from '../../../context/AcademicYearContext';
 import './StudentManagement.css';
 
@@ -38,39 +39,74 @@ const StudentManagement = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      logger.componentLifecycle('StudentManagement', 'fetchData started', { classId, grade, selectedAcademicYear });
+      
       try {
         // Filter classes by selected academic year
         const filteredByYear = classes.filter(cls => cls.academicYear === selectedAcademicYear);
+        logger.debug('Filtered classes by academic year', { filteredByYear: filteredByYear.length, selectedAcademicYear });
         
         // If classId is provided, find the matching class
         if (classId && !grade) {
           const selectedClass = filteredByYear.find(cls => cls.classId === parseInt(classId));
           if (selectedClass) {
             setSelectedClass(selectedClass);
+            logger.debug('Selected class found', { selectedClass });
           }
         }
         
         // If grade is provided, filter classes for that grade and academic year
         if (grade) {
-          const classesForGrade = filteredByYear.filter(cls => cls.className === grade);
+          const classesForGrade = filteredByYear.filter(cls => cls.className.includes(grade.replace('th', '').replace('Grade', '').trim()));
           setFilteredClasses(classesForGrade);
+          logger.debug('Classes filtered by grade', { grade, classesForGrade: classesForGrade.length, foundClasses: classesForGrade.map(c => c.className) });
         }
 
-        // Fetch students
-        const response = classId && !grade
-          ? await apiService.getStudentsByClass(classId)
-          : await apiService.getStudents();
+        // Fetch students - only fetch if we have a specific classId, not for grade selection
+        let response;
+        logger.info('Starting student data fetch', { grade, classId, hasGrade: !!grade, hasClassId: !!classId });
+        
+        if (classId) {
+          // Fetch students for specific class only
+          response = await apiService.getStudentsByClass(classId);
+        } else if (!grade) {
+          // Only fetch all students if no grade or class is selected
+          response = await apiService.getStudents();
+        } else {
+          // If grade is selected but no specific class, don't fetch students yet
+          logger.info('Grade selected but no specific class - skipping student fetch');
+          setStudents([]);
+          return;
+        }
+        
+        logger.info('Student API response received', { 
+          success: response?.success, 
+          hasData: !!response?.data, 
+          hasStudents: !!response?.students,
+          dataLength: response?.data?.length || response?.students?.length || 0,
+          responseKeys: Object.keys(response || {}),
+          firstStudentSample: response?.data?.[0] || response?.students?.[0] || null
+        });
             
         if (response.success) {
-          setStudents(response.data);
+          const studentData = response.data || response.students || [];
+          logger.info('Students set successfully', { 
+            count: studentData.length,
+            sampleStudentNames: studentData.slice(0, 3).map(s => s.name || s.firstName + ' ' + s.lastName),
+            sampleStudentIds: studentData.slice(0, 3).map(s => s.studentId || s.id)
+          });
+          setStudents(studentData);
         } else {
-          setError(response.message || 'Failed to fetch students');
+          const errorMsg = response.message || 'Failed to fetch students';
+          setError(errorMsg);
+          logger.error('Student fetch failed', null, { response, errorMsg });
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        logger.error('Error in fetchData', error, { classId, grade, selectedAcademicYear });
         setError('Failed to load data');
       } finally {
         setLoading(false);
+        logger.componentLifecycle('StudentManagement', 'fetchData completed');
       }
     };
 
@@ -410,7 +446,19 @@ const StudentManagement = () => {
           </thead>
           <tbody>
             {students.map(student => {
-              const studentId = String(student.id);
+              // Debug logging for each student being rendered
+              logger.debug('Rendering student', { 
+                student: {
+                  id: student.id,
+                  studentId: student.studentId,
+                  name: student.name,
+                  email: student.email,
+                  classId: student.classId,
+                  className: student.class?.className
+                }
+              });
+              
+              const studentId = String(student.studentId || student.id);
               const isExpanded = expandedStudents[studentId] || false;
               
               return (

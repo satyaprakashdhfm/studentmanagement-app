@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const { PrismaClient } = require('@prisma/client');
+const { errorLogger, requestTracker } = require('./middleware/errorLogger');
 const dotenv = require('dotenv');
 
 // Load environment variables
@@ -50,30 +52,63 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
+// Add request tracking middleware
+app.use(requestTracker);
+
+// Enhanced Request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const method = req.method;
   const url = req.url;
   const userAgent = req.get('User-Agent') || 'Unknown';
   const auth = req.get('Authorization') ? 'Bearer ***' : 'No Auth';
+  const ip = req.ip || req.connection.remoteAddress;
   
   console.log(`\n🌐 [${timestamp}] ${method} ${url}`);
   console.log(`   📱 User-Agent: ${userAgent.substring(0, 50)}...`);
   console.log(`   🔑 Auth: ${auth}`);
+  console.log(`   🌍 IP: ${ip}`);
   
   if (Object.keys(req.body).length > 0) {
     console.log(`   📦 Body:`, JSON.stringify(req.body, null, 2));
   }
 
-  // Capture response
+  if (Object.keys(req.query).length > 0) {
+    console.log(`   🔍 Query:`, JSON.stringify(req.query, null, 2));
+  }
+
+  // Capture response with detailed logging
   const originalSend = res.send;
   res.send = function(data) {
-    console.log(`   ✅ Response: ${res.statusCode} ${res.statusMessage}`);
-    if (res.statusCode >= 400) {
-      console.log(`   ❌ Error Response:`, data);
+    const duration = Date.now() - req.startTime;
+    
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      console.log(`   ✅ Response: ${res.statusCode} ${res.statusMessage}`);
+      
+      // Log response data structure for debugging
+      try {
+        const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
+        if (parsedData && typeof parsedData === 'object') {
+          const keys = Object.keys(parsedData);
+          console.log(`   📊 Response Keys: [${keys.join(', ')}]`);
+          
+          if (parsedData.data && Array.isArray(parsedData.data)) {
+            console.log(`   📈 Data Array Length: ${parsedData.data.length}`);
+          }
+          
+          if (parsedData.pagination) {
+            console.log(`   📄 Pagination: page ${parsedData.pagination.page}/${parsedData.pagination.pages}, total: ${parsedData.pagination.total}`);
+          }
+        }
+      } catch (e) {
+        console.log(`   📊 Response Size: ${data ? data.length : 0} chars`);
+      }
+    } else if (res.statusCode >= 400) {
+      console.log(`   ❌ Error Response: ${res.statusCode} ${res.statusMessage}`);
+      console.log(`   💥 Error Data:`, data);
     }
-    console.log(`   ⏱️  Duration: ${Date.now() - req.startTime}ms\n`);
+    
+    console.log(`   ⏱️  Duration: ${duration}ms\n`);
     return originalSend.call(this, data);
   };
   
@@ -112,19 +147,8 @@ app.use('*', (req, res) => {
   });
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  
-  // Determine error status and message
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
-  
-  res.status(status).json({
-    error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
+// Global error handler - use our enhanced error logger
+app.use(errorLogger);
 
 // Test database connection and start server
 testConnection()

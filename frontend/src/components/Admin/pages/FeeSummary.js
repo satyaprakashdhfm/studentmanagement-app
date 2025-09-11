@@ -299,7 +299,7 @@ const FeeSummary = () => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .content-area {
           padding: 20px;
         }

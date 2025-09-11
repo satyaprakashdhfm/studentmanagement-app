@@ -1,79 +1,65 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/database');
+const { prisma } = require('../config/database');
 const { authenticateToken } = require('../utils/jwt');
-const { hashPassword } = require('../utils/password');
-const { 
-  userValidationRules, 
-  handleValidationErrors 
-} = require('../utils/validation');
+const bcrypt = require('bcrypt');
 
 // GET /api/users - Get all users (admin only)
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    // For now, allow any authenticated user to view users
-    // In production, you might want to add role-based access control
+    const { search, active, role, page = 1, limit = 20 } = req.query;
     
-    const { search, active, page = 1, limit = 20 } = req.query;
-    
-    let query = 'SELECT id, username, email, first_name, last_name, active, created_at FROM users WHERE 1=1';
-    const params = [];
-    let paramCount = 0;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
 
-    // Add search filter
-    if (search) {
-      paramCount += 4;
-      query += ` AND (username ILIKE $${paramCount-3} OR email ILIKE $${paramCount-2} OR first_name ILIKE $${paramCount-1} OR last_name ILIKE $${paramCount})`;
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
-    }
-
-    // Add active filter
-    if (active !== undefined) {
-      paramCount += 1;
-      query += ` AND active = $${paramCount}`;
-      params.push(active === 'true');
-    }
-
-    // Add ordering
-    query += ' ORDER BY created_at DESC';
-
-    // Add pagination
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    paramCount += 2;
-    query += ` LIMIT $${paramCount-1} OFFSET $${paramCount}`;
-    params.push(parseInt(limit), offset);
-
-    const users = await db.executeQuery(query, params);
-
-    // Get total count for pagination
-    let countQuery = 'SELECT COUNT(*) as total FROM users WHERE 1=1';
-    const countParams = [];
-    let countParamCount = 0;
+    // Build where clause
+    const where = {};
     
     if (search) {
-      countParamCount += 4;
-      countQuery += ` AND (username ILIKE $${countParamCount-3} OR email ILIKE $${countParamCount-2} OR first_name ILIKE $${countParamCount-1} OR last_name ILIKE $${countParamCount})`;
-      const searchTerm = `%${search}%`;
-      countParams.push(searchTerm, searchTerm, searchTerm, searchTerm);
+      where.OR = [
+        { username: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } }
+      ];
     }
     
     if (active !== undefined) {
-      countParamCount += 1;
-      countQuery += ` AND active = $${countParamCount}`;
-      countParams.push(active === 'true');
+      where.active = active === 'true';
+    }
+    
+    if (role) {
+      where.role = role;
     }
 
-    const countResult = await db.executeQuery(countQuery, countParams);
-    const total = parseInt(countResult[0].total);
+    // Get users with pagination
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          username: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          active: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limitNum
+      }),
+      prisma.user.count({ where })
+    ]);
 
     res.json({
       users,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: pageNum,
+        limit: limitNum,
         total,
-        pages: Math.ceil(total / parseInt(limit))
+        pages: Math.ceil(total / limitNum)
       }
     });
 
@@ -83,23 +69,33 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/users/:id - Get user by ID
-router.get('/:id', authenticateToken, async (req, res) => {
+// GET /api/users/:username - Get user by username
+router.get('/:username', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const requestingUserId = req.user.id;
+    const { username } = req.params;
+    const requestingUsername = req.user.username;
 
     // Users can only view their own profile, unless they're admin
     // For now, allow viewing any user (you can add role checks later)
     
-    const query = 'SELECT id, username, email, first_name, last_name, active, created_at FROM users WHERE id = $1';
-    const users = await db.executeQuery(query, [id]);
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: {
+        username: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        active: true,
+        createdAt: true
+      }
+    });
 
-    if (users.length === 0) {
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(users[0]);
+    res.json(user);
 
   } catch (error) {
     console.error('Get user error:', error);
@@ -108,38 +104,53 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // POST /api/users - Create new user (admin only)
-router.post('/', authenticateToken, userValidationRules(), handleValidationErrors, async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { username, email, password, firstName, lastName, active = true } = req.body;
+    const { username, email, password, firstName, lastName, role = 'student', active = true } = req.body;
+
+    // Validate required fields
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password are required' });
+    }
 
     // Check if user already exists
-    const existingQuery = 'SELECT id FROM users WHERE username = $1 OR email = $2';
-    const existing = await db.executeQuery(existingQuery, [username, email]);
+    const existing = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username },
+          { email }
+        ]
+      }
+    });
 
-    if (existing.length > 0) {
+    if (existing) {
       return res.status(409).json({ error: 'Username or email already exists' });
     }
 
     // Hash password
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert new user
-    const insertQuery = `
-      INSERT INTO users (username, email, password, first_name, last_name, active)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, username, email, first_name, last_name, active, created_at
-    `;
-    
-    const result = await db.executeQuery(insertQuery, [
-      username,
-      email,
-      hashedPassword,
-      firstName || null,
-      lastName || null,
-      active
-    ]);
-
-    const newUser = result[0];
+    // Create new user
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        role,
+        active
+      },
+      select: {
+        username: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        active: true,
+        createdAt: true
+      }
+    });
 
     res.status(201).json({
       user: newUser,
@@ -148,85 +159,83 @@ router.post('/', authenticateToken, userValidationRules(), handleValidationError
 
   } catch (error) {
     console.error('Create user error:', error);
-    if (error.code === '23505') { // PostgreSQL unique constraint violation
+    if (error.code === 'P2002') {
       return res.status(409).json({ error: 'Username or email already exists' });
     }
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// PUT /api/users/:id - Update user
-router.put('/:id', authenticateToken, async (req, res) => {
+// PUT /api/users/:username - Update user
+router.put('/:username', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { username } = req.params;
     const updateData = req.body;
-    const requestingUserId = req.user.id;
+    const requestingUsername = req.user.username;
 
-    // Users can only update their own profile
-    if (parseInt(id) !== requestingUserId) {
+    // Users can only update their own profile (unless admin)
+    if (username !== requestingUsername && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'You can only update your own profile' });
     }
 
     // Check if user exists
-    const existingQuery = 'SELECT * FROM users WHERE id = ?';
-    const existing = await db.executeQuery(existingQuery, [id]);
+    const existing = await prisma.user.findUnique({
+      where: { username }
+    });
 
-    if (existing.length === 0) {
+    if (!existing) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Check if email is being updated and already exists for another user
     if (updateData.email) {
-      const emailQuery = 'SELECT id FROM users WHERE email = ? AND id != ?';
-      const emailExists = await db.executeQuery(emailQuery, [updateData.email, id]);
+      const emailExists = await prisma.user.findFirst({
+        where: {
+          email: updateData.email,
+          username: { not: username }
+        }
+      });
       
-      if (emailExists.length > 0) {
+      if (emailExists) {
         return res.status(409).json({ error: 'Email already exists for another user' });
       }
     }
 
-    // Check if username is being updated and already exists for another user
-    if (updateData.username) {
-      const usernameQuery = 'SELECT id FROM users WHERE username = ? AND id != ?';
-      const usernameExists = await db.executeQuery(usernameQuery, [updateData.username, id]);
-      
-      if (usernameExists.length > 0) {
-        return res.status(409).json({ error: 'Username already exists for another user' });
-      }
-    }
-
-    // Build update query dynamically (exclude password and sensitive fields)
-    const updateFields = [];
-    const updateValues = [];
+    // Prepare update data (exclude password and sensitive fields)
+    const allowedFields = ['email', 'firstName', 'lastName'];
+    const dataToUpdate = {};
     
-    const allowedFields = ['username', 'email', 'firstName', 'lastName'];
-    const fieldMapping = {
-      firstName: 'first_name',
-      lastName: 'last_name'
-    };
-
-    Object.keys(updateData).forEach(key => {
-      if (allowedFields.includes(key)) {
-        const dbField = fieldMapping[key] || key;
-        updateFields.push(`${dbField} = ?`);
-        updateValues.push(updateData[key]);
+    allowedFields.forEach(field => {
+      if (updateData[field] !== undefined) {
+        dataToUpdate[field] = updateData[field];
       }
     });
 
-    if (updateFields.length === 0) {
+    // Only admin can update role and active status
+    if (req.user.role === 'admin') {
+      if (updateData.role !== undefined) dataToUpdate.role = updateData.role;
+      if (updateData.active !== undefined) dataToUpdate.active = updateData.active;
+    }
+
+    if (Object.keys(dataToUpdate).length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
-    // Add updated_at timestamp
-    updateFields.push('updated_at = CURRENT_TIMESTAMP');
-    updateValues.push(id);
-
-    const updateQuery = `UPDATE users SET ${updateFields.join(', ')} WHERE id = ?`;
-    await db.executeQuery(updateQuery, updateValues);
-
-    // Get updated user (without password)
-    const updatedUserQuery = 'SELECT id, username, email, first_name, last_name, active, created_at FROM users WHERE id = ?';
-    const [updatedUser] = await db.executeQuery(updatedUserQuery, [id]);
+    // Update user
+    const updatedUser = await prisma.user.update({
+      where: { username },
+      data: dataToUpdate,
+      select: {
+        username: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        active: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
 
     res.json({
       user: updatedUser,
@@ -235,35 +244,43 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('Update user error:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Username or email already exists' });
+    if (error.code === 'P2002') {
+      return res.status(409).json({ error: 'Email already exists' });
     }
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// DELETE /api/users/:id - Delete user (admin only)
-router.delete('/:id', authenticateToken, async (req, res) => {
+// DELETE /api/users/:username - Delete user (admin only)
+router.delete('/:username', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const requestingUserId = req.user.id;
+    const { username } = req.params;
+    const requestingUsername = req.user.username;
+
+    // Only admin can delete users
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
 
     // Prevent users from deleting themselves
-    if (parseInt(id) === requestingUserId) {
+    if (username === requestingUsername) {
       return res.status(400).json({ error: 'You cannot delete your own account' });
     }
 
     // Check if user exists
-    const existingQuery = 'SELECT id FROM users WHERE id = ?';
-    const existing = await db.executeQuery(existingQuery, [id]);
+    const existing = await prisma.user.findUnique({
+      where: { username }
+    });
 
-    if (existing.length === 0) {
+    if (!existing) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Soft delete by setting active to false instead of actually deleting
-    const updateQuery = 'UPDATE users SET active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
-    await db.executeQuery(updateQuery, [id]);
+    await prisma.user.update({
+      where: { username },
+      data: { active: false }
+    });
 
     res.json({ message: 'User deactivated successfully' });
 
@@ -273,22 +290,30 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/users/:id/activate - Reactivate user (admin only)
-router.put('/:id/activate', authenticateToken, async (req, res) => {
+// PUT /api/users/:username/activate - Reactivate user (admin only)
+router.put('/:username/activate', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { username } = req.params;
+
+    // Only admin can activate users
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
 
     // Check if user exists
-    const existingQuery = 'SELECT id FROM users WHERE id = ?';
-    const existing = await db.executeQuery(existingQuery, [id]);
+    const existing = await prisma.user.findUnique({
+      where: { username }
+    });
 
-    if (existing.length === 0) {
+    if (!existing) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Reactivate user
-    const updateQuery = 'UPDATE users SET active = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
-    await db.executeQuery(updateQuery, [id]);
+    await prisma.user.update({
+      where: { username },
+      data: { active: true }
+    });
 
     res.json({ message: 'User activated successfully' });
 

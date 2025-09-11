@@ -74,20 +74,13 @@ router.get('/', authenticateToken, async (req, res) => {
     // Get total count
     const total = await prisma.syllabus.count({ where });
 
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const syllabusWithNumericIds = syllabus.map(record => {
-      return JSON.parse(JSON.stringify(record, (key, value) =>
-        typeof value === 'bigint' ? Number(value) : value
-      ));
-    });
-
     res.json({
-      syllabus: syllabusWithNumericIds,
+      syllabus,
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total: Number(total),
-        pages: Math.ceil(Number(total) / limitNum)
+        total,
+        pages: Math.ceil(total / limitNum)
       }
     });
 
@@ -103,7 +96,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     const syllabusItem = await prisma.syllabus.findUnique({
-      where: { syllabusId: parseInt(id) },
+      where: { syllabusId: id },
       include: {
         class: {
           select: {
@@ -133,13 +126,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Syllabus record not found' });
     }
 
-    // Convert BigInt IDs to Numbers
-    const syllabusWithNumericIds = {
-      ...syllabusItem,
-      teacherId: Number(syllabusItem.teacherId)
-    };
-
-    res.json(syllabusWithNumericIds);
+    res.json(syllabusItem);
 
   } catch (error) {
     console.error('Get syllabus record error:', error);
@@ -181,7 +168,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Check if subject exists
     const subject = await prisma.subject.findUnique({
-      where: { subjectId: parseInt(subjectId) }
+      where: { subjectCode: subjectId }
     });
 
     if (!subject) {
@@ -190,7 +177,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Check if teacher exists
     const teacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(teacherId) }
+      where: { teacherId }
     });
 
     if (!teacher) {
@@ -201,7 +188,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const existingSyllabus = await prisma.syllabus.findFirst({
       where: {
         classId: parseInt(classId),
-        subjectId: parseInt(subjectId),
+        subjectCode: subjectId,
         unitName
       }
     });
@@ -210,16 +197,20 @@ router.post('/', authenticateToken, async (req, res) => {
       return res.status(409).json({ error: 'Syllabus record already exists for this class, subject, and unit' });
     }
 
+    // Generate syllabus ID
+    const syllabusId = `SYL${Date.now()}`;
+
     // Create new syllabus record
     const newSyllabus = await prisma.syllabus.create({
       data: {
+        syllabusId,
         classId: parseInt(classId),
-        subjectId: parseInt(subjectId),
+        subjectCode: subjectId,
         unitName,
         completionStatus,
         completionPercentage: parseInt(completionPercentage),
         currentTopic,
-        teacherId: BigInt(teacherId),
+        teacherId,
         lastUpdated: new Date()
       },
       include: {
@@ -244,10 +235,7 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     res.status(201).json({
-      syllabus: {
-        ...newSyllabus,
-        teacherId: Number(newSyllabus.teacherId)
-      },
+      syllabus: newSyllabus,
       message: 'Syllabus record created successfully'
     });
 
@@ -286,7 +274,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Validate teacher if provided
     if (teacherId) {
       const teacher = await prisma.teacher.findUnique({
-        where: { id: BigInt(teacherId) }
+        where: { teacherId }
       });
 
       if (!teacher) {
@@ -303,11 +291,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (completionStatus) updateData.completionStatus = completionStatus;
     if (completionPercentage !== undefined) updateData.completionPercentage = parseInt(completionPercentage);
     if (currentTopic) updateData.currentTopic = currentTopic;
-    if (teacherId) updateData.teacherId = BigInt(teacherId);
+    if (teacherId) updateData.teacherId = teacherId;
 
     // Update syllabus record
     const updatedSyllabus = await prisma.syllabus.update({
-      where: { syllabusId: parseInt(id) },
+      where: { syllabusId: id },
       data: updateData,
       include: {
         class: {
@@ -331,10 +319,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     });
 
     res.json({
-      syllabus: {
-        ...updatedSyllabus,
-        teacherId: Number(updatedSyllabus.teacherId)
-      },
+      syllabus: updatedSyllabus,
       message: 'Syllabus record updated successfully'
     });
 
@@ -360,7 +345,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     // Delete syllabus record
     await prisma.syllabus.delete({
-      where: { syllabusId: parseInt(id) }
+      where: { syllabusId: id }
     });
 
     res.json({ message: 'Syllabus record deleted successfully' });
@@ -432,26 +417,26 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
 
     // Get subject-wise progress
     const subjectStats = await prisma.syllabus.groupBy({
-      by: ['subjectId'],
+      by: ['subjectCode'],
       where,
       _avg: {
         completionPercentage: true
       },
       _count: {
-        subjectId: true
+        subjectCode: true
       }
     });
 
     // Get subject details for stats
-    const subjectIds = subjectStats.map(stat => stat.subjectId);
+    const subjectCodes = subjectStats.map(stat => stat.subjectCode);
     const subjectDetails = await prisma.subject.findMany({
       where: {
-        subjectId: {
-          in: subjectIds
+        subjectCode: {
+          in: subjectCodes
         }
       },
       select: {
-        subjectId: true,
+        subjectCode: true,
         subjectName: true
       }
     });
@@ -478,12 +463,12 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     const subjectWiseProgress = subjectStats.map(stat => {
-      const subjectDetail = subjectDetails.find(s => s.subjectId === stat.subjectId);
+      const subjectDetail = subjectDetails.find(s => s.subjectCode === stat.subjectCode);
       return {
-        subjectId: stat.subjectId,
+        subjectCode: stat.subjectCode,
         subjectName: subjectDetail ? subjectDetail.subjectName : 'Unknown',
         averageProgress: Math.round(stat._avg.completionPercentage || 0),
-        unitCount: stat._count.subjectId
+        unitCount: stat._count.subjectCode
       };
     });
 

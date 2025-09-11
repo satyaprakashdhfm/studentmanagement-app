@@ -21,19 +21,19 @@ router.get('/', authenticateToken, async (req, res) => {
     
     // Add filters
     if (studentId) {
-      where.studentId = BigInt(studentId);
+      where.studentId = studentId;
     }
     
     if (classId) {
       where.classId = parseInt(classId);
     }
     
-    if (subjectId) {
-      where.subjectId = parseInt(subjectId);
+    if (subjectCode) {
+      where.subjectCode = subjectCode;
     }
     
     if (teacherId) {
-      where.teacherId = BigInt(teacherId);
+      where.teacherId = teacherId;
     }
     
     if (examinationType) {
@@ -200,13 +200,13 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/marks/:id - Get mark record by ID
+// GET /api/marks/:id - Get mark by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const markId = req.params.id;
 
     const mark = await prisma.mark.findUnique({
-      where: { marksId: BigInt(id) },
+      where: { marksId: markId },
       include: {
         student: {
           select: {
@@ -258,36 +258,31 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/marks - Create new mark record
+// POST /api/marks - Create new mark
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const {
-      studentId,
-      classId,
-      subjectId,
-      examinationType,
-      marksObtained,
-      maxMarks,
-      grade,
-      teacherId,
-      entryDate
+    const { 
+      studentId, 
+      classId, 
+      subjectCode, 
+      teacherId, 
+      examinationType, 
+      marksObtained, 
+      maxMarks, 
+      entryDate 
     } = req.body;
 
     // Validate required fields
-    if (!studentId || !classId || !subjectId || !examinationType || marksObtained === undefined || !maxMarks || !teacherId) {
-      return res.status(400).json({ error: 'All required fields must be provided' });
-    }
-
-    // Validate marks
-    if (marksObtained < 0 || marksObtained > maxMarks) {
-      return res.status(400).json({ error: 'Marks obtained cannot be negative or exceed maximum marks' });
+    if (!studentId || !classId || !subjectCode || !teacherId || !examinationType || marksObtained === undefined || !maxMarks) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: studentId, classId, subjectCode, teacherId, examinationType, marksObtained, maxMarks' 
+      });
     }
 
     // Check if student exists
     const student = await prisma.student.findUnique({
-      where: { id: BigInt(studentId) }
+      where: { studentId }
     });
-
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -296,68 +291,69 @@ router.post('/', authenticateToken, async (req, res) => {
     const classExists = await prisma.class.findUnique({
       where: { classId: parseInt(classId) }
     });
-
     if (!classExists) {
       return res.status(404).json({ error: 'Class not found' });
     }
 
     // Check if subject exists
     const subject = await prisma.subject.findUnique({
-      where: { subjectId: parseInt(subjectId) }
+      where: { subjectCode }
     });
-
     if (!subject) {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
     // Check if teacher exists
     const teacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(teacherId) }
+      where: { teacherId }
     });
-
     if (!teacher) {
       return res.status(404).json({ error: 'Teacher not found' });
     }
 
-    // Check if marks already exist for this combination
+    // Calculate grade if not provided
+    const percentage = (marksObtained / maxMarks) * 100;
+    let grade;
+    if (percentage >= 90) grade = 'A+';
+    else if (percentage >= 80) grade = 'A';
+    else if (percentage >= 70) grade = 'B+';
+    else if (percentage >= 60) grade = 'B';
+    else if (percentage >= 50) grade = 'C+';
+    else if (percentage >= 40) grade = 'C';
+    else if (percentage >= 33) grade = 'D';
+    else grade = 'F';
+
+    // Check for duplicate mark entry
     const existingMark = await prisma.mark.findFirst({
       where: {
-        studentId: BigInt(studentId),
+        studentId,
         classId: parseInt(classId),
-        subjectId: parseInt(subjectId),
+        subjectCode,
         examinationType
       }
     });
 
     if (existingMark) {
-      return res.status(409).json({ error: 'Marks already exist for this student, class, subject, and examination type' });
+      return res.status(409).json({ 
+        error: 'Mark already exists for this student, class, subject, and examination type' 
+      });
     }
 
-    // Calculate grade if not provided
-    let calculatedGrade = grade;
-    if (!calculatedGrade) {
-      const percentage = (marksObtained / maxMarks) * 100;
-      if (percentage >= 90) calculatedGrade = 'A+';
-      else if (percentage >= 80) calculatedGrade = 'A';
-      else if (percentage >= 70) calculatedGrade = 'B+';
-      else if (percentage >= 60) calculatedGrade = 'B';
-      else if (percentage >= 50) calculatedGrade = 'C+';
-      else if (percentage >= 40) calculatedGrade = 'C';
-      else if (percentage >= 35) calculatedGrade = 'D';
-      else calculatedGrade = 'F';
-    }
+    // Generate marks ID
+    const marksId = `MRK${Date.now()}`;
 
-    // Create new mark record
+    // Create mark record
     const newMark = await prisma.mark.create({
       data: {
-        studentId: BigInt(studentId),
+        marksId,
+        studentId,
         classId: parseInt(classId),
-        subjectId: parseInt(subjectId),
+        subjectCode,
+        teacherId,
         examinationType,
         marksObtained: parseInt(marksObtained),
         maxMarks: parseInt(maxMarks),
-        grade: calculatedGrade,
-        teacherId: BigInt(teacherId),
+        grade,
         entryDate: entryDate ? new Date(entryDate) : new Date()
       },
       include: {
@@ -375,8 +371,7 @@ router.post('/', authenticateToken, async (req, res) => {
         },
         subject: {
           select: {
-            subjectName: true,
-            subjectCode: true
+            subjectName: true
           }
         },
         teacher: {
@@ -406,20 +401,20 @@ router.post('/', authenticateToken, async (req, res) => {
 // POST /api/marks/bulk - Create multiple mark records
 router.post('/bulk', authenticateToken, async (req, res) => {
   try {
-    const { markRecords, classId, subjectId, examinationType, maxMarks, teacherId, entryDate } = req.body;
+    const { markRecords, classId, subjectCode, examinationType, maxMarks, teacherId, entryDate } = req.body;
 
     if (!markRecords || !Array.isArray(markRecords) || markRecords.length === 0) {
       return res.status(400).json({ error: 'Mark records array is required' });
     }
 
     // Validate common fields
-    if (!classId || !subjectId || !examinationType || !maxMarks || !teacherId) {
+    if (!classId || !subjectCode || !examinationType || !maxMarks || !teacherId) {
       return res.status(400).json({ error: 'All required common fields must be provided' });
     }
 
     // Validate teacher exists
     const teacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(teacherId) }
+      where: { teacherId }
     });
 
     if (!teacher) {
@@ -437,7 +432,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
     // Validate subject exists
     const subject = await prisma.subject.findUnique({
-      where: { subjectId: parseInt(subjectId) }
+      where: { subjectCode }
     });
 
     if (!subject) {
@@ -459,9 +454,9 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         // Check if marks already exist
         const existingMark = await prisma.mark.findFirst({
           where: {
-            studentId: BigInt(studentId),
+            studentId,
             classId: parseInt(classId),
-            subjectId: parseInt(subjectId),
+            subjectCode,
             examinationType
           }
         });
@@ -477,20 +472,20 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             else if (percentage >= 60) calculatedGrade = 'B';
             else if (percentage >= 50) calculatedGrade = 'C+';
             else if (percentage >= 40) calculatedGrade = 'C';
-            else if (percentage >= 35) calculatedGrade = 'D';
+            else if (percentage >= 33) calculatedGrade = 'D';
             else calculatedGrade = 'F';
           }
 
           const newMark = await prisma.mark.create({
             data: {
-              studentId: BigInt(studentId),
+              studentId,
               classId: parseInt(classId),
-              subjectId: parseInt(subjectId),
+              subjectCode,
+              teacherId,
               examinationType,
               marksObtained: parseInt(marksObtained),
               maxMarks: parseInt(maxMarks),
               grade: calculatedGrade,
-              teacherId: BigInt(teacherId),
               entryDate: entryDate ? new Date(entryDate) : new Date()
             },
             include: {
@@ -526,19 +521,19 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/marks/:id - Update mark record
+// PUT /api/marks/:id - Update mark
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { marksObtained, maxMarks, grade, examinationType } = req.body;
+    const markId = req.params.id;
+    const updateData = req.body;
 
-    // Check if mark record exists
+    // Check if mark exists
     const existingMark = await prisma.mark.findUnique({
-      where: { marksId: BigInt(id) }
+      where: { marksId: markId }
     });
 
     if (!existingMark) {
-      return res.status(404).json({ error: 'Mark record not found' });
+      return res.status(404).json({ error: 'Mark not found' });
     }
 
     // Validate marks if provided
@@ -559,13 +554,13 @@ router.put('/:id', authenticateToken, async (req, res) => {
       else if (percentage >= 60) calculatedGrade = 'B';
       else if (percentage >= 50) calculatedGrade = 'C+';
       else if (percentage >= 40) calculatedGrade = 'C';
-      else if (percentage >= 35) calculatedGrade = 'D';
+      else if (percentage >= 33) calculatedGrade = 'D';
       else calculatedGrade = 'F';
     }
 
     // Update mark record
     const updatedMark = await prisma.mark.update({
-      where: { marksId: BigInt(id) },
+      where: { marksId: markId },
       data: {
         marksObtained: newMarksObtained,
         maxMarks: newMaxMarks,
@@ -587,8 +582,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         },
         subject: {
           select: {
-            subjectName: true,
-            subjectCode: true
+            subjectName: true
           }
         },
         teacher: {
@@ -615,26 +609,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/marks/:id - Delete mark record
+// DELETE /api/marks/:id - Delete mark
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const markId = req.params.id;
 
-    // Check if mark record exists
+    // Check if mark exists
     const existingMark = await prisma.mark.findUnique({
-      where: { marksId: BigInt(id) }
+      where: { marksId: markId }
     });
 
     if (!existingMark) {
-      return res.status(404).json({ error: 'Mark record not found' });
+      return res.status(404).json({ error: 'Mark not found' });
     }
 
-    // Delete mark record
+    // Delete mark
     await prisma.mark.delete({
-      where: { marksId: BigInt(id) }
+      where: { marksId: markId }
     });
 
-    res.json({ message: 'Mark record deleted successfully' });
+    res.json({ message: 'Mark deleted successfully' });
 
   } catch (error) {
     console.error('Delete mark error:', error);

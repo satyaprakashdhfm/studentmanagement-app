@@ -9,115 +9,107 @@ const {
   handleValidationErrors 
 } = require('../utils/validation');
 
-// GET /api/students - Get all students
+// GET /api/students - Get all students with pagination and filtering
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { search, classId, status, page = 1, limit = 50 } = req.query;
-    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 1000; // Show more students by default
+    const skip = (page - 1) * limit;
+    const search = req.query.search || '';
+    const classFilter = req.query.classId || req.query.class;
+    const classNameFilter = req.query.className || req.query.grade;
+    const status = req.query.status;
+
     // Build where clause
     const where = {};
     
-    // Add search filter
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
-        { fatherName: { contains: search, mode: 'insensitive' } },
-        { motherName: { contains: search, mode: 'insensitive' } }
+        { studentId: { contains: search, mode: 'insensitive' } }
       ];
     }
-
-    // Add class filter
-    if (classId) {
-      where.classId = parseInt(classId);
+    
+    if (classFilter) {
+      where.classId = parseInt(classFilter);
     }
-
-    // Add status filter
+    
+    if (classNameFilter) {
+      where.class = {
+        className: { contains: classNameFilter, mode: 'insensitive' }
+      };
+    }
+    
     if (status) {
       where.status = status;
     }
 
-    // Calculate pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Get students with pagination and relations
-    const students = await prisma.student.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            active: true
-          }
-        },
-        class: {
-          select: {
-            classId: true,
-            className: true,
-            section: true,
-            academicYear: true
-          }
-        },
-        attendance: {
-          select: {
-            status: true,
-            date: true
-          },
-          orderBy: {
-            date: 'desc'
-          },
-          take: 10
-        },
-        marks: {
-          select: {
-            marksObtained: true,
-            maxMarks: true,
-            grade: true,
-            examinationType: true,
-            subject: {
-              select: {
-                subjectName: true
-              }
+    // Get students with pagination
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          class: {
+            select: {
+              classId: true,
+              className: true,
+              section: true,
+              academicYear: true
             }
           },
-          orderBy: {
-            entryDate: 'desc'
+          attendances: {
+            select: {
+              attendanceId: true,
+              date: true,
+              status: true,
+              timestamp: true
+            },
+            orderBy: { date: 'desc' },
+            take: 5
           },
-          take: 10
+          marks: {
+            select: {
+              marksId: true,
+              examinationType: true,
+              marksObtained: true,
+              maxMarks: true,
+              grade: true,
+              subject: {
+                select: {
+                  subjectCode: true,
+                  subjectName: true
+                }
+              }
+            },
+            orderBy: { entryDate: 'desc' },
+            take: 5
+          },
+          fees: {
+            select: {
+              feeId: true,
+              feeType: true,
+              amountDue: true,
+              amountPaid: true,
+              balance: true,
+              paymentDate: true
+            }
+          }
         },
-        fees: {
-          select: {
-            feeType: true,
-            amountDue: true,
-            amountPaid: true,
-            balance: true,
-            paymentDate: true
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 5
-        }
-      },
-      orderBy: { id: 'asc' },
-      skip,
-      take: limitNum
-    });
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.student.count({ where })
+    ]);
 
-    // Get total count
-    const total = await prisma.student.count({ where });
-
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const studentsWithNumericIds = students.map(student => ({
+    // Convert BigInt fields to numbers for JSON serialization
+    const serializedStudents = students.map(student => ({
       ...student,
-      id: Number(student.id),
-      userId: Number(student.userId),
+      attendances: student.attendances.map(att => ({
+        ...att,
+        attendanceId: Number(att.attendanceId)
+      })),
       fees: student.fees.map(fee => ({
         ...fee,
         amountDue: Number(fee.amountDue),
@@ -128,43 +120,29 @@ router.get('/', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      data: studentsWithNumericIds,
+      data: serializedStudents,
       pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum)
+        page: page,
+        limit: limit,
+        total: Number(total),
+        pages: Math.ceil(Number(total) / limit)
       }
     });
 
   } catch (error) {
     console.error('Get students error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Internal server error' 
-    });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // GET /api/students/:id - Get student by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const studentId = req.params.id;
 
     const student = await prisma.student.findUnique({
-      where: { id: BigInt(id) },
+      where: { studentId },
       include: {
-        user: {
-          select: {
-            username: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            active: true,
-            lastLogin: true
-          }
-        },
         class: {
           select: {
             classId: true,
@@ -173,115 +151,88 @@ router.get('/:id', authenticateToken, async (req, res) => {
             academicYear: true,
             classTeacher: {
               select: {
+                teacherId: true,
                 name: true,
                 email: true
               }
             }
           }
         },
-        attendance: {
-          include: {
-            class: {
-              select: {
-                className: true,
-                section: true
-              }
-            },
-            teacher: {
-              select: {
-                name: true
-              }
-            }
+        attendances: {
+          select: {
+            attendanceId: true,
+            date: true,
+            period: true,
+            status: true,
+            timestamp: true
           },
-          orderBy: {
-            date: 'desc'
-          }
+          orderBy: { date: 'desc' }
         },
         marks: {
-          include: {
+          select: {
+            marksId: true,
+            examinationType: true,
+            marksObtained: true,
+            maxMarks: true,
+            grade: true,
+            entryDate: true,
             subject: {
               select: {
-                subjectName: true,
-                subjectCode: true
-              }
-            },
-            class: {
-              select: {
-                className: true,
-                section: true
+                subjectCode: true,
+                subjectName: true
               }
             },
             teacher: {
               select: {
+                teacherId: true,
                 name: true
               }
             }
           },
-          orderBy: {
-            entryDate: 'desc'
-          }
+          orderBy: { entryDate: 'desc' }
         },
         fees: {
-          include: {
-            class: {
-              select: {
-                className: true,
-                section: true
-              }
-            }
-          },
-          orderBy: {
-            createdAt: 'desc'
+          select: {
+            feeId: true,
+            feeType: true,
+            amountDue: true,
+            amountPaid: true,
+            balance: true,
+            paymentDate: true,
+            paymentMethod: true,
+            academicYear: true
           }
         }
       }
     });
 
     if (!student) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Student not found' 
-      });
+      return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Convert BigInt IDs and Decimals to Numbers
-    const studentWithNumericIds = {
+    // Convert BigInt fields to numbers for JSON serialization
+    const serializedStudent = {
       ...student,
-      id: Number(student.id),
-      userId: Number(student.userId),
+      attendances: student.attendances.map(att => ({
+        ...att,
+        attendanceId: Number(att.attendanceId)
+      })),
       fees: student.fees.map(fee => ({
         ...fee,
-        feeId: Number(fee.feeId),
-        studentId: Number(fee.studentId),
         amountDue: Number(fee.amountDue),
         amountPaid: Number(fee.amountPaid),
         balance: Number(fee.balance)
-      })),
-      marks: student.marks.map(mark => ({
-        ...mark,
-        marksId: Number(mark.marksId),
-        studentId: Number(mark.studentId),
-        teacherId: Number(mark.teacherId)
-      })),
-      attendance: student.attendance.map(att => ({
-        ...att,
-        attendanceId: Number(att.attendanceId),
-        studentId: Number(att.studentId),
-        markedBy: Number(att.markedBy)
       }))
     };
 
-    res.json({
+    res.json({ 
       success: true,
-      data: studentWithNumericIds
+      data: serializedStudent 
     });
 
   } catch (error) {
     console.error('Get student error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Internal server error' 
-    });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -335,6 +286,9 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
     // Hash the password
     const hashedPassword = await hashPassword(password);
 
+    // Generate student ID
+    const studentId = `STU${Date.now()}`;
+
     // Create user and student in a transaction
     const result = await prisma.$transaction(async (prisma) => {
       // Create user first
@@ -345,14 +299,15 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
           password: hashedPassword,
           firstName,
           lastName,
-          role: 'student'
+          role: 'student',
+          active: true
         }
       });
 
       // Create student
       const newStudent = await prisma.student.create({
         data: {
-          userId: newUser.id,
+          studentId,
           name: name || `${firstName} ${lastName}`.trim(),
           address,
           email,
@@ -364,20 +319,10 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
           motherOccupation,
           parentContact,
           classId: classId ? parseInt(classId) : null,
-          section,
           admissionDate: admissionDate ? new Date(admissionDate) : new Date(),
           status: 'active'
         },
         include: {
-          user: {
-            select: {
-              username: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true
-            }
-          },
           class: {
             select: {
               className: true,
@@ -390,12 +335,12 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
 
       // Create default fee records for all fee types
       const defaultFeeTypes = [
-        'Term1_Tuition',
-        'Term2_Tuition',
-        'Term3_Tuition',
-        'Bus_Fee',
-        'Books_Fee',
-        'Dress_Fee'
+        'tuition_term1',
+        'tuition_term2',
+        'tuition_term3',
+        'bus_fee',
+        'books_fee',
+        'dress_fee'
       ];
 
       // Get the current academic year from the class or use current year
@@ -405,7 +350,8 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
       for (const feeType of defaultFeeTypes) {
         await prisma.fee.create({
           data: {
-            studentId: newStudent.id,
+            feeId: `FEE${Date.now()}_${feeType}`,
+            studentId: newStudent.studentId,
             classId: newStudent.classId,
             feeType: feeType,
             amountDue: 0,
@@ -422,11 +368,7 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
     res.status(201).json({
       success: true,
       message: 'Student created successfully',
-      student: {
-        ...result,
-        id: Number(result.id),
-        userId: Number(result.userId)
-      }
+      student: result
     });
 
   } catch (error) {
@@ -447,30 +389,24 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
 // PUT /api/students/:id - Update student
 router.put('/:id', authenticateToken, updateStudentValidationRules(), handleValidationErrors, async (req, res) => {
   try {
-    const { id } = req.params;
+    const studentId = req.params.id;
     const updateData = req.body;
 
     // Check if student exists
     const existingStudent = await prisma.student.findUnique({
-      where: { id: BigInt(id) },
-      include: { user: true }
+      where: { studentId }
     });
 
     if (!existingStudent) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Separate user data from student data
-    const userData = {};
+    // Prepare student data for update
     const studentData = {};
-
-    const userFields = ['username', 'email', 'firstName', 'lastName', 'active'];
-  const studentFields = ['name', 'address', 'phone', 'dateOfBirth', 'fatherName', 'fatherOccupation', 'motherName', 'motherOccupation', 'parentContact', 'classId', 'section', 'status'];
+    const studentFields = ['name', 'address', 'phone', 'dateOfBirth', 'fatherName', 'fatherOccupation', 'motherName', 'motherOccupation', 'parentContact', 'classId', 'status'];
 
     Object.keys(updateData).forEach(key => {
-      if (userFields.includes(key)) {
-        userData[key] = updateData[key];
-      } else if (studentFields.includes(key)) {
+      if (studentFields.includes(key)) {
         if (key === 'dateOfBirth' && updateData[key]) {
           studentData[key] = new Date(updateData[key]);
         } else if (key === 'classId' && updateData[key]) {
@@ -481,50 +417,25 @@ router.put('/:id', authenticateToken, updateStudentValidationRules(), handleVali
       }
     });
 
-    // Update in transaction
-    const result = await prisma.$transaction(async (prisma) => {
-      // Update user if there's user data
-      if (Object.keys(userData).length > 0) {
-        await prisma.user.update({
-          where: { id: existingStudent.userId },
-          data: userData
-        });
-      }
-
-      // Update student
-      const updatedStudent = await prisma.student.update({
-        where: { id: BigInt(id) },
-        data: studentData,
-        include: {
-          user: {
-            select: {
-              username: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-              role: true,
-              active: true
-            }
-          },
-          class: {
-            select: {
-              className: true,
-              section: true,
-              academicYear: true
-            }
+    // Update student
+    const updatedStudent = await prisma.student.update({
+      where: { studentId },
+      data: studentData,
+      include: {
+        class: {
+          select: {
+            classId: true,
+            className: true,
+            section: true,
+            academicYear: true
           }
         }
-      });
-
-      return updatedStudent;
+      }
     });
 
     res.json({
-      student: {
-        ...result,
-        id: Number(result.id),
-        userId: Number(result.userId)
-      },
+      success: true,
+      data: updatedStudent,
       message: 'Student updated successfully'
     });
 
@@ -540,31 +451,26 @@ router.put('/:id', authenticateToken, updateStudentValidationRules(), handleVali
 // DELETE /api/students/:id - Delete student
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const studentId = req.params.id;
 
     // Check if student exists
     const existingStudent = await prisma.student.findUnique({
-      where: { id: BigInt(id) }
+      where: { studentId }
     });
 
     if (!existingStudent) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Delete student and associated user in transaction
-    await prisma.$transaction(async (prisma) => {
-      // Delete student first (this will cascade delete related records)
-      await prisma.student.delete({
-        where: { id: BigInt(id) }
-      });
-
-      // Delete associated user
-      await prisma.user.delete({
-        where: { id: existingStudent.userId }
-      });
+    // Delete student (related records will be handled by database constraints)
+    await prisma.student.delete({
+      where: { studentId }
     });
 
-    res.json({ message: 'Student deleted successfully' });
+    res.json({ 
+      success: true,
+      message: 'Student deleted successfully' 
+    });
 
   } catch (error) {
     console.error('Delete student error:', error);
@@ -634,10 +540,12 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     res.json({
-      total,
-      active,
-      inactive: total - active,
-      classDistribution: classStats.map(stat => {
+      success: true,
+      data: {
+        total,
+        active,
+        inactive: total - active,
+        classDistribution: classStats.map(stat => {
         const classDetail = classDetails.find(c => c.classId === stat.classId);
         return {
           classId: stat.classId,
@@ -649,15 +557,70 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
         status: stat.status,
         count: stat._count.status
       })),
-      feeStats: {
-        totalDue: Number(feeStats._sum.amountDue || 0),
-        totalPaid: Number(feeStats._sum.amountPaid || 0),
-        totalBalance: Number(feeStats._sum.balance || 0)
+        feeStats: {
+          totalDue: Number(feeStats._sum.amountDue || 0),
+          totalPaid: Number(feeStats._sum.amountPaid || 0),
+          totalBalance: Number(feeStats._sum.balance || 0)
+        }
       }
     });
 
   } catch (error) {
     console.error('Get stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/students/grade/:gradeName - Get students by grade/class name
+router.get('/grade/:gradeName', authenticateToken, async (req, res) => {
+  try {
+    const { gradeName } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 1000; // Show all students for the grade
+    const skip = (page - 1) * limit;
+
+    // Decode URL-encoded grade name
+    const decodedGradeName = decodeURIComponent(gradeName);
+
+    const where = {
+      class: {
+        className: { contains: decodedGradeName, mode: 'insensitive' }
+      }
+    };
+
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          class: {
+            select: {
+              classId: true,
+              className: true,
+              section: true,
+              academicYear: true
+            }
+          }
+        },
+        orderBy: { name: 'asc' }
+      }),
+      prisma.student.count({ where })
+    ]);
+
+    res.json({
+      success: true,
+      data: students,
+      pagination: {
+        page,
+        limit,
+        total: Number(total),
+        pages: Math.ceil(Number(total) / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Get students by grade error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

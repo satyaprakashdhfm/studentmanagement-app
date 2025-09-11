@@ -22,7 +22,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     // Add filters
     if (studentId) {
-      where.studentId = BigInt(studentId);
+      where.studentId = studentId;
     }
     
     if (classId) {
@@ -30,7 +30,7 @@ router.get('/', authenticateToken, async (req, res) => {
     }
     
     if (teacherId) {
-      where.markedBy = BigInt(teacherId);
+      where.markedBy = teacherId;
     }
     
     if (status) {
@@ -119,7 +119,7 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
     
     // Build where clause
     const where = {
-      studentId: BigInt(studentId)
+      studentId: studentId
     };
     
     // Add date range filter
@@ -190,19 +190,18 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/attendance/:id - Get attendance record by ID
+// GET /api/attendance/:id - Get attendance by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const attendanceId = req.params.id;
 
-    const attendanceRecord = await prisma.attendance.findUnique({
-      where: { attendanceId: BigInt(id) },
+    const attendance = await prisma.attendance.findUnique({
+      where: { attendanceId },
       include: {
         student: {
           select: {
             name: true,
-            email: true,
-            phone: true
+            email: true
           }
         },
         class: {
@@ -221,16 +220,16 @@ router.get('/:id', authenticateToken, async (req, res) => {
       }
     });
 
-    if (!attendanceRecord) {
+    if (!attendance) {
       return res.status(404).json({ error: 'Attendance record not found' });
     }
 
     // Convert BigInt IDs to Numbers
     const recordWithNumericIds = {
-      ...attendanceRecord,
-      attendanceId: Number(attendanceRecord.attendanceId),
-      studentId: Number(attendanceRecord.studentId),
-      markedBy: Number(attendanceRecord.markedBy)
+      ...attendance,
+      attendanceId: Number(attendance.attendanceId),
+      studentId: Number(attendance.studentId),
+      markedBy: Number(attendance.markedBy)
     };
 
     res.json(recordWithNumericIds);
@@ -244,25 +243,26 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST /api/attendance - Create new attendance record
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const {
-      studentId,
-      classId,
-      date,
-      period,
-      status,
-      markedBy
+    const { 
+      studentId, 
+      classId, 
+      date, 
+      period, 
+      status, 
+      markedBy 
     } = req.body;
 
     // Validate required fields
     if (!studentId || !classId || !date || !period || !status || !markedBy) {
-      return res.status(400).json({ error: 'All fields are required' });
+      return res.status(400).json({ 
+        error: 'Missing required fields: studentId, classId, date, period, status, markedBy' 
+      });
     }
 
     // Check if student exists
     const student = await prisma.student.findUnique({
-      where: { id: BigInt(studentId) }
+      where: { studentId }
     });
-
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -271,24 +271,22 @@ router.post('/', authenticateToken, async (req, res) => {
     const classExists = await prisma.class.findUnique({
       where: { classId: parseInt(classId) }
     });
-
     if (!classExists) {
       return res.status(404).json({ error: 'Class not found' });
     }
 
-    // Check if teacher exists
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(markedBy) }
+    // Check if marker (teacher/admin) exists
+    const marker = await prisma.user.findUnique({
+      where: { username: markedBy }
     });
-
-    if (!teacher) {
-      return res.status(404).json({ error: 'Teacher not found' });
+    if (!marker) {
+      return res.status(404).json({ error: 'Marker (user) not found' });
     }
 
-    // Check if attendance already exists for this student, class, date, and period
+    // Check for duplicate attendance record
     const existingAttendance = await prisma.attendance.findFirst({
       where: {
-        studentId: BigInt(studentId),
+        studentId,
         classId: parseInt(classId),
         date: new Date(date),
         period: parseInt(period)
@@ -296,18 +294,21 @@ router.post('/', authenticateToken, async (req, res) => {
     });
 
     if (existingAttendance) {
-      return res.status(409).json({ error: 'Attendance already marked for this student, class, date, and period' });
+      return res.status(409).json({ 
+        error: 'Attendance record already exists for this student, class, date, and period' 
+      });
     }
 
-    // Create new attendance record
+    // Create attendance record
     const newAttendance = await prisma.attendance.create({
       data: {
-        studentId: BigInt(studentId),
+        studentId,
         classId: parseInt(classId),
         date: new Date(date),
         period: parseInt(period),
         status,
-        markedBy: BigInt(markedBy)
+        markedBy,
+        timestamp: new Date()
       },
       include: {
         student: {
@@ -322,9 +323,11 @@ router.post('/', authenticateToken, async (req, res) => {
             section: true
           }
         },
-        teacher: {
+        markedByUser: {
           select: {
-            name: true
+            username: true,
+            firstName: true,
+            lastName: true
           }
         }
       }
@@ -357,7 +360,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
     // Validate teacher exists
     const teacher = await prisma.teacher.findUnique({
-      where: { id: BigInt(markedBy) }
+      where: { teacherId: markedBy }
     });
 
     if (!teacher) {
@@ -386,7 +389,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         // Check if attendance already exists
         const existingAttendance = await prisma.attendance.findFirst({
           where: {
-            studentId: BigInt(studentId),
+            studentId: studentId,
             classId: parseInt(classId),
             date: attendanceDate,
             period: periodNum
@@ -396,12 +399,12 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         if (!existingAttendance) {
           const newAttendance = await prisma.attendance.create({
             data: {
-              studentId: BigInt(studentId),
+              studentId: studentId,
               classId: parseInt(classId),
               date: attendanceDate,
               period: periodNum,
               status,
-              markedBy: BigInt(markedBy)
+              markedBy: markedBy
             },
             include: {
               student: {
@@ -439,12 +442,12 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 // PUT /api/attendance/:id - Update attendance record
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status, period } = req.body;
+    const attendanceId = req.params.id;
+    const { status, markedBy } = req.body;
 
-    // Check if attendance record exists
+    // Check if attendance exists
     const existingAttendance = await prisma.attendance.findUnique({
-      where: { attendanceId: BigInt(id) }
+      where: { attendanceId }
     });
 
     if (!existingAttendance) {
@@ -453,10 +456,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Update attendance record
     const updatedAttendance = await prisma.attendance.update({
-      where: { attendanceId: BigInt(id) },
+      where: { attendanceId },
       data: {
         status: status || existingAttendance.status,
-        period: period ? parseInt(period) : existingAttendance.period
+        markedBy: markedBy || existingAttendance.markedBy
       },
       include: {
         student: {
@@ -498,11 +501,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // DELETE /api/attendance/:id - Delete attendance record
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const attendanceId = req.params.id;
 
-    // Check if attendance record exists
+    // Check if attendance exists
     const existingAttendance = await prisma.attendance.findUnique({
-      where: { attendanceId: BigInt(id) }
+      where: { attendanceId }
     });
 
     if (!existingAttendance) {
@@ -511,7 +514,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     // Delete attendance record
     await prisma.attendance.delete({
-      where: { attendanceId: BigInt(id) }
+      where: { attendanceId }
     });
 
     res.json({ message: 'Attendance record deleted successfully' });
@@ -545,7 +548,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     }
 
     if (studentId) {
-      where.studentId = BigInt(studentId);
+      where.studentId = studentId;
     }
 
     // Get attendance statistics by status

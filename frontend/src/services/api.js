@@ -1,14 +1,19 @@
 // API service for communicating with the backend
-const API_BASE_URL = 'http://localhost:8080/api';
+import logger from '../utils/logger';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
 class ApiService {
   constructor() {
     this.baseUrl = API_BASE_URL;
   }
 
-  // Helper method for making API calls
+  // Helper method for making API calls with enhanced logging
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const method = options.method || 'GET';
+    const startTime = Date.now();
+    
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -23,17 +28,58 @@ class ApiService {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    // Log API call start
+    logger.debug(`API Call Started: ${method} ${endpoint}`, {
+      url,
+      headers: config.headers,
+      body: options.body ? JSON.parse(options.body) : null
+    });
+
     try {
       const response = await fetch(url, config);
+      const duration = Date.now() - startTime;
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'API request failed');
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        const error = new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        error.status = response.status;
+        error.data = errorData;
+        
+        // Log API error
+        logger.apiCall(method, endpoint, 
+          options.body ? JSON.parse(options.body) : null, 
+          errorData, 
+          error, 
+          duration
+        );
+        
+        throw error;
       }
 
-      return await response.json();
+      const responseData = await response.json();
+      
+      // Log successful API call
+      logger.apiCall(method, endpoint, 
+        options.body ? JSON.parse(options.body) : null, 
+        responseData, 
+        null, 
+        duration
+      );
+
+      return responseData;
     } catch (error) {
-      console.error('API Error:', error);
+      const duration = Date.now() - startTime;
+      
+      // Log network or parsing errors
+      if (!error.status) {
+        logger.apiCall(method, endpoint, 
+          options.body ? JSON.parse(options.body) : null, 
+          null, 
+          error, 
+          duration
+        );
+      }
+      
       throw error;
     }
   }
@@ -65,16 +111,26 @@ class ApiService {
     });
   }
 
-  async updateUser(userId, userData) {
-    return this.request(`/users/${userId}`, {
+  async getUser(username) {
+    return this.request(`/users/${username}`);
+  }
+
+  async updateUser(username, userData) {
+    return this.request(`/users/${username}`, {
       method: 'PUT',
       body: JSON.stringify(userData),
     });
   }
 
-  async deleteUser(userId) {
-    return this.request(`/users/${userId}`, {
+  async deleteUser(username) {
+    return this.request(`/users/${username}`, {
       method: 'DELETE',
+    });
+  }
+
+  async activateUser(username) {
+    return this.request(`/users/${username}/activate`, {
+      method: 'PUT',
     });
   }
 
@@ -84,7 +140,11 @@ class ApiService {
   }
 
   async getStudentsByClass(classId) {
-    return this.request(`/students?classId=${classId}`);
+    return this.request(`/students?classId=${classId}&limit=1000`);
+  }
+
+  async getStudentsByGrade(gradeName) {
+    return this.request(`/students/grade/${encodeURIComponent(gradeName)}?limit=1000`);
   }
 
   async getStudent(studentId) {
@@ -174,8 +234,8 @@ class ApiService {
     return this.request('/subjects');
   }
 
-  async getSubject(subjectId) {
-    return this.request(`/subjects/${subjectId}`);
+  async getSubject(subjectCode) {
+    return this.request(`/subjects/${subjectCode}`);
   }
 
   async createSubject(subjectData) {
@@ -185,15 +245,15 @@ class ApiService {
     });
   }
 
-  async updateSubject(subjectId, subjectData) {
-    return this.request(`/subjects/${subjectId}`, {
+  async updateSubject(subjectCode, subjectData) {
+    return this.request(`/subjects/${subjectCode}`, {
       method: 'PUT',
       body: JSON.stringify(subjectData),
     });
   }
 
-  async deleteSubject(subjectId) {
-    return this.request(`/subjects/${subjectId}`, {
+  async deleteSubject(subjectCode) {
+    return this.request(`/subjects/${subjectCode}`, {
       method: 'DELETE',
     });
   }
@@ -302,20 +362,6 @@ class ApiService {
     return this.request(`/fees/${feeId}/payment`, {
       method: 'POST',
       body: JSON.stringify(paymentData),
-    });
-  }
-
-  async recordPayment(feeId, paymentData) {
-    return this.request(`/fees/${feeId}/payment`, {
-      method: 'POST',
-      body: JSON.stringify(paymentData),
-    });
-  }
-
-  async updateFee(feeId, feeData) {
-    return this.request(`/fees/${feeId}`, {
-      method: 'PUT',
-      body: JSON.stringify(feeData),
     });
   }
 

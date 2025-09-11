@@ -9,26 +9,46 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { search, classApplicable, isActive, page = 1, limit = 50 } = req.query;
     
-    // Get subjects with simple query
-    const subjects = await prisma.$queryRaw`
-      SELECT * FROM subjects 
-      WHERE is_active = true
-      ORDER BY subject_name ASC
-    `;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
 
-    // Convert BigInt fields to strings for JSON serialization
-    const subjectsWithStringIds = subjects.map(subject => ({
-      ...subject,
-      subject_id: subject.subject_id.toString()
-    }));
+    // Build where clause
+    const where = {};
+    
+    if (search) {
+      where.OR = [
+        { subjectName: { contains: search, mode: 'insensitive' } },
+        { subjectCode: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+    
+    if (classApplicable) {
+      where.classApplicable = classApplicable;
+    }
+    
+    if (isActive !== undefined) {
+      where.isActive = isActive === 'true';
+    }
+
+    // Get subjects with pagination
+    const [subjects, total] = await Promise.all([
+      prisma.subject.findMany({
+        where,
+        orderBy: { subjectName: 'asc' },
+        skip,
+        take: limitNum
+      }),
+      prisma.subject.count({ where })
+    ]);
 
     res.json({
-      subjects: subjectsWithStringIds,
+      subjects,
       pagination: {
-        page: 1,
-        limit: subjectsWithStringIds.length,
-        total: subjectsWithStringIds.length,
-        pages: 1
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
       }
     });
 
@@ -41,10 +61,10 @@ router.get('/', authenticateToken, async (req, res) => {
 // GET /api/subjects/:id - Get subject by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const subjectCode = req.params.id;
 
     const subject = await prisma.subject.findUnique({
-      where: { subjectId: parseInt(id) },
+      where: { subjectCode },
       include: {
         marks: {
           include: {
@@ -93,22 +113,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
-    // Convert BigInt IDs to Numbers
-    const subjectWithNumericIds = {
-      ...subject,
-      marks: subject.marks.map(mark => ({
-        ...mark,
-        marksId: Number(mark.marksId),
-        studentId: Number(mark.studentId),
-        teacherId: Number(mark.teacherId)
-      })),
-      syllabus: subject.syllabus.map(syl => ({
-        ...syl,
-        teacherId: Number(syl.teacherId)
-      }))
-    };
-
-    res.json(subjectWithNumericIds);
+    res.json(subject);
 
   } catch (error) {
     console.error('Get subject error:', error);
@@ -119,33 +124,34 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST /api/subjects - Create new subject
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const {
-      subjectId,
-      subjectName,
-      subjectCode,
-      classApplicable,
-      maxMarksPerExam,
-      isActive = true
-    } = req.body;
+    const { subjectName, subjectCode, classApplicable, maxMarksPerExam } = req.body;
 
-    // Check if subject ID already exists
+    // Validate required fields
+    if (!subjectName || !subjectCode || !classApplicable || !maxMarksPerExam) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: subjectName, subjectCode, classApplicable, maxMarksPerExam' 
+      });
+    }
+
+    // Check if subject code already exists
     const existingSubject = await prisma.subject.findUnique({
-      where: { subjectId: parseInt(subjectId) }
+      where: { subjectCode }
     });
 
     if (existingSubject) {
-      return res.status(409).json({ error: 'Subject ID already exists' });
+      return res.status(409).json({ 
+        error: 'Subject code already exists' 
+      });
     }
 
-    // Create new subject
+    // Create subject
     const newSubject = await prisma.subject.create({
       data: {
-        subjectId: parseInt(subjectId),
         subjectName,
         subjectCode,
         classApplicable,
         maxMarksPerExam: parseInt(maxMarksPerExam),
-        isActive
+        isActive: true
       }
     });
 
@@ -157,7 +163,7 @@ router.post('/', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Create subject error:', error);
     if (error.code === 'P2002') {
-      return res.status(409).json({ error: 'Subject ID already exists' });
+      return res.status(409).json({ error: 'Subject code already exists' });
     }
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -166,12 +172,12 @@ router.post('/', authenticateToken, async (req, res) => {
 // PUT /api/subjects/:id - Update subject
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const subjectCode = req.params.id;
     const updateData = req.body;
 
     // Check if subject exists
     const existingSubject = await prisma.subject.findUnique({
-      where: { subjectId: parseInt(id) }
+      where: { subjectCode }
     });
 
     if (!existingSubject) {
@@ -184,12 +190,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       maxMarksPerExam: updateData.maxMarksPerExam ? parseInt(updateData.maxMarksPerExam) : updateData.maxMarksPerExam
     };
 
-    // Remove subjectId from update data (shouldn't be updated)
-    delete dataToUpdate.subjectId;
-
     // Update subject
     const updatedSubject = await prisma.subject.update({
-      where: { subjectId: parseInt(id) },
+      where: { subjectCode },
       data: dataToUpdate
     });
 
@@ -207,35 +210,35 @@ router.put('/:id', authenticateToken, async (req, res) => {
 // DELETE /api/subjects/:id - Delete subject
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    const { id } = req.params;
+    const subjectCode = req.params.id;
 
     // Check if subject exists
     const existingSubject = await prisma.subject.findUnique({
-      where: { subjectId: parseInt(id) },
-      include: {
-        _count: {
-          select: {
-            marks: true,
-            syllabus: true
-          }
-        }
-      }
+      where: { subjectCode }
     });
 
     if (!existingSubject) {
       return res.status(404).json({ error: 'Subject not found' });
     }
 
-    // Check if subject has marks or syllabus
-    if (existingSubject._count.marks > 0 || existingSubject._count.syllabus > 0) {
+    // Check if subject is being used in marks or syllabus
+    const marksCount = await prisma.mark.count({
+      where: { subjectCode }
+    });
+
+    const syllabusCount = await prisma.syllabus.count({
+      where: { subjectCode }
+    });
+
+    if (marksCount > 0 || syllabusCount > 0) {
       return res.status(400).json({ 
-        error: 'Cannot delete subject with existing marks or syllabus records. Please remove them first.' 
+        error: `Cannot delete subject. It is referenced in ${marksCount} marks records and ${syllabusCount} syllabus records.` 
       });
     }
 
     // Delete subject
     await prisma.subject.delete({
-      where: { subjectId: parseInt(id) }
+      where: { subjectCode }
     });
 
     res.json({ message: 'Subject deleted successfully' });
@@ -270,42 +273,42 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
 
     // Subject performance (average marks)
     const performanceStats = await prisma.mark.groupBy({
-      by: ['subjectId'],
+      by: ['subjectCode'],
       _avg: {
         marksObtained: true,
         maxMarks: true
       },
       _count: {
-        subjectId: true
+        subjectCode: true
       }
     });
 
     // Get subject details for performance stats
     const subjectDetails = await prisma.subject.findMany({
       where: {
-        subjectId: {
-          in: performanceStats.map(stat => stat.subjectId)
+        subjectCode: {
+          in: performanceStats.map(stat => stat.subjectCode)
         }
       },
       select: {
-        subjectId: true,
+        subjectCode: true,
         subjectName: true
       }
     });
 
     const performanceWithDetails = performanceStats.map(stat => {
-      const subject = subjectDetails.find(s => s.subjectId === stat.subjectId);
+      const subject = subjectDetails.find(s => s.subjectCode === stat.subjectCode);
       const avgPercentage = stat._avg.maxMarks > 0 
         ? Math.round((stat._avg.marksObtained / stat._avg.maxMarks) * 100)
         : 0;
       
       return {
-        subjectId: stat.subjectId,
+        subjectCode: stat.subjectCode,
         subjectName: subject ? subject.subjectName : 'Unknown',
         averageMarks: Math.round(stat._avg.marksObtained || 0),
         averageMaxMarks: Math.round(stat._avg.maxMarks || 0),
         averagePercentage: avgPercentage,
-        totalExams: stat._count.subjectId
+        totalExams: stat._count.subjectCode
       };
     });
 
