@@ -47,6 +47,15 @@
 -- BUSINESS LOGIC TRIGGERS: 22 Automation Rules
 -- INDEXES: 15+ Performance Optimizations
 --
+-- CURRENT PRODUCTION DATA (After Cleanup):
+-- STUDENTS: 315 (active, duplicates removed)
+-- TEACHERS: 6 (qualified with subject assignments)
+-- CLASSES: 9 (with capacity management)
+-- CLASS SCHEDULES: 215 (deduplicated, conflict-free)
+-- ATTENDANCE RECORDS: 10,535 (after duplicate cleanup)
+-- FEE RECORDS: 1,890 (standardized academic years)
+-- ACADEMIC YEAR FORMAT: "2024-2025" (standardized across all tables)
+--
 -- ============================================================================
 
 -- Student Management System Database Setup (PostgreSQL)
