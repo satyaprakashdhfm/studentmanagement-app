@@ -27,15 +27,14 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
 
     const schedule = await prisma.$queryRaw`
       SELECT cs.*, 
-             s.subject_name, s.subject_id,
+             s.subject_name, s.subject_code,
              t.name as teacher_name, t.teacher_id,
              ts.slot_name, ts.start_time, ts.end_time, ts.slot_order
       FROM class_schedule cs
-      LEFT JOIN subjects s ON cs.subject_id = s.subject_id
+      LEFT JOIN subjects s ON cs.subject_code = s.subject_code
       LEFT JOIN teachers t ON cs.teacher_id = t.teacher_id
       LEFT JOIN time_slots ts ON cs.slot_id = ts.slot_id
       WHERE cs.class_id = ${parseInt(classId)}
-        AND cs.section = ${section}
         AND cs.academic_year = ${academicYear || '2024-2025'}
         AND cs.is_active = true
       ORDER BY cs.day_of_week ASC, ts.slot_order ASC
@@ -58,11 +57,11 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
       // Fetch exceptions for this week
       exceptions = await prisma.$queryRaw`
         SELECT se.*, 
-               s.subject_name, s.subject_id,
+               s.subject_name, s.subject_code,
                t.name as teacher_name, t.teacher_id,
                ts.slot_name, ts.start_time, ts.end_time, ts.slot_order
         FROM schedule_exceptions se
-        LEFT JOIN subjects s ON se.subject_id = s.subject_id
+        LEFT JOIN subjects s ON se.subject_code = s.subject_code
         LEFT JOIN teachers t ON se.teacher_id = t.teacher_id
         LEFT JOIN time_slots ts ON se.slot_id = ts.slot_id
         WHERE se.exception_date >= ${weekDates[1]}::date
@@ -79,7 +78,7 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
         exception_id: exc.exception_id ? exc.exception_id.toString() : null,
         class_id: exc.class_id ? exc.class_id.toString() : null,
         slot_id: exc.slot_id ? exc.slot_id.toString() : null,
-        subject_id: exc.subject_id ? exc.subject_id.toString() : null,
+        subject_code: exc.subject_code ? exc.subject_code.toString() : null,
         teacher_id: exc.teacher_id ? exc.teacher_id.toString() : null,
         created_by: exc.created_by ? exc.created_by.toString() : null
       }));
@@ -106,10 +105,10 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
           schedule_id: item.schedule_id ? item.schedule_id.toString() : null,
           class_id: item.class_id ? item.class_id.toString() : null,
           slot_id: item.slot_id ? item.slot_id.toString() : null,
-          subject_id: matchingException.subject_id ? matchingException.subject_id.toString() : null,
+          subject_code: matchingException.subject_code ? matchingException.subject_code.toString() : null,
           teacher_id: matchingException.teacher_id ? matchingException.teacher_id.toString() : null,
-          subject: matchingException.subject_id ? {
-            subject_id: matchingException.subject_id.toString(),
+          subject: matchingException.subject_code ? {
+            subject_code: matchingException.subject_code.toString(),
             subject_name: matchingException.exception_type === 'exam' ? 'EXAM' : (matchingException.subject_name || matchingException.title)
           } : null,
           teacher: matchingException.teacher_id ? {
@@ -127,10 +126,10 @@ router.get('/schedule/:classId/:section', authenticateToken, async (req, res) =>
           schedule_id: item.schedule_id ? item.schedule_id.toString() : null,
           class_id: item.class_id ? item.class_id.toString() : null,
           slot_id: item.slot_id ? item.slot_id.toString() : null,
-          subject_id: item.subject_id ? item.subject_id.toString() : null,
+          subject_code: item.subject_code ? item.subject_code.toString() : null,
           teacher_id: item.teacher_id ? item.teacher_id.toString() : null,
-          subject: item.subject_id ? {
-            subject_id: item.subject_id.toString(),
+          subject: item.subject_code ? {
+            subject_code: item.subject_code.toString(),
             subject_name: item.subject_name
           } : null,
           teacher: item.teacher_id ? {
@@ -178,7 +177,7 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       // Update existing entry
       scheduleEntry = await prisma.$queryRaw`
         UPDATE class_schedule 
-        SET subject_id = ${subjectId ? parseInt(subjectId) : null},
+        SET subject_code = ${subjectId},
             teacher_id = ${teacherId ? BigInt(teacherId) : null},
             updated_at = NOW()
         WHERE schedule_id = ${existingSchedule[0].schedule_id}
@@ -188,9 +187,9 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       // Create new entry
       scheduleEntry = await prisma.$queryRaw`
         INSERT INTO class_schedule 
-        (class_id, section, day_of_week, slot_id, subject_id, teacher_id, academic_year, is_active)
-        VALUES (${parseInt(classId)}, ${section}, ${parseInt(dayOfWeek)}, ${parseInt(slotId)}, 
-                ${subjectId ? parseInt(subjectId) : null}, ${teacherId ? BigInt(teacherId) : null}, 
+        (class_id, day_of_week, slot_id, subject_code, teacher_id, academic_year, is_active)
+        VALUES (${parseInt(classId)}, ${parseInt(dayOfWeek)}, ${slotId}, 
+                ${subjectId}, ${teacherId ? BigInt(teacherId) : null}, 
                 ${academicYear || '2024-2025'}, true)
         RETURNING *
       `;
@@ -202,7 +201,7 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       normalizedResult.schedule_id = normalizedResult.schedule_id ? normalizedResult.schedule_id.toString() : null;
       normalizedResult.class_id = normalizedResult.class_id ? normalizedResult.class_id.toString() : null;
       normalizedResult.slot_id = normalizedResult.slot_id ? normalizedResult.slot_id.toString() : null;
-      normalizedResult.subject_id = normalizedResult.subject_id ? normalizedResult.subject_id.toString() : null;
+      normalizedResult.subject_code = normalizedResult.subject_code ? normalizedResult.subject_code.toString() : null;
       normalizedResult.teacher_id = normalizedResult.teacher_id ? normalizedResult.teacher_id.toString() : null;
     }
 
@@ -256,7 +255,7 @@ router.put('/schedule', authenticateToken, async (req, res) => {
     if (scheduleId) {
       const updateQuery = await prisma.$queryRaw`
         UPDATE class_schedule
-        SET subject_id = ${subjectId ? parseInt(subjectId) : null},
+        SET subject_code = ${subjectId},
             teacher_id = ${finalTeacherId ? BigInt(finalTeacherId) : null},
             updated_at = NOW()
         WHERE schedule_id = ${BigInt(scheduleId)}
@@ -273,7 +272,7 @@ router.put('/schedule', authenticateToken, async (req, res) => {
         schedule_id: updateQuery[0].schedule_id ? updateQuery[0].schedule_id.toString() : null,
         class_id: updateQuery[0].class_id ? updateQuery[0].class_id.toString() : null,
         slot_id: updateQuery[0].slot_id ? updateQuery[0].slot_id.toString() : null,
-        subject_id: updateQuery[0].subject_id ? updateQuery[0].subject_id.toString() : null,
+        subject_code: updateQuery[0].subject_code ? updateQuery[0].subject_code.toString() : null,
         teacher_id: updateQuery[0].teacher_id ? updateQuery[0].teacher_id.toString() : null,
       };
 
@@ -433,7 +432,7 @@ router.get('/exceptions', authenticateToken, async (req, res) => {
       exception_id: exc.exceptionId.toString(),
       class_id: exc.classId ? exc.classId.toString() : null,
       slot_id: exc.slotId ? exc.slotId.toString() : null,
-      subject_id: exc.subjectId ? exc.subjectId.toString() : null,
+      subject_code: exc.subjectCode ? exc.subjectCode.toString() : null,
       teacher_id: exc.teacherId ? exc.teacherId.toString() : null,
       created_by: exc.createdBy.toString(),
       exception_date: exc.exceptionDate.toISOString().split('T')[0] // Format date
