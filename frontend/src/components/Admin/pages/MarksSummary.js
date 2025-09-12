@@ -11,7 +11,10 @@ const MarksSummary = () => {
     averageScore: 0,
     gradeDistribution: [],
     subjectCount: 0,
-    recentRecords: 0
+    recentRecords: 0,
+    examTypeDistribution: [],
+    topPerformingClasses: [],
+    lowPerformingStudents: 0
   });
   const [loading, setLoading] = useState(true);
 
@@ -20,11 +23,14 @@ const MarksSummary = () => {
       try {
         setLoading(true);
 
-        // Fetch all marks records
+        // Fetch marks statistics from backend with academic year filter
+        const statsResponse = await apiService.getMarksStats({ academicYear: selectedAcademicYear });
+        // Also fetch all marks records for additional calculations
         const marksResponse = await apiService.getMarks();
 
-        if (marksResponse.marks) {
+        if (statsResponse && marksResponse.marks) {
           const allRecords = marksResponse.marks;
+          const stats = statsResponse;
 
           // Filter records by current academic year classes
           const currentYearClassIds = classes
@@ -35,64 +41,74 @@ const MarksSummary = () => {
             currentYearClassIds.includes(record.classId)
           );
 
-          // Calculate summary statistics
-          const totalRecords = currentYearRecords.length;
-          const averageScore = totalRecords > 0
-            ? Math.round(currentYearRecords.reduce((sum, record) => sum + (record.marks || 0), 0) / totalRecords)
-            : 0;
+          // Use backend statistics for accurate counts (now filtered by academic year)
+          const totalRecords = stats.overall?.totalRecords || currentYearRecords.length;
+          const averageScore = stats.overall?.averagePercentage || 0;
 
-          // Get unique subjects
-          const subjectCount = new Set(currentYearRecords.map(record => record.subjectId)).size;
+          // Get unique subjects from current year records
+          const subjectCount = new Set(currentYearRecords.map(record => record.subjectCode)).size;
 
-          // Grade distribution
-          const gradeDistribution = classes
-            .filter(cls => cls.academicYear === selectedAcademicYear)
-            .reduce((acc, cls) => {
-              const recordsInClass = currentYearRecords.filter(r => r.classId === cls.classId).length;
-              const avgMarksInClass = recordsInClass > 0
-                ? Math.round(currentYearRecords
-                    .filter(r => r.classId === cls.classId)
-                    .reduce((sum, r) => sum + (r.marks || 0), 0) / recordsInClass)
-                : 0;
+          // Use backend grade distribution (now filtered by academic year)
+          const gradeDistribution = stats.gradeDistribution?.map(gradeStat => {
+            // Find class information for this grade
+            const classInfo = classes.find(cls => cls.className === gradeStat.grade && cls.academicYear === selectedAcademicYear);
+            const recordsInClass = currentYearRecords.filter(r => r.grade === gradeStat.grade).length;
 
-              const existing = acc.find(item => item.grade === cls.className);
+            // Calculate actual average for this grade from current year records
+            const gradeRecords = currentYearRecords.filter(r => r.grade === gradeStat.grade);
+            const gradeAverage = gradeRecords.length > 0
+              ? Math.round(gradeRecords.reduce((sum, r) => sum + ((r.marksObtained || 0) / (r.maxMarks || 1) * 100), 0) / gradeRecords.length)
+              : 0;
 
-              if (existing) {
-                existing.count += recordsInClass;
-                existing.averageMarks = Math.round((existing.averageMarks + avgMarksInClass) / 2);
-                existing.sections.push({
-                  section: cls.section,
-                  count: recordsInClass,
-                  averageMarks: avgMarksInClass
-                });
-              } else {
-                acc.push({
-                  grade: cls.className,
-                  count: recordsInClass,
-                  averageMarks: avgMarksInClass,
-                  sections: [{
-                    section: cls.section,
-                    count: recordsInClass,
-                    averageMarks: avgMarksInClass
-                  }]
-                });
-              }
-              return acc;
-            }, []);
-
-          // Recent records (last 30 days)
+            return {
+              grade: gradeStat.grade,
+              count: gradeStat.count,
+              averageMarks: gradeAverage,
+              sections: classInfo ? [{
+                section: classInfo.section,
+                count: recordsInClass,
+                averageMarks: gradeAverage,
+                maxStudents: classInfo.maxStudents
+              }] : []
+            };
+          }) || [];          // Recent records (last 30 days)
           const thirtyDaysAgo = new Date();
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
           const recentRecords = currentYearRecords.filter(record =>
-            new Date(record.examDate) >= thirtyDaysAgo
+            new Date(record.entryDate) >= thirtyDaysAgo
           ).length;
+
+          // Use backend exam type distribution (now filtered by academic year)
+          const examTypeDistribution = stats.examTypePerformance?.map(examStat => ({
+            type: examStat.examinationType,
+            count: examStat.totalRecords,
+            averageMarks: examStat.averagePercentage
+          })) || [];
+
+          // Top performing classes (by grade-specific average marks)
+          const topPerformingClasses = gradeDistribution
+            .sort((a, b) => b.averageMarks - a.averageMarks)
+            .slice(0, 3);
+
+          // Students with marks below 40% (failing) - calculate from current year records
+          const lowPerformingStudents = currentYearRecords.filter(record => {
+            const percentage = record.maxMarks > 0 ? (record.marksObtained / record.maxMarks) * 100 : 0;
+            return percentage < 40;
+          }).length;
 
           setSummaryData({
             totalRecords,
             averageScore,
             gradeDistribution,
             subjectCount,
-            recentRecords
+            recentRecords,
+            examTypeDistribution: examTypeDistribution.map(item => ({
+              type: item.examinationType || item.type,
+              count: item.totalRecords || item.count,
+              averageMarks: item.averagePercentage || item.averageMarks
+            })),
+            topPerformingClasses,
+            lowPerformingStudents
           });
         }
       } catch (error) {
@@ -159,6 +175,47 @@ const MarksSummary = () => {
             <h3>{summaryData.recentRecords}</h3>
             <p>Recent Records (30 days)</p>
           </div>
+        </div>
+
+        <div className="summary-card failing">
+          <div className="card-icon">⚠️</div>
+          <div className="card-content">
+            <h3>{summaryData.lowPerformingStudents}</h3>
+            <p>Below 40% (Need Attention)</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="exam-type-section">
+        <h3>Performance by Exam Type</h3>
+        <div className="exam-type-cards">
+          {summaryData.examTypeDistribution.map(examData => (
+            <div key={examData.type} className="exam-type-card">
+              <div className="exam-type-header">
+                <h4>{examData.type}</h4>
+                <span className="exam-count">{examData.count} records</span>
+              </div>
+              <div className="exam-average">
+                <span className="average-value">{examData.averageMarks}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="top-performers-section">
+        <h3>Top Performing Classes</h3>
+        <div className="top-performers-cards">
+          {summaryData.topPerformingClasses.map((classData, index) => (
+            <div key={classData.grade} className="top-performer-card">
+              <div className="rank-badge">{index + 1}</div>
+              <div className="class-info">
+                <h4>Grade {classData.grade}</h4>
+                <p>{classData.count} records</p>
+                <div className="performance-score">{classData.averageMarks}%</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -246,6 +303,10 @@ const MarksSummary = () => {
 
         .summary-card.recent {
           border-left: 4px solid #3498db;
+        }
+
+        .summary-card.failing {
+          border-left: 4px solid #e74c3c;
         }
 
         .card-icon {
@@ -383,6 +444,117 @@ const MarksSummary = () => {
           justify-content: center;
           align-items: center;
           height: 200px;
+        }
+
+        .exam-type-section,
+        .top-performers-section {
+          margin-bottom: 40px;
+        }
+
+        .exam-type-section h3,
+        .top-performers-section h3 {
+          margin-bottom: 20px;
+          color: #2c3e50;
+          font-size: 1.5rem;
+        }
+
+        .exam-type-cards {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 15px;
+        }
+
+        .exam-type-card {
+          background: white;
+          border-radius: 8px;
+          padding: 15px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          text-align: center;
+        }
+
+        .exam-type-header {
+          margin-bottom: 10px;
+        }
+
+        .exam-type-header h4 {
+          margin: 0 0 5px 0;
+          color: #2c3e50;
+          font-size: 1rem;
+        }
+
+        .exam-count {
+          background: #ecf0f1;
+          color: #2c3e50;
+          padding: 2px 6px;
+          border-radius: 8px;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .exam-average .average-value {
+          font-size: 1.5rem;
+          font-weight: bold;
+          color: #27ae60;
+        }
+
+        .top-performers-cards {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 15px;
+        }
+
+        .top-performer-card {
+          background: white;
+          border-radius: 10px;
+          padding: 20px;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .top-performer-card::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 4px;
+          background: linear-gradient(90deg, #f39c12, #e67e22);
+        }
+
+        .rank-badge {
+          background: linear-gradient(135deg, #f39c12, #e67e22);
+          color: white;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 1.2rem;
+          flex-shrink: 0;
+        }
+
+        .class-info h4 {
+          margin: 0 0 5px 0;
+          color: #2c3e50;
+          font-size: 1.1rem;
+        }
+
+        .class-info p {
+          margin: 0 0 10px 0;
+          color: #7f8c8d;
+          font-size: 0.9rem;
+        }
+
+        .performance-score {
+          font-size: 1.3rem;
+          font-weight: bold;
+          color: #27ae60;
         }
       `}</style>
     </div>

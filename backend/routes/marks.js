@@ -46,7 +46,8 @@ router.get('/', authenticateToken, async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // For class-specific queries, show ALL records without pagination
-    const shouldPaginate = !classId;
+    // Also disable pagination for general queries when high limit is requested
+    const shouldPaginate = !classId && limitNum <= 1000;
     
     // Get marks records with conditional pagination
     const marks = await prisma.mark.findMany({
@@ -630,7 +631,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // GET /api/marks/stats/overview - Get marks statistics
 router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
-    const { classId, subjectId, examinationType } = req.query;
+    const { classId, subjectId, examinationType, academicYear } = req.query;
 
     // Build where clause
     const where = {};
@@ -647,6 +648,13 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       where.examinationType = examinationType;
     }
 
+    // Add academic year filtering by joining with Class table
+    if (academicYear) {
+      where.class = {
+        academicYear: academicYear
+      };
+    }
+
     // Get grade distribution
     const gradeStats = await prisma.mark.groupBy({
       by: ['grade'],
@@ -656,6 +664,9 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       },
       orderBy: {
         grade: 'asc'
+      },
+      include: {
+        class: true
       }
     });
 
@@ -668,20 +679,23 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
         maxMarks: true
       },
       _count: {
-        subjectId: true
+        subjectCode: true
+      },
+      include: {
+        class: true
       }
     });
 
     // Get subject details for performance stats
-    const subjectIds = subjectStats.map(stat => stat.subjectId);
+    const subjectCodes = subjectStats.map(stat => stat.subjectCode);
     const subjectDetails = await prisma.subject.findMany({
       where: {
-        subjectId: {
-          in: subjectIds
+        subjectCode: {
+          in: subjectCodes
         }
       },
       select: {
-        subjectId: true,
+        subjectCode: true,
         subjectName: true
       }
     });
@@ -696,6 +710,9 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       },
       _count: {
         examinationType: true
+      },
+      include: {
+        class: true
       }
     });
 
@@ -708,22 +725,25 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       },
       _count: {
         marksId: true
+      },
+      include: {
+        class: true
       }
     });
 
     const subjectPerformance = subjectStats.map(stat => {
-      const subject = subjectDetails.find(s => s.subjectId === stat.subjectId);
+      const subject = subjectDetails.find(s => s.subjectCode === stat.subjectCode);
       const avgPercentage = stat._avg.maxMarks > 0 
         ? Math.round((stat._avg.marksObtained / stat._avg.maxMarks) * 100)
         : 0;
       
       return {
-        subjectId: stat.subjectId,
+        subjectCode: stat.subjectCode,
         subjectName: subject ? subject.subjectName : 'Unknown',
         averageMarks: Math.round(stat._avg.marksObtained || 0),
         averageMaxMarks: Math.round(stat._avg.maxMarks || 0),
         averagePercentage: avgPercentage,
-        totalRecords: stat._count.subjectId
+        totalRecords: stat._count.subjectCode
       };
     });
 

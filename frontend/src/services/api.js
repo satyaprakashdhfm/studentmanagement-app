@@ -289,7 +289,7 @@ class ApiService {
 
   // Marks
   async getMarks() {
-    return this.request('/marks');
+    return this.request('/marks?limit=10000');
   }
 
   async getMarksByClass(classId) {
@@ -323,6 +323,11 @@ class ApiService {
   async getStudentMarks(studentId, filters = {}) {
     const queryParams = new URLSearchParams(filters).toString();
     return this.request(`/marks/student/${studentId}${queryParams ? `?${queryParams}` : ''}`);
+  }
+
+  async getMarksStats(filters = {}) {
+    const queryParams = new URLSearchParams(filters).toString();
+    return this.request(`/marks/stats/overview${queryParams ? `?${queryParams}` : ''}`);
   }
 
   // Fees
