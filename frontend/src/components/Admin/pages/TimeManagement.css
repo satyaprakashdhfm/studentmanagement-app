@@ -376,6 +376,58 @@
   margin-bottom: 2px;
 }
 
+/* Special Period Styles */
+.period-content.lunch-period {
+  background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%) !important;
+  border-left: 4px solid #e17055 !important;
+  box-shadow: 0 2px 8px rgba(225, 112, 85, 0.15);
+}
+
+.period-content.lunch-period .subject-name {
+  color: #d63031;
+  font-weight: 700;
+}
+
+.period-content.lunch-period .teacher-name {
+  color: #636e72;
+}
+
+.period-content.optional-period {
+  background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%) !important;
+  border-left: 4px solid #6c5ce7 !important;
+  box-shadow: 0 2px 8px rgba(108, 92, 231, 0.15);
+}
+
+.period-content.optional-period .subject-name {
+  color: #2d3436;
+  font-weight: 700;
+}
+
+.period-content.optional-period .teacher-name {
+  color: #636e72;
+}
+
+/* Lunch Period Header Styling */
+.period-header.lunch-header {
+  background: linear-gradient(90deg, #e17055 60%, #fab1a0 100%) !important;
+  color: #fff !important;
+}
+
+.period-header.lunch-header .period-title {
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.period-header.optional-header {
+  background: linear-gradient(90deg, #6c5ce7 60%, #a29bfe 100%) !important;
+  color: #fff !important;
+}
+
+.period-header.optional-header .period-title {
+  color: #fff !important;
+  font-weight: 700;
+}
+
 /* Events Container */
 .events-container {
   background: var(--card-background);
