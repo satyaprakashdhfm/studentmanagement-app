@@ -21,8 +21,9 @@ const AttendanceManagement = () => {
     studentId: '',
     classId: '',
     date: '',
+    period: 1,
     status: 'present',
-    remarks: ''
+    markedBy: ''
   });
 
   // Use the academic year context
@@ -53,10 +54,12 @@ const AttendanceManagement = () => {
           ? await apiService.getAttendanceByClass(classId)
           : await apiService.getAttendance();
 
-        if (response.attendance) {
+        if (response && response.attendance) {
           setAttendanceRecords(response.attendance);
+        } else if (response && Array.isArray(response)) {
+          setAttendanceRecords(response);
         } else {
-          setError(response.message || 'Failed to fetch attendance records');
+          setError(response?.message || 'Failed to fetch attendance records');
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -107,8 +110,9 @@ const AttendanceManagement = () => {
       studentId: '',
       classId: classId || '',
       date: new Date().toISOString().split('T')[0],
+      period: 1,
       status: 'present',
-      remarks: ''
+      markedBy: ''
     });
     setEditMode(false);
     setShowAddModal(true);
@@ -235,7 +239,7 @@ const AttendanceManagement = () => {
               <div className="header-cell">Student ID</div>
               <div className="header-cell">Date</div>
               <div className="header-cell">Status</div>
-              <div className="header-cell">Remarks</div>
+              <div className="header-cell">Period</div>
               <div className="header-cell">Actions</div>
             </div>
             {attendanceRecords.map(record => (
@@ -247,7 +251,7 @@ const AttendanceManagement = () => {
                     {record.status}
                   </span>
                 </div>
-                <div className="table-cell">{record.remarks || '-'}</div>
+                <div className="table-cell">Period {record.period}</div>
                 <div className="table-cell">
                   <button
                     className="edit-button"
@@ -335,17 +339,41 @@ const AttendanceManagement = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Remarks:</label>
-                  <textarea
-                    value={editMode ? selectedRecord?.remarks : newRecord.remarks}
+                  <label>Period:</label>
+                  <select
+                    value={editMode ? selectedRecord?.period : newRecord.period}
                     onChange={(e) => {
                       if (editMode) {
-                        setSelectedRecord({...selectedRecord, remarks: e.target.value});
+                        setSelectedRecord({...selectedRecord, period: parseInt(e.target.value)});
                       } else {
-                        setNewRecord({...newRecord, remarks: e.target.value});
+                        setNewRecord({...newRecord, period: parseInt(e.target.value)});
                       }
                     }}
-                    rows="3"
+                  >
+                    <option value={1}>Period 1</option>
+                    <option value={2}>Period 2</option>
+                    <option value={3}>Period 3</option>
+                    <option value={4}>Period 4</option>
+                    <option value={5}>Period 5</option>
+                    <option value={6}>Period 6</option>
+                    <option value={7}>Period 7</option>
+                    <option value={8}>Period 8</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Marked By:</label>
+                  <input
+                    type="text"
+                    value={editMode ? selectedRecord?.markedBy : newRecord.markedBy}
+                    onChange={(e) => {
+                      if (editMode) {
+                        setSelectedRecord({...selectedRecord, markedBy: e.target.value});
+                      } else {
+                        setNewRecord({...newRecord, markedBy: e.target.value});
+                      }
+                    }}
+                    placeholder="Teacher ID"
+                    required
                   />
                 </div>
               </form>

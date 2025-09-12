@@ -243,7 +243,7 @@ model ClassSchedule {
 // ============================================================================
 
 model Attendance {
-  attendanceId BigInt   @id @map("attendance_id")
+  attendanceId String   @id @map("attendance_id")
   studentId    String   @map("student_id")
   classId      Int      @map("class_id")
   date         DateTime @map("date")

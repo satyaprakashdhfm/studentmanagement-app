@@ -9,7 +9,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const { 
       studentId, 
       classId, 
-      subjectId,
+      subjectCode,
       teacherId,
       examinationType,
       page = 1, 
@@ -46,7 +46,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Get marks records with pagination and relations
-    const marks = await prisma.mark.findMany({
+    const marks = await prisma.marks.findMany({
       where,
       include: {
         student: {
@@ -85,7 +85,7 @@ router.get('/', authenticateToken, async (req, res) => {
     });
 
     // Get total count
-    const total = await prisma.mark.count({ where });
+    const total = await prisma.marks.count({ where });
 
     // Convert BigInt IDs to Numbers for JSON serialization
     const marksWithNumericIds = marks.map(record => {
@@ -146,7 +146,7 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Get marks with pagination and relations
-    const marks = await prisma.mark.findMany({
+    const marks = await prisma.marks.findMany({
       where,
       include: {
         subject: {
@@ -175,7 +175,7 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
     });
 
     // Get total count
-    const total = await prisma.mark.count({ where });
+    const total = await prisma.marks.count({ where });
 
     // Convert BigInt IDs to Numbers for JSON serialization
     const marksWithNumericIds = marks.map(record => {
@@ -205,7 +205,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const markId = req.params.id;
 
-    const mark = await prisma.mark.findUnique({
+    const mark = await prisma.marks.findUnique({
       where: { marksId: markId },
       include: {
         student: {
@@ -324,7 +324,7 @@ router.post('/', authenticateToken, async (req, res) => {
     else grade = 'F';
 
     // Check for duplicate mark entry
-    const existingMark = await prisma.mark.findFirst({
+    const existingMark = await prisma.marks.findFirst({
       where: {
         studentId,
         classId: parseInt(classId),
@@ -343,7 +343,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const marksId = `MRK${Date.now()}`;
 
     // Create mark record
-    const newMark = await prisma.mark.create({
+    const newMark = await prisma.marks.create({
       data: {
         marksId,
         studentId,
@@ -452,7 +452,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         }
 
         // Check if marks already exist
-        const existingMark = await prisma.mark.findFirst({
+        const existingMark = await prisma.marks.findFirst({
           where: {
             studentId,
             classId: parseInt(classId),
@@ -476,7 +476,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             else calculatedGrade = 'F';
           }
 
-          const newMark = await prisma.mark.create({
+          const newMark = await prisma.marks.create({
             data: {
               studentId,
               classId: parseInt(classId),
@@ -528,7 +528,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const updateData = req.body;
 
     // Check if mark exists
-    const existingMark = await prisma.mark.findUnique({
+    const existingMark = await prisma.marks.findUnique({
       where: { marksId: markId }
     });
 
@@ -559,7 +559,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // Update mark record
-    const updatedMark = await prisma.mark.update({
+    const updatedMark = await prisma.marks.update({
       where: { marksId: markId },
       data: {
         marksObtained: newMarksObtained,
@@ -615,7 +615,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const markId = req.params.id;
 
     // Check if mark exists
-    const existingMark = await prisma.mark.findUnique({
+    const existingMark = await prisma.marks.findUnique({
       where: { marksId: markId }
     });
 
@@ -624,7 +624,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Delete mark
-    await prisma.mark.delete({
+    await prisma.marks.delete({
       where: { marksId: markId }
     });
 
@@ -657,7 +657,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     }
 
     // Get grade distribution
-    const gradeStats = await prisma.mark.groupBy({
+    const gradeStats = await prisma.marks.groupBy({
       by: ['grade'],
       where,
       _count: {
@@ -669,7 +669,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     // Get subject-wise performance
-    const subjectStats = await prisma.mark.groupBy({
+    const subjectStats = await prisma.marks.groupBy({
       by: ['subjectId'],
       where,
       _avg: {
@@ -696,7 +696,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     // Get examination type performance
-    const examTypeStats = await prisma.mark.groupBy({
+    const examTypeStats = await prisma.marks.groupBy({
       by: ['examinationType'],
       where,
       _avg: {
@@ -709,7 +709,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     // Calculate overall statistics
-    const overallStats = await prisma.mark.aggregate({
+    const overallStats = await prisma.marks.aggregate({
       where,
       _avg: {
         marksObtained: true,

@@ -19,13 +19,13 @@ const MarksManagement = () => {
   const [expandedRecords, setExpandedRecords] = useState({});
   const [newRecord, setNewRecord] = useState({
     studentId: '',
-    subjectId: '',
+    subjectCode: '',
     classId: '',
-    examDate: '',
-    marks: '',
+    entryDate: '',
+    marksObtained: '',
     maxMarks: '',
     grade: '',
-    remarks: ''
+    examinationType: 'unit_test'
   });
 
   // Use the academic year context
@@ -108,13 +108,13 @@ const MarksManagement = () => {
   const handleAddRecord = () => {
     setNewRecord({
       studentId: '',
-      subjectId: '',
+      subjectCode: '',
       classId: classId || '',
-      examDate: new Date().toISOString().split('T')[0],
-      marks: '',
+      entryDate: new Date().toISOString().split('T')[0],
+      marksObtained: '',
       maxMarks: '',
       grade: '',
-      remarks: ''
+      examinationType: 'unit_test'
     });
     setEditMode(false);
     setShowAddModal(true);
@@ -247,9 +247,9 @@ const MarksManagement = () => {
             {marks.map(record => (
               <div key={record.marksId} className="table-row">
                 <div className="table-cell">{record.studentId}</div>
-                <div className="table-cell">{record.subjectId}</div>
+                <div className="table-cell">{record.subjectCode}</div>
                 <div className="table-cell">
-                  {record.marks}/{record.maxMarks || 100}
+                  {record.marksObtained}/{record.maxMarks || 100}
                 </div>
                 <div className="table-cell">
                   <span className={`grade-badge ${record.grade?.toLowerCase()}`}>
@@ -311,45 +311,45 @@ const MarksManagement = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Subject ID:</label>
+                  <label>Subject Code:</label>
                   <input
                     type="text"
-                    value={editMode ? selectedRecord?.subjectId : newRecord.subjectId}
+                    value={editMode ? selectedRecord?.subjectCode : newRecord.subjectCode}
                     onChange={(e) => {
                       if (editMode) {
-                        setSelectedRecord({...selectedRecord, subjectId: e.target.value});
+                        setSelectedRecord({...selectedRecord, subjectCode: e.target.value});
                       } else {
-                        setNewRecord({...newRecord, subjectId: e.target.value});
+                        setNewRecord({...newRecord, subjectCode: e.target.value});
                       }
                     }}
                     required
                   />
                 </div>
                 <div className="form-group">
-                  <label>Exam Date:</label>
+                  <label>Entry Date:</label>
                   <input
                     type="date"
-                    value={editMode ? selectedRecord?.examDate?.split('T')[0] : newRecord.examDate}
+                    value={editMode ? selectedRecord?.entryDate?.split('T')[0] : newRecord.entryDate}
                     onChange={(e) => {
                       if (editMode) {
-                        setSelectedRecord({...selectedRecord, examDate: e.target.value});
+                        setSelectedRecord({...selectedRecord, entryDate: e.target.value});
                       } else {
-                        setNewRecord({...newRecord, examDate: e.target.value});
+                        setNewRecord({...newRecord, entryDate: e.target.value});
                       }
                     }}
                     required
                   />
                 </div>
                 <div className="form-group">
-                  <label>Marks:</label>
+                  <label>Marks Obtained:</label>
                   <input
                     type="number"
-                    value={editMode ? selectedRecord?.marks : newRecord.marks}
+                    value={editMode ? selectedRecord?.marksObtained : newRecord.marksObtained}
                     onChange={(e) => {
                       if (editMode) {
-                        setSelectedRecord({...selectedRecord, marks: e.target.value});
+                        setSelectedRecord({...selectedRecord, marksObtained: e.target.value});
                       } else {
-                        setNewRecord({...newRecord, marks: e.target.value});
+                        setNewRecord({...newRecord, marksObtained: e.target.value});
                       }
                     }}
                     required
@@ -393,18 +393,23 @@ const MarksManagement = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Remarks:</label>
-                  <textarea
-                    value={editMode ? selectedRecord?.remarks : newRecord.remarks}
+                  <label>Examination Type:</label>
+                  <select
+                    value={editMode ? selectedRecord?.examinationType : newRecord.examinationType}
                     onChange={(e) => {
                       if (editMode) {
-                        setSelectedRecord({...selectedRecord, remarks: e.target.value});
+                        setSelectedRecord({...selectedRecord, examinationType: e.target.value});
                       } else {
-                        setNewRecord({...newRecord, remarks: e.target.value});
+                        setNewRecord({...newRecord, examinationType: e.target.value});
                       }
                     }}
-                    rows="3"
-                  />
+                  >
+                    <option value="unit_test">Unit Test</option>
+                    <option value="mid_term">Mid Term</option>
+                    <option value="final_exam">Final Exam</option>
+                    <option value="assignment">Assignment</option>
+                    <option value="project">Project</option>
+                  </select>
                 </div>
               </form>
             </div>
