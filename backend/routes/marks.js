@@ -664,9 +664,6 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       },
       orderBy: {
         grade: 'asc'
-      },
-      include: {
-        class: true
       }
     });
 
@@ -680,9 +677,6 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       },
       _count: {
         subjectCode: true
-      },
-      include: {
-        class: true
       }
     });
 
@@ -710,9 +704,6 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       },
       _count: {
         examinationType: true
-      },
-      include: {
-        class: true
       }
     });
 
@@ -725,9 +716,6 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
       },
       _count: {
         marksId: true
-      },
-      include: {
-        class: true
       }
     });
 

@@ -263,6 +263,10 @@ class ApiService {
     return this.request('/attendance');
   }
 
+  async getAttendanceWithLimit(limit = 1000) {
+    return this.request(`/attendance?limit=${limit}`);
+  }
+
   async getAttendanceByClass(classId) {
     return this.request(`/attendance?classId=${classId}`);
   }
@@ -281,10 +285,9 @@ class ApiService {
     });
   }
 
-  async deleteAttendance(attendanceId) {
-    return this.request(`/attendance/${attendanceId}`, {
-      method: 'DELETE',
-    });
+  async getAttendanceStats(filters = {}) {
+    const queryParams = new URLSearchParams(filters).toString();
+    return this.request(`/attendance/stats/overview${queryParams ? `?${queryParams}` : ''}`);
   }
 
   // Marks

@@ -536,7 +536,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // GET /api/attendance/stats/overview - Get attendance statistics
 router.get('/stats/overview', authenticateToken, async (req, res) => {
   try {
-    const { startDate, endDate, classId, studentId } = req.query;
+    const { startDate, endDate, classId, studentId, academicYear } = req.query;
 
     // Build where clause for date range
     const where = {};
@@ -557,6 +557,13 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
 
     if (studentId) {
       where.studentId = studentId;
+    }
+
+    // Add academic year filtering by joining with Class table
+    if (academicYear) {
+      where.class = {
+        academicYear: academicYear
+      };
     }
 
     // Get attendance statistics by status

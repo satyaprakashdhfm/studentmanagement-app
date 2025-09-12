@@ -20,11 +20,14 @@ const AttendanceSummary = () => {
       try {
         setLoading(true);
 
-        // Fetch all attendance records
-        const attendanceResponse = await apiService.getAttendance();
+        // Fetch attendance statistics from backend with academic year filter
+        const statsResponse = await apiService.getAttendanceStats({ academicYear: selectedAcademicYear });
+        // Also fetch some records for additional calculations if needed
+        const attendanceResponse = await apiService.getAttendanceWithLimit(10000);
 
-        if (attendanceResponse.attendance) {
+        if (statsResponse && attendanceResponse.attendance) {
           const allRecords = attendanceResponse.attendance;
+          const stats = statsResponse;
 
           // Filter records by current academic year classes
           const currentYearClassIds = classes
@@ -35,38 +38,30 @@ const AttendanceSummary = () => {
             currentYearClassIds.includes(record.classId)
           );
 
-          // Calculate summary statistics
-          const totalRecords = currentYearRecords.length;
-          const presentCount = currentYearRecords.filter(r => r.status === 'present').length;
+          // Use backend statistics for accurate counts
+          const totalRecords = stats.statusDistribution?.reduce((sum, stat) => sum + stat.count, 0) || currentYearRecords.length;
+          const presentCount = stats.statusDistribution?.find(stat => stat.status === 'present')?.count || 
+                              currentYearRecords.filter(r => r.status === 'present').length;
           const absentCount = totalRecords - presentCount;
 
-          // Grade distribution
+          // Use backend class-wise stats for grade distribution
           const gradeDistribution = classes
             .filter(cls => cls.academicYear === selectedAcademicYear)
-            .reduce((acc, cls) => {
-              const recordsInClass = currentYearRecords.filter(r => r.classId === cls.classId).length;
-              const existing = acc.find(item => item.grade === cls.className);
-
-              if (existing) {
-                existing.count += recordsInClass;
-                existing.sections.push({
+            .map(cls => {
+              const classStats = stats.classWiseStats?.filter(stat => stat.classId === cls.classId) || [];
+              const totalInClass = classStats.reduce((sum, stat) => sum + stat.count, 0);
+              const presentInClass = classStats.find(stat => stat.status === 'present')?.count || 0;
+              
+              return {
+                grade: cls.className,
+                count: totalInClass || currentYearRecords.filter(r => r.classId === cls.classId).length,
+                sections: [{
                   section: cls.section,
-                  count: recordsInClass,
+                  count: totalInClass || currentYearRecords.filter(r => r.classId === cls.classId).length,
                   maxStudents: cls.maxStudents || 40
-                });
-              } else {
-                acc.push({
-                  grade: cls.className,
-                  count: recordsInClass,
-                  sections: [{
-                    section: cls.section,
-                    count: recordsInClass,
-                    maxStudents: cls.maxStudents || 40
-                  }]
-                });
-              }
-              return acc;
-            }, []);
+                }]
+              };
+            });
 
           // Recent records (last 7 days)
           const sevenDaysAgo = new Date();
