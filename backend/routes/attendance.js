@@ -70,10 +70,11 @@ router.get('/', authenticateToken, async (req, res) => {
             academicYear: true
           }
         },
-        teacher: {
+        markedByUser: {
           select: {
-            name: true,
-            email: true
+            username: true,
+            firstName: true,
+            lastName: true
           }
         }
       },
@@ -149,10 +150,11 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
             academicYear: true
           }
         },
-        teacher: {
+        markedByUser: {
           select: {
-            name: true,
-            email: true
+            username: true,
+            firstName: true,
+            lastName: true
           }
         }
       },
@@ -224,15 +226,16 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Attendance record not found' });
     }
 
-    // Convert BigInt IDs to Numbers
-    const recordWithNumericIds = {
+    // Format attendance record for JSON serialization
+    const formattedRecord = {
       ...attendance,
-      attendanceId: Number(attendance.attendanceId),
-      studentId: Number(attendance.studentId),
-      markedBy: Number(attendance.markedBy)
+      date: attendance.date.toISOString(),
+      timestamp: attendance.timestamp.toISOString(),
+      createdAt: attendance.createdAt.toISOString(),
+      updatedAt: attendance.updatedAt.toISOString()
     };
 
-    res.json(recordWithNumericIds);
+    res.json(formattedRecord);
 
   } catch (error) {
     console.error('Get attendance record error:', error);
@@ -336,9 +339,10 @@ router.post('/', authenticateToken, async (req, res) => {
     res.status(201).json({
       attendance: {
         ...newAttendance,
-        attendanceId: Number(newAttendance.attendanceId),
-        studentId: Number(newAttendance.studentId),
-        markedBy: Number(newAttendance.markedBy)
+        date: newAttendance.date.toISOString(),
+        timestamp: newAttendance.timestamp.toISOString(),
+        createdAt: newAttendance.createdAt.toISOString(),
+        updatedAt: newAttendance.updatedAt.toISOString()
       },
       message: 'Attendance marked successfully'
     });
@@ -358,13 +362,13 @@ router.post('/bulk', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Attendance records array is required' });
     }
 
-    // Validate teacher exists
-    const teacher = await prisma.teacher.findUnique({
-      where: { teacherId: markedBy }
+    // Validate user exists
+    const user = await prisma.user.findUnique({
+      where: { username: markedBy }
     });
 
-    if (!teacher) {
-      return res.status(404).json({ error: 'Teacher not found' });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
     // Validate class exists
@@ -418,9 +422,10 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
           createdRecords.push({
             ...newAttendance,
-            attendanceId: Number(newAttendance.attendanceId),
-            studentId: Number(newAttendance.studentId),
-            markedBy: Number(newAttendance.markedBy)
+            date: newAttendance.date.toISOString(),
+            timestamp: newAttendance.timestamp ? newAttendance.timestamp.toISOString() : new Date().toISOString(),
+            createdAt: newAttendance.createdAt.toISOString(),
+            updatedAt: newAttendance.updatedAt.toISOString()
           });
         }
       }
@@ -474,9 +479,11 @@ router.put('/:id', authenticateToken, async (req, res) => {
             section: true
           }
         },
-        teacher: {
+        markedByUser: {
           select: {
-            name: true
+            username: true,
+            firstName: true,
+            lastName: true
           }
         }
       }
@@ -485,9 +492,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
     res.json({
       attendance: {
         ...updatedAttendance,
-        attendanceId: Number(updatedAttendance.attendanceId),
-        studentId: Number(updatedAttendance.studentId),
-        markedBy: Number(updatedAttendance.markedBy)
+        date: updatedAttendance.date.toISOString(),
+        timestamp: updatedAttendance.timestamp.toISOString(),
+        createdAt: updatedAttendance.createdAt.toISOString(),
+        updatedAt: updatedAttendance.updatedAt.toISOString()
       },
       message: 'Attendance updated successfully'
     });

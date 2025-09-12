@@ -47,12 +47,12 @@
 -- BUSINESS LOGIC TRIGGERS: 22 Automation Rules
 -- INDEXES: 15+ Performance Optimizations
 --
--- CURRENT PRODUCTION DATA (After Cleanup):
+-- CURRENT PRODUCTION DATA (After Cleanup & Meaningful ID Implementation):
 -- STUDENTS: 315 (active, duplicates removed)
 -- TEACHERS: 6 (qualified with subject assignments)
 -- CLASSES: 9 (with capacity management)
--- CLASS SCHEDULES: 215 (deduplicated, conflict-free)
--- ATTENDANCE RECORDS: 10,535 (after duplicate cleanup)
+-- CLASS SCHEDULES: 240 (deduplicated, conflict-free)
+-- ATTENDANCE RECORDS: 18,900 (with meaningful IDs: YYYYMMDD_ClassID_Period_Sequence)
 -- FEE RECORDS: 1,890 (standardized academic years)
 -- ACADEMIC YEAR FORMAT: "2024-2025" (standardized across all tables)
 --
@@ -439,23 +439,30 @@ CREATE TABLE IF NOT EXISTS fees (
     CHECK (balance = amount_due - amount_paid)
 );
 
--- Create syllabus table
-CREATE TABLE IF NOT EXISTS syllabus (
-    syllabus_id         VARCHAR(50) PRIMARY KEY,
-    class_id            INTEGER NOT NULL,
-    unit_name           VARCHAR(255) NOT NULL,
-    completion_status   VARCHAR(20) NOT NULL CHECK (completion_status IN ('not_started', 'in_progress', 'completed')),
-    completion_percentage INTEGER NOT NULL CHECK (completion_percentage BETWEEN 0 AND 100),
-    current_topic       TEXT,
-    last_updated        TIMESTAMP NOT NULL,
-    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    subject_code        VARCHAR(20),
-    teacher_id          VARCHAR(20),
+-- Create attendance table
+CREATE TABLE IF NOT EXISTS attendance (
+    attendance_id   VARCHAR(50) PRIMARY KEY,
+    student_id      VARCHAR(20) NOT NULL,
+    class_id        INTEGER NOT NULL,
+    date            TIMESTAMP NOT NULL,
+    period          INTEGER NOT NULL CHECK (period BETWEEN 1 AND 10),
+    status          VARCHAR(20) NOT NULL CHECK (status IN ('present', 'absent', 'late')),
+    marked_by       VARCHAR(20) NOT NULL,
+    timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    schedule_id     VARCHAR(100),
+    FOREIGN KEY (student_id) REFERENCES students(student_id),
     FOREIGN KEY (class_id) REFERENCES classes(class_id),
-    FOREIGN KEY (subject_code) REFERENCES subjects(subject_code),
-    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id)
+    FOREIGN KEY (schedule_id) REFERENCES class_schedule(schedule_id),
+    FOREIGN KEY (marked_by) REFERENCES teachers(teacher_id)
 );
+
+-- Trigger to update updated_at for attendance table
+CREATE TRIGGER trigger_update_attendance_updated_at
+    BEFORE UPDATE ON attendance
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- ADMINISTRATIVE

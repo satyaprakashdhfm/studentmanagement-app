@@ -40,13 +40,16 @@ router.get('/', authenticateToken, async (req, res) => {
       where.examinationType = examinationType;
     }
 
-    // Calculate pagination
+    // Calculate pagination info for reference
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Get marks records with pagination and relations
-    const marks = await prisma.marks.findMany({
+    // For class-specific queries, show ALL records without pagination
+    const shouldPaginate = !classId;
+    
+    // Get marks records with conditional pagination
+    const marks = await prisma.mark.findMany({
       where,
       include: {
         student: {
@@ -80,27 +83,29 @@ router.get('/', authenticateToken, async (req, res) => {
         { entryDate: 'desc' },
         { examinationType: 'asc' }
       ],
-      skip,
-      take: limitNum
+      ...(shouldPaginate && { skip, take: limitNum })
     });
 
     // Get total count
-    const total = await prisma.marks.count({ where });
+    const total = await prisma.mark.count({ where });
 
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const marksWithNumericIds = marks.map(record => {
-      return JSON.parse(JSON.stringify(record, (key, value) =>
-        typeof value === 'bigint' ? Number(value) : value
-      ));
+    // Format marks records for JSON serialization
+    const formattedMarks = marks.map(record => {
+      return {
+        ...record,
+        entryDate: record.entryDate.toISOString(),
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString()
+      };
     });
 
     res.json({
-      marks: marksWithNumericIds,
+      marks: formattedMarks,
       pagination: {
         page: pageNum,
-        limit: limitNum,
-        total: Number(total),
-        pages: Math.ceil(Number(total) / limitNum)
+        total: total,
+        pages: shouldPaginate ? Math.ceil(total / limitNum) : 1,
+        showingAll: !shouldPaginate
       }
     });
 
@@ -114,39 +119,28 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/student/:studentId', authenticateToken, async (req, res) => {
   try {
     const { studentId } = req.params;
-    const { 
-      classId, 
-      subjectId, 
-      examinationType, 
-      page = 1, 
-      limit = 50 
-    } = req.query;
+    const { subjectCode, examinationType, page = 1, limit = 50 } = req.query;
     
     // Build where clause
     const where = {
-      studentId: BigInt(studentId)
+      studentId: studentId
     };
     
-    // Add filters
-    if (classId) {
-      where.classId = parseInt(classId);
-    }
-    
-    if (subjectId) {
-      where.subjectId = parseInt(subjectId);
+    if (subjectCode) {
+      where.subjectCode = subjectCode;
     }
     
     if (examinationType) {
       where.examinationType = examinationType;
     }
 
-    // Calculate pagination
+    // For student-specific queries, show ALL records without pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Get marks with pagination and relations
-    const marks = await prisma.marks.findMany({
+    // Get marks without pagination for student view
+    const marks = await prisma.mark.findMany({
       where,
       include: {
         subject: {
@@ -160,37 +154,34 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
             className: true,
             section: true
           }
-        },
-        teacher: {
-          select: {
-            name: true
-          }
         }
       },
       orderBy: [
         { entryDate: 'desc' }
-      ],
-      skip,
-      take: limitNum
+      ]
     });
 
     // Get total count
-    const total = await prisma.marks.count({ where });
+    const total = await prisma.mark.count({ where });
 
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const marksWithNumericIds = marks.map(record => {
-      return JSON.parse(JSON.stringify(record, (key, value) =>
-        typeof value === 'bigint' ? Number(value) : value
-      ));
+    // Format marks records for JSON serialization
+    const formattedMarks = marks.map(record => {
+      return {
+        ...record,
+        entryDate: record.entryDate.toISOString(),
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString()
+      };
     });
 
     res.json({
-      marks: marksWithNumericIds,
+      marks: formattedMarks,
       pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total: Number(total),
-        pages: Math.ceil(Number(total) / limitNum)
+        page: 1,
+        limit: total,
+        total: total,
+        pages: 1,
+        showingAll: true
       }
     });
 
@@ -205,7 +196,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const markId = req.params.id;
 
-    const mark = await prisma.marks.findUnique({
+    const mark = await prisma.mark.findUnique({
       where: { marksId: markId },
       include: {
         student: {
@@ -324,7 +315,7 @@ router.post('/', authenticateToken, async (req, res) => {
     else grade = 'F';
 
     // Check for duplicate mark entry
-    const existingMark = await prisma.marks.findFirst({
+    const existingMark = await prisma.mark.findFirst({
       where: {
         studentId,
         classId: parseInt(classId),
@@ -343,7 +334,7 @@ router.post('/', authenticateToken, async (req, res) => {
     const marksId = `MRK${Date.now()}`;
 
     // Create mark record
-    const newMark = await prisma.marks.create({
+    const newMark = await prisma.mark.create({
       data: {
         marksId,
         studentId,
@@ -452,7 +443,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
         }
 
         // Check if marks already exist
-        const existingMark = await prisma.marks.findFirst({
+        const existingMark = await prisma.mark.findFirst({
           where: {
             studentId,
             classId: parseInt(classId),
@@ -476,7 +467,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             else calculatedGrade = 'F';
           }
 
-          const newMark = await prisma.marks.create({
+          const newMark = await prisma.mark.create({
             data: {
               studentId,
               classId: parseInt(classId),
@@ -559,7 +550,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // Update mark record
-    const updatedMark = await prisma.marks.update({
+    const updatedMark = await prisma.mark.update({
       where: { marksId: markId },
       data: {
         marksObtained: newMarksObtained,
@@ -615,7 +606,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const markId = req.params.id;
 
     // Check if mark exists
-    const existingMark = await prisma.marks.findUnique({
+    const existingMark = await prisma.mark.findUnique({
       where: { marksId: markId }
     });
 
@@ -624,7 +615,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Delete mark
-    await prisma.marks.delete({
+    await prisma.mark.delete({
       where: { marksId: markId }
     });
 
@@ -657,7 +648,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     }
 
     // Get grade distribution
-    const gradeStats = await prisma.marks.groupBy({
+    const gradeStats = await prisma.mark.groupBy({
       by: ['grade'],
       where,
       _count: {
@@ -669,8 +660,8 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     // Get subject-wise performance
-    const subjectStats = await prisma.marks.groupBy({
-      by: ['subjectId'],
+    const subjectStats = await prisma.mark.groupBy({
+      by: ['subjectCode'],
       where,
       _avg: {
         marksObtained: true,
@@ -696,7 +687,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     // Get examination type performance
-    const examTypeStats = await prisma.marks.groupBy({
+    const examTypeStats = await prisma.mark.groupBy({
       by: ['examinationType'],
       where,
       _avg: {
@@ -709,7 +700,7 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
     });
 
     // Calculate overall statistics
-    const overallStats = await prisma.marks.aggregate({
+    const overallStats = await prisma.mark.aggregate({
       where,
       _avg: {
         marksObtained: true,
