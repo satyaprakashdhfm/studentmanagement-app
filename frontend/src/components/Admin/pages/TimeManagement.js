@@ -36,6 +36,11 @@ const TimeManagement = () => {
     'SOC': '#98D8C8',      // Green for Social Science
     'TEL': '#FFA726',      // Orange for Telugu
     
+    // Special periods
+    'LUNCH': '#A8E6CF',    // Light green for Lunch
+    'OPTIONAL': '#FFD3A5',  // Light orange for Optional periods
+    'OPT': '#FFD3A5',       // Light orange for Optional periods
+    
     // Full subject names for backward compatibility
     'Mathematics': '#FF6B6B',
     'English': '#FFEAA7',
@@ -47,7 +52,9 @@ const TimeManagement = () => {
     'Physics': '#4ECDC4',
     'Chemistry': '#45B7D1',
     'Biology': '#96CEB4',
-    'Telugu': '#FFA726'
+    'Telugu': '#FFA726',
+    'Lunch Break': '#A8E6CF',
+    'Optional': '#FFD3A5'
   };
 
   // Function to get color for a subject (supports both prefix and full name matching)
@@ -130,13 +137,17 @@ const TimeManagement = () => {
           if (subjectColors[prefix]) {
             usedPrefixes.add(prefix);
           }
+        } else if (item.subject?.subject_code === 'LUNCH') {
+          usedPrefixes.add('LUNCH');
+        } else if (item.subject?.subject_code === 'OPTIONAL' || item.subject?.subject_name?.includes('Optional')) {
+          usedPrefixes.add('OPTIONAL');
         }
       });
     }
 
     // If no subjects found in schedule, show all available prefixes
     if (usedPrefixes.size === 0) {
-      return ['MATH', 'ENG', 'SCI', 'HIN', 'SOC', 'TEL'];
+      return ['MATH', 'ENG', 'SCI', 'HIN', 'SOC', 'TEL', 'LUNCH', 'OPTIONAL'];
     }
 
     return Array.from(usedPrefixes).sort();
@@ -228,31 +239,124 @@ const TimeManagement = () => {
       console.log('🕐 RAW CALENDAR GRID DATA FROM API:', data);
 
       // Extract time slots from calendar grid
-      if (data && data.data) {
-        // For now, we'll create default time slots since the calendar grid structure is different
-        // In the future, this should be extracted from the calendar grid JSON data
+      if (data && data.data && data.data.length > 0) {
+        // Get unique time slots from all calendar entries
+        const uniqueSlots = new Map();
+
+        data.data.forEach(entry => {
+          try {
+            // Parse morning slots
+            if (entry.morning_slots && entry.morning_slots !== '[]') {
+              const morningSlots = JSON.parse(entry.morning_slots);
+              morningSlots.forEach(slotId => {
+                if (!uniqueSlots.has(slotId)) {
+                  uniqueSlots.set(slotId, extractSlotInfo(slotId));
+                }
+              });
+            }
+
+            // Parse afternoon slots
+            if (entry.afternoon_slots && entry.afternoon_slots !== '[]') {
+              const afternoonSlots = JSON.parse(entry.afternoon_slots);
+              afternoonSlots.forEach(slotId => {
+                if (!uniqueSlots.has(slotId)) {
+                  uniqueSlots.set(slotId, extractSlotInfo(slotId));
+                }
+              });
+            }
+          } catch (error) {
+            console.error('Error parsing slots for entry:', entry, error);
+          }
+        });
+
+        // Convert to array and sort by start time
+        const extractedSlots = Array.from(uniqueSlots.values())
+          .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+        console.log('🕐 EXTRACTED TIME SLOTS:', extractedSlots);
+        console.log('🕐 TOTAL SLOTS FOUND:', extractedSlots.length);
+        
+        // Log slot names to debug
+        extractedSlots.forEach(slot => {
+          console.log(`🕐 SLOT: ${slot.slot_name} (${slot.start_time} - ${slot.end_time})`);
+        });
+        
+        setTimeSlots(extractedSlots);
+      } else {
+        // Fallback to default slots if no calendar data
+        console.log('🕐 NO CALENDAR DATA RECEIVED, USING DEFAULT SLOTS');
         const defaultSlots = [
           { slot_id: 'P1_0900_0940', slot_name: 'Period 1', start_time: '09:00:00', end_time: '09:40:00' },
           { slot_id: 'P2_0940_1020', slot_name: 'Period 2', start_time: '09:40:00', end_time: '10:20:00' },
           { slot_id: 'P3_1020_1100', slot_name: 'Period 3', start_time: '10:20:00', end_time: '11:00:00' },
           { slot_id: 'P4_1100_1140', slot_name: 'Period 4', start_time: '11:00:00', end_time: '11:40:00' },
-          { slot_id: 'Lunch_1140_1220', slot_name: 'Lunch Break', start_time: '11:40:00', end_time: '12:20:00' },
+          { slot_id: 'LUNCH_1140_1220', slot_name: 'Lunch Break', start_time: '11:40:00', end_time: '12:20:00' },
           { slot_id: 'P5_1220_1300', slot_name: 'Period 5', start_time: '12:20:00', end_time: '13:00:00' },
           { slot_id: 'P6_1300_1340', slot_name: 'Period 6', start_time: '13:00:00', end_time: '13:40:00' },
           { slot_id: 'P7_1340_1420', slot_name: 'Period 7', start_time: '13:40:00', end_time: '14:20:00' },
-          { slot_id: 'P8_1420_1500', slot_name: 'Period 8', start_time: '14:20:00', end_time: '15:00:00' }
+          { slot_id: 'P8_1420_1500', slot_name: 'Period 8', start_time: '14:20:00', end_time: '15:00:00' },
+          { slot_id: 'OPT1_1500_1540', slot_name: 'Optional 1', start_time: '15:00:00', end_time: '15:40:00' }
         ];
-
-        console.log('🕐 USING DEFAULT TIME SLOTS:', defaultSlots);
         setTimeSlots(defaultSlots);
-      } else {
-        console.log('🕐 NO CALENDAR DATA RECEIVED, USING DEFAULT SLOTS');
-        setTimeSlots([]);
       }
     } catch (error) {
       console.error('Error fetching calendar grid:', error);
-      setTimeSlots([]); // Ensure it's always an array
+      // Use default slots as fallback
+      const defaultSlots = [
+        { slot_id: 'P1_0900_0940', slot_name: 'Period 1', start_time: '09:00:00', end_time: '09:40:00' },
+        { slot_id: 'P2_0940_1020', slot_name: 'Period 2', start_time: '09:40:00', end_time: '10:20:00' },
+        { slot_id: 'P3_1020_1100', slot_name: 'Period 3', start_time: '10:20:00', end_time: '11:00:00' },
+        { slot_id: 'P4_1100_1140', slot_name: 'Period 4', start_time: '11:00:00', end_time: '11:40:00' },
+        { slot_id: 'LUNCH_1140_1220', slot_name: 'Lunch Break', start_time: '11:40:00', end_time: '12:20:00' },
+        { slot_id: 'P5_1220_1300', slot_name: 'Period 5', start_time: '12:20:00', end_time: '13:00:00' },
+        { slot_id: 'P6_1300_1340', slot_name: 'Period 6', start_time: '13:00:00', end_time: '13:40:00' },
+        { slot_id: 'P7_1340_1420', slot_name: 'Period 7', start_time: '13:40:00', end_time: '14:20:00' },
+        { slot_id: 'P8_1420_1500', slot_name: 'Period 8', start_time: '14:20:00', end_time: '15:00:00' },
+        { slot_id: 'OPT1_1500_1540', slot_name: 'Optional 1', start_time: '15:00:00', end_time: '15:40:00' }
+      ];
+      setTimeSlots(defaultSlots);
     }
+  };
+
+  // Helper function to extract slot information from slot_id
+  const extractSlotInfo = (slotId) => {
+    // Parse slot_id format: {class_id}_{day_of_week}_{period}_{start_time}_{end_time}
+    // Example: 242508001_1_P1_0900_0940 or 242508001_1_OPT1_1500_1540
+    const parts = slotId.split('_');
+    if (parts.length >= 5) {
+      const period = parts[2]; // P1, P2, LUNCH, OPT1, etc.
+      const startTime = parts[3]; // 0900, 0940, etc.
+      const endTime = parts[4]; // 0940, 1020, etc.
+
+      // Format times: 0900 -> 09:00:00
+      const formattedStart = `${startTime.substring(0,2)}:${startTime.substring(2,4)}:00`;
+      const formattedEnd = `${endTime.substring(0,2)}:${endTime.substring(2,4)}:00`;
+
+      // Determine slot name
+      let slotName = period;
+      if (period === 'LUNCH') {
+        slotName = 'Lunch Break';
+      } else if (period.startsWith('OPT')) {
+        slotName = `Optional ${period.substring(3)}`;
+      } else if (period.startsWith('P')) {
+        slotName = `Period ${period.substring(1)}`;
+      }
+
+      return {
+        slot_id: slotId,
+        slot_name: slotName,
+        start_time: formattedStart,
+        end_time: formattedEnd
+      };
+    }
+
+    // Fallback for unrecognized format
+    return {
+      slot_id: slotId,
+      slot_name: slotId,
+      start_time: '00:00:00',
+      end_time: '00:00:00'
+    };
   };
 
   const fetchSchedule = async () => {
@@ -556,7 +660,11 @@ const TimeManagement = () => {
               <span className="stat-item">
                 <i className="fas fa-clock"></i> 
                 {timeSlots && timeSlots.length > 0 ? 
-                  timeSlots.filter(slot => slot.slot_name !== 'Break' && slot.slot_name !== 'Lunch Break').length : 0} periods/day
+                  timeSlots.filter(slot => 
+                    slot.slot_name !== 'Break' && 
+                    slot.slot_name !== 'Lunch Break' && 
+                    !slot.slot_name.includes('Lunch')
+                  ).length : 0} periods/day
               </span>
             </div>
           </div>
@@ -592,7 +700,7 @@ const TimeManagement = () => {
                           </th>
                         ))
                   : 
-                  <th colSpan="7" className="period-header">
+                  <th colSpan="8" className="period-header">
                     <div className="loading-message">Loading time slots...</div>
                   </th>
                 }
