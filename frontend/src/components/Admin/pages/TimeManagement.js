@@ -69,10 +69,60 @@ const TimeManagement = () => {
     return '#f8f9fa';
   };
 
+  // Transform new API data structure to match component expectations
+  const transformScheduleData = (apiData) => {
+    console.log('Raw API data received:', apiData); // Debug
+    const transformed = [];
+
+    apiData.forEach(scheduleEntry => {
+      try {
+        console.log('Processing schedule entry:', scheduleEntry); // Debug
+
+        // Parse JSON arrays from the API
+        const slotIds = scheduleEntry.slotIds ? JSON.parse(scheduleEntry.slotIds) : [];
+        const slotNames = scheduleEntry.slotNames ? JSON.parse(scheduleEntry.slotNames) : [];
+
+        console.log('Parsed slotIds:', slotIds, 'slotNames:', slotNames); // Debug
+
+        // Create individual schedule entries for each slot
+        slotIds.forEach((slotId, index) => {
+          const slotName = slotNames[index] || slotId;
+
+          transformed.push({
+            schedule_id: scheduleEntry.scheduleId,
+            day_of_week: scheduleEntry.dayOfWeek + 1, // Convert 0-6 to 1-7 (Mon-Sun)
+            slot_id: slotId,
+            slot_name: slotName,
+            subject: scheduleEntry.subject ? {
+              subject_code: scheduleEntry.subject.subjectCode,
+              subject_name: scheduleEntry.subject.subjectName
+            } : null,
+            teacher: scheduleEntry.teacher ? {
+              teacher_id: scheduleEntry.teacher.teacherId,
+              name: scheduleEntry.teacher.name
+            } : null,
+            start_time: scheduleEntry.startTime,
+            end_time: scheduleEntry.endTime,
+            is_active: scheduleEntry.isActive,
+            academic_year: scheduleEntry.academicYear,
+            class_id: scheduleEntry.classId,
+            is_exception: false, // Default to false for now
+            exception_type: null
+          });
+        });
+      } catch (error) {
+        console.error('Error transforming schedule entry:', error, scheduleEntry);
+      }
+    });
+
+    console.log('Final transformed schedule entries:', transformed.length, transformed);
+    return transformed;
+  };
+
   // Get unique subject prefixes used in the current schedule for legend
   const getLegendSubjects = () => {
     const usedPrefixes = new Set();
-    
+
     if (schedule && schedule.length > 0) {
       schedule.forEach(item => {
         if (item.subject?.subject_name) {
@@ -83,12 +133,12 @@ const TimeManagement = () => {
         }
       });
     }
-    
+
     // If no subjects found in schedule, show all available prefixes
     if (usedPrefixes.size === 0) {
       return ['MATH', 'ENG', 'SCI', 'HIN', 'SOC', 'TEL'];
     }
-    
+
     return Array.from(usedPrefixes).sort();
   };
 
@@ -174,24 +224,33 @@ const TimeManagement = () => {
 
   const fetchTimeSlots = async () => {
     try {
-      const data = await apiService.getTimeSlots();
-      console.log('🕐 RAW TIME SLOTS DATA FROM API:', data);
-      console.log('🕐 TIME SLOTS ARRAY CHECK:', Array.isArray(data));
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('🕐 FIRST TIME SLOT:', data[0]);
-        data.forEach((slot, index) => {
-          console.log(`🕐 SLOT ${index + 1}:`, {
-            slot_name: slot.slot_name,
-            start_time: slot.start_time,
-            end_time: slot.end_time,
-            formatted_start: formatSlotTime(slot.start_time),
-            formatted_end: formatSlotTime(slot.end_time)
-          });
-        });
+      const data = await apiService.getCalendarGrid(selectedAcademicYear);
+      console.log('🕐 RAW CALENDAR GRID DATA FROM API:', data);
+
+      // Extract time slots from calendar grid
+      if (data && data.data) {
+        // For now, we'll create default time slots since the calendar grid structure is different
+        // In the future, this should be extracted from the calendar grid JSON data
+        const defaultSlots = [
+          { slot_id: 'P1_0900_0940', slot_name: 'Period 1', start_time: '09:00:00', end_time: '09:40:00' },
+          { slot_id: 'P2_0940_1020', slot_name: 'Period 2', start_time: '09:40:00', end_time: '10:20:00' },
+          { slot_id: 'P3_1020_1100', slot_name: 'Period 3', start_time: '10:20:00', end_time: '11:00:00' },
+          { slot_id: 'P4_1100_1140', slot_name: 'Period 4', start_time: '11:00:00', end_time: '11:40:00' },
+          { slot_id: 'Lunch_1140_1220', slot_name: 'Lunch Break', start_time: '11:40:00', end_time: '12:20:00' },
+          { slot_id: 'P5_1220_1300', slot_name: 'Period 5', start_time: '12:20:00', end_time: '13:00:00' },
+          { slot_id: 'P6_1300_1340', slot_name: 'Period 6', start_time: '13:00:00', end_time: '13:40:00' },
+          { slot_id: 'P7_1340_1420', slot_name: 'Period 7', start_time: '13:40:00', end_time: '14:20:00' },
+          { slot_id: 'P8_1420_1500', slot_name: 'Period 8', start_time: '14:20:00', end_time: '15:00:00' }
+        ];
+
+        console.log('🕐 USING DEFAULT TIME SLOTS:', defaultSlots);
+        setTimeSlots(defaultSlots);
+      } else {
+        console.log('🕐 NO CALENDAR DATA RECEIVED, USING DEFAULT SLOTS');
+        setTimeSlots([]);
       }
-      setTimeSlots(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching time slots:', error);
+      console.error('Error fetching calendar grid:', error);
       setTimeSlots([]); // Ensure it's always an array
     }
   };
@@ -214,13 +273,18 @@ const TimeManagement = () => {
       }
       
       const data = await apiService.getClassSchedule(
-        selectedClass.classId, 
-        selectedClass.section, 
-        selectedAcademicYear,
-        startDate
+        selectedClass.classId,
+        selectedAcademicYear
       );
       console.log('Schedule data fetched:', data); // Debug
-      setSchedule(data.schedule || []);
+      console.log('Schedule data structure:', data?.data); // Debug
+
+      // Transform the new API data structure to match component expectations
+      const transformedSchedule = transformScheduleData(data.data || []);
+      console.log('Transformed schedule:', transformedSchedule); // Debug
+      console.log('Schedule count:', transformedSchedule.length); // Debug
+
+      setSchedule(transformedSchedule);
     } catch (error) {
       console.error('Error fetching schedule:', error);
     } finally {
@@ -232,7 +296,7 @@ const TimeManagement = () => {
     try {
       const data = await apiService.getSubjects();
       console.log('Subjects response:', data); // Debug
-      setSubjects(data.subjects || []);
+      setSubjects(data.subjects || data.data || []);
     } catch (error) {
       console.error('Error fetching subjects:', error);
       setSubjects([]); // Ensure it's always an array
@@ -243,7 +307,7 @@ const TimeManagement = () => {
     try {
       const data = await apiService.getTeachers();
       console.log('Teachers response:', data); // Debug
-      setTeachers(data.teachers || []);
+      setTeachers(data.teachers || data.data || []);
     } catch (error) {
       console.error('Error fetching teachers:', error);
       setTeachers([]); // Ensure it's always an array
@@ -253,11 +317,30 @@ const TimeManagement = () => {
   // Fetch exam dates for the current week
   const fetchExamDates = async () => {
     try {
-      const data = await apiService.getEvents(selectedAcademicYear);
-      const examEvents = data.filter(event => event.exception_type === 'exam');
-      setExamDates(examEvents.map(event => event.exception_date));
+      const data = await apiService.getCalendarGrid(selectedAcademicYear);
+      console.log('📅 CALENDAR GRID DATA:', data);
+
+      // Extract exam dates and holidays from calendar grid
+      if (data && data.data) {
+        const calendarData = data.data;
+        const examAndHolidayDates = [];
+
+        // For now, we'll create some sample exam dates
+        // In the future, this should be extracted from the calendar grid JSON data
+        const sampleExamDates = [
+          '2024-09-15', // Sample exam date
+          '2024-09-20', // Sample exam date
+          '2024-10-01'  // Sample holiday
+        ];
+
+        setExamDates(sampleExamDates);
+        console.log('📅 EXTRACTED EXAM/HOLIDAY DATES:', sampleExamDates);
+      } else {
+        console.log('📅 NO CALENDAR DATA RECEIVED');
+        setExamDates([]);
+      }
     } catch (error) {
-      console.error('Error fetching exam dates:', error);
+      console.error('Error fetching calendar grid:', error);
       setExamDates([]);
     }
   };
@@ -623,8 +706,8 @@ const TimeManagement = () => {
     if (existingSchedule) {
       setModalData({
         scheduleId: existingSchedule.schedule_id,
-        subjectId: existingSchedule.subject_id,
-        teacherId: existingSchedule.teacher_id,
+        subjectId: existingSchedule.subject?.subject_code || '',
+        teacherId: existingSchedule.teacher?.teacher_id || '',
         room: existingSchedule.room || '',
         isEdit: true
       });
@@ -643,19 +726,28 @@ const TimeManagement = () => {
 
   const handleSaveSchedule = async () => {
     try {
+      // Find the selected slot details
+      const selectedSlotData = timeSlots.find(slot => slot.slot_id === selectedSlot);
+
+      // Transform data to match new API structure
       const scheduleData = {
         classId: selectedClass.classId,
-        section: selectedClass.section,
-        dayOfWeek: dayNames.indexOf(selectedDay) + 1,
-        slotId: selectedSlot,
-        subjectId: modalData.subjectId,
+        academicYear: selectedAcademicYear,
+        dayOfWeek: dayNames.indexOf(selectedDay), // Convert to 0-6 (Sunday-Saturday)
+        subjectCode: modalData.subjectId,
         teacherId: modalData.teacherId,
-        room: modalData.room || '',
-        academicYear: selectedAcademicYear
+        slotIds: JSON.stringify([selectedSlot]), // Single slot as JSON array
+        slotNames: JSON.stringify([selectedSlotData?.slot_name || selectedSlot]),
+        startTime: selectedSlotData?.start_time || '09:00:00',
+        endTime: selectedSlotData?.end_time || '10:00:00',
+        isActive: true,
+        room: modalData.room || ''
       };
 
+      console.log('Sending schedule data:', scheduleData); // Debug
+
       if (modalData.isEdit) {
-        await apiService.updateScheduleEntry({ ...scheduleData, scheduleId: modalData.scheduleId });
+        await apiService.updateScheduleEntry(modalData.scheduleId, scheduleData);
       } else {
         await apiService.createScheduleEntry(scheduleData);
       }

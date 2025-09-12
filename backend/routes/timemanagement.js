@@ -1,696 +1,353 @@
-const express = require('express');
-const { prisma } = require('../config/database');
-const { authenticateToken } = require('../utils/jwt');
-
+﻿const express = require('express');
 const router = express.Router();
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+const jwt = require('../utils/jwt');
 
-// Get all time slots
-router.get('/timeslots', authenticateToken, async (req, res) => {
-  try {
-    const timeSlots = await prisma.$queryRaw`
-      SELECT slot_id, slot_name, start_time, end_time, slot_order, is_active
-      FROM time_slots 
-      WHERE is_active = true 
-      ORDER BY slot_order ASC
-    `;
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-    res.json(timeSlots);
-  } catch (error) {
-    console.error('Error fetching time slots:', error);
-    res.status(500).json({ error: 'Failed to fetch time slots' });
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
   }
-});
 
-// Get class schedule for a specific class and section
-router.get('/schedule/:classId/:section', authenticateToken, async (req, res) => {
   try {
-    const { classId, section } = req.params;
-    const { academicYear, startDate } = req.query;
-
-    // Get all active time slots
-    const timeSlots = await prisma.$queryRaw`
-      SELECT slot_id, slot_name, start_time, end_time, slot_order
-      FROM time_slots 
-      WHERE is_active = true 
-      ORDER BY slot_order ASC
-    `;
-
-    // Get all schedule entries for this class
-    const scheduleEntries = await prisma.$queryRaw`
-      SELECT
-        cs.schedule_id,
-        cs.class_id,
-        cs.day_of_week,
-        cs.slot_id,
-        cs.subject_code,
-        cs.teacher_id,
-        cs.academic_year,
-        cs.is_active,
-        s.subject_name,
-        t.name as teacher_name
-      FROM class_schedule cs
-      LEFT JOIN subjects s ON cs.subject_code = s.subject_code
-      LEFT JOIN teachers t ON cs.teacher_id = t.teacher_id
-      WHERE cs.class_id = ${parseInt(classId)}
-        AND cs.academic_year = ${academicYear || '2024-2025'}
-        AND cs.is_active = true
-    `;
-
-    let exceptions = [];
-    let weekDates = {};
-
-    // If startDate is provided, calculate week dates and fetch exceptions
-    if (startDate) {
-      const start = new Date(startDate);
-      // Calculate dates for the week (Monday to Sunday)
-      for (let i = 0; i < 7; i++) {
-        const date = new Date(start);
-        date.setDate(start.getDate() + i);
-        const dayOfWeek = (date.getDay() === 0 ? 7 : date.getDay()); // Convert Sunday (0) to 7
-        weekDates[dayOfWeek] = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-      }
-
-      // Fetch exceptions for this week
-      console.log('🔍 Week dates for exception filtering:', weekDates);
-      console.log('🔍 Looking for exceptions between:', weekDates[1], 'and', weekDates[7]);
-      
-      exceptions = await prisma.$queryRaw`
-        SELECT se.exception_id, se.exception_date, se.day_of_week, se.exception_type, se.title,
-               se.description, se.academic_year, se.class_id, se.slot_id,
-               se.subject_code, se.teacher_id
-        FROM schedule_exceptions se
-        WHERE DATE(se.exception_date) >= ${weekDates[1]}::date
-          AND DATE(se.exception_date) <= ${weekDates[7]}::date
-          AND se.academic_year = ${academicYear || '2024-2025'}
-          AND (se.class_id IS NULL OR se.class_id = ${parseInt(classId)})
-        ORDER BY se.exception_date ASC
-      `;
-      
-      console.log('🔍 Found exceptions for week:', exceptions.length);
-
-      // Convert BigInt fields to strings
-      exceptions = exceptions.map(exc => ({
-        ...exc,
-        exception_id: exc.exception_id ? exc.exception_id.toString() : null,
-        class_id: exc.class_id ? exc.class_id.toString() : null,
-        slot_id: exc.slot_id ? exc.slot_id.toString() : null,
-        subject_code: exc.subject_code ? exc.subject_code.toString() : null,
-        teacher_id: exc.teacher_id ? exc.teacher_id.toString() : null,
-        created_by: exc.created_by ? exc.created_by.toString() : null
-      }));
-    }
-
-    // Create the full schedule matrix (all days x all time slots)
-    const transformedSchedule = [];
-    
-    // For each day of the week (1-7, Monday-Sunday)
-    for (let dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
-      // For each time slot
-      for (const slot of timeSlots) {
-        // Find if there's a schedule entry for this day and slot
-        const scheduleEntry = scheduleEntries.find(
-          s => s.day_of_week === dayOfWeek && s.slot_id === slot.slot_id
-        );
-
-        if (scheduleEntry) {
-          // Regular schedule entry
-          transformedSchedule.push({
-            schedule_id: scheduleEntry.schedule_id ? scheduleEntry.schedule_id.toString() : null,
-            class_id: scheduleEntry.class_id ? scheduleEntry.class_id.toString() : null,
-            day_of_week: dayOfWeek,
-            slot_id: scheduleEntry.slot_id ? scheduleEntry.slot_id.toString() : null,
-            subject_code: scheduleEntry.subject_code ? scheduleEntry.subject_code.toString() : null,
-            teacher_id: scheduleEntry.teacher_id ? scheduleEntry.teacher_id.toString() : null,
-            academic_year: scheduleEntry.academic_year,
-            is_active: scheduleEntry.is_active,
-            subject: scheduleEntry.subject_code ? {
-              subject_code: scheduleEntry.subject_code.toString(),
-              subject_name: scheduleEntry.subject_name
-            } : null,
-            teacher: scheduleEntry.teacher_id ? {
-              teacher_id: scheduleEntry.teacher_id.toString(),
-              name: scheduleEntry.teacher_name
-            } : null,
-            slot_name: slot.slot_name,
-            start_time: slot.start_time,
-            end_time: slot.end_time,
-            slot_order: slot.slot_order,
-            period_type: 'teaching',
-            is_exception: false
-          });
-        } else {
-          // No schedule entry - create blank period
-          let periodType = 'free';
-          let displaySubject = 'FREE PERIOD';
-          let displayTeacher = null;
-
-          // Special handling for known periods
-          if (slot.slot_id === 'Lunch_1140_1220') {
-            periodType = 'break';
-            displaySubject = 'LUNCH BREAK';
-          } else if (slot.slot_id && slot.slot_id.startsWith('P')) {
-            periodType = 'study';
-            displaySubject = 'STUDY HALL';
-          }
-
-          transformedSchedule.push({
-            schedule_id: null,
-            class_id: classId.toString(),
-            day_of_week: dayOfWeek,
-            slot_id: slot.slot_id,
-            subject_code: null,
-            teacher_id: null,
-            academic_year: academicYear || '2024-2025',
-            is_active: true,
-            subject: {
-              subject_code: null,
-              subject_name: displaySubject
-            },
-            teacher: null,
-            slot_name: slot.slot_name,
-            start_time: slot.start_time,
-            end_time: slot.end_time,
-            slot_order: slot.slot_order,
-            period_type: periodType,
-            is_exception: false
-          });
-        }
-      }
-    }
-
-    // Now handle exceptions by overriding the schedule
-    if (startDate && exceptions.length > 0) {
-      // Create reverse mapping from date to day_of_week
-      const dateToDayOfWeek = {};
-      for (const [dayOfWeek, date] of Object.entries(weekDates)) {
-        dateToDayOfWeek[date] = parseInt(dayOfWeek);
-      }
-
-      for (const exception of exceptions) {
-        // Use day_of_week from database instead of calculating from date
-        const adjustedDayOfWeek = exception.day_of_week;
-
-        if (adjustedDayOfWeek) {
-          // Handle multiple slot_ids (comma-separated)
-          const slotIds = exception.slot_id ? exception.slot_id.split(',') : [];
-
-          for (const slotId of slotIds) {
-            const trimmedSlotId = slotId.trim();
-
-            // Find the schedule item to override
-            const scheduleIndex = transformedSchedule.findIndex(
-              s => s.day_of_week === adjustedDayOfWeek && s.slot_id === trimmedSlotId
-            );
-
-            if (scheduleIndex !== -1) {
-              // Determine display text based on exception type
-              let displaySubject = exception.title;
-              let displayTeacher = exception.teacher_id ? 'Scheduled' : 'No Teacher';
-
-              if (exception.exception_type === 'exam') {
-                displaySubject = 'EXAM';
-                displayTeacher = exception.description || 'Exam Session';
-              } else if (exception.exception_type === 'holiday') {
-                displaySubject = exception.title;
-                displayTeacher = 'Holiday';
-              }
-
-              transformedSchedule[scheduleIndex] = {
-                ...transformedSchedule[scheduleIndex],
-                schedule_id: exception.exception_id ? exception.exception_id.toString() : null,
-                subject_code: exception.subject_code ? exception.subject_code.toString() : null,
-                teacher_id: exception.teacher_id ? exception.teacher_id.toString() : null,
-                subject: {
-                  subject_code: exception.subject_code ? exception.subject_code.toString() : null,
-                  subject_name: displaySubject
-                },
-                teacher: exception.teacher_id ? {
-                  teacher_id: exception.teacher_id.toString(),
-                  name: displayTeacher
-                } : null,
-                is_exception: true,
-                exception_type: exception.exception_type,
-                exception_title: exception.title,
-                period_type: exception.exception_type === 'exam' ? 'exam' : 'holiday'
-              };
-            }
-          }
-        }
-      }
-    }
-
-    res.json({ schedule: transformedSchedule, exceptions: exceptions, weekDates: weekDates });
+    const decoded = jwt.verifyToken(token);
+    req.user = decoded;
+    next();
   } catch (error) {
-    console.error('Error fetching class schedule:', error);
-    res.status(500).json({ error: 'Failed to fetch class schedule' });
+    return res.status(403).json({ error: 'Invalid or expired token' });
   }
-});
+};
 
-// Create or update schedule entry
-router.post('/schedule', authenticateToken, async (req, res) => {
+// Helper function to get calendar grid for a specific academic year
+const getCalendarGrid = async (academicYear) => {
+  return await prisma.calendarGrid.findFirst({
+    where: { academicYear }
+  });
+};
+
+// Helper function to validate schedule data
+const validateScheduleData = (data) => {
+  const { dayOfWeek, classId, subjectId, teacherId, startTime, endTime, room } = data;
+
+  if (!dayOfWeek || !classId || !subjectId || !teacherId || !startTime || !endTime) {
+    throw new Error('Missing required fields: dayOfWeek, classId, subjectId, teacherId, startTime, endTime');
+  }
+
+  // Validate dayOfWeek (0-6 for Sunday-Saturday)
+  if (dayOfWeek < 0 || dayOfWeek > 6) {
+    throw new Error('dayOfWeek must be between 0 (Sunday) and 6 (Saturday)');
+  }
+
+  // Validate time format (HH:MM)
+  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+  if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+    throw new Error('Time must be in HH:MM format');
+  }
+
+  return true;
+};
+
+// GET /api/timemanagement/calendar/:academicYear
+// Get calendar grid for a specific academic year
+router.get('/calendar/:academicYear', authenticateToken, async (req, res) => {
   try {
-    const {
-      classId,
-      section,
-      dayOfWeek,
-      slotId,
-      subjectId,
-      teacherId,
-      academicYear
-    } = req.body;
+    const { academicYear } = req.params;
 
-    // Check if schedule entry already exists
-    const existingSchedule = await prisma.$queryRaw`
-      SELECT * FROM class_schedule 
-      WHERE class_id = ${parseInt(classId)}
-        AND section = ${section}
-        AND day_of_week = ${parseInt(dayOfWeek)}
-        AND slot_id = ${parseInt(slotId)}
-        AND academic_year = ${academicYear || '2024-2025'}
-    `;
+    const calendarGrid = await getCalendarGrid(academicYear);
 
-    let scheduleEntry;
-    
-    if (existingSchedule.length > 0) {
-      // Update existing entry
-      scheduleEntry = await prisma.$queryRaw`
-        UPDATE class_schedule 
-        SET subject_code = ${subjectId},
-            teacher_id = ${teacherId ? BigInt(teacherId) : null},
-            updated_at = NOW()
-        WHERE schedule_id = ${existingSchedule[0].schedule_id}
-        RETURNING *
-      `;
-    } else {
-      // Create new entry
-      scheduleEntry = await prisma.$queryRaw`
-        INSERT INTO class_schedule 
-        (class_id, day_of_week, slot_id, subject_code, teacher_id, academic_year, is_active)
-        VALUES (${parseInt(classId)}, ${parseInt(dayOfWeek)}, ${slotId}, 
-                ${subjectId}, ${teacherId ? BigInt(teacherId) : null}, 
-                ${academicYear || '2024-2025'}, true)
-        RETURNING *
-      `;
+    if (!calendarGrid) {
+      return res.status(404).json({ error: 'Calendar grid not found for this academic year' });
     }
 
-    // Convert BigInt fields to strings for JSON serialization
-    const normalizedResult = scheduleEntry[0] || scheduleEntry;
-    if (normalizedResult) {
-      normalizedResult.schedule_id = normalizedResult.schedule_id ? normalizedResult.schedule_id.toString() : null;
-      normalizedResult.class_id = normalizedResult.class_id ? normalizedResult.class_id.toString() : null;
-      normalizedResult.slot_id = normalizedResult.slot_id ? normalizedResult.slot_id.toString() : null;
-      normalizedResult.subject_code = normalizedResult.subject_code ? normalizedResult.subject_code.toString() : null;
-      normalizedResult.teacher_id = normalizedResult.teacher_id ? normalizedResult.teacher_id.toString() : null;
-    }
-
-    res.json(normalizedResult);
-  } catch (error) {
-    console.error('Error creating/updating schedule:', error);
-    res.status(500).json({ error: 'Failed to create/update schedule' });
-  }
-});
-
-// Update schedule entry (PUT method for frontend compatibility)
-router.put('/schedule', authenticateToken, async (req, res) => {
-  try {
-    const {
-      classId,
-      section,
-      dayOfWeek,
-      slotId,
-      subjectId,
-      teacherId,
-      academicYear,
-      scheduleId
-    } = req.body;
-
-    console.log('PUT Schedule Update Request:', {
-      classId,
-      section,
-      dayOfWeek,
-      slotId,
-      subjectId,
-      teacherId,
-      academicYear,
-      scheduleId
+    res.json({
+      success: true,
+      data: calendarGrid
     });
-
-    // Handle teacherId - if it's a string (teacher name), find the teacher ID
-    let finalTeacherId = teacherId;
-    if (teacherId && isNaN(teacherId)) {
-      // teacherId is a string (teacher name), find the actual teacher ID
-      const teacher = await prisma.$queryRaw`
-        SELECT teacher_id FROM teachers WHERE name = ${teacherId}
-      `;
-      if (teacher.length > 0) {
-        finalTeacherId = teacher[0].teacher_id;
-      } else {
-        return res.status(400).json({ error: 'Teacher not found' });
-      }
-    }
-
-    // If scheduleId is provided, update that specific entry
-    if (scheduleId) {
-      const updateQuery = await prisma.$queryRaw`
-        UPDATE class_schedule
-        SET subject_code = ${subjectId},
-            teacher_id = ${finalTeacherId ? BigInt(finalTeacherId) : null},
-            updated_at = NOW()
-        WHERE schedule_id = ${BigInt(scheduleId)}
-        RETURNING *
-      `;
-
-      if (updateQuery.length === 0) {
-        return res.status(404).json({ error: 'Schedule entry not found' });
-      }
-
-      // Convert BigInt fields to strings for JSON serialization
-      const normalizedResult = {
-        ...updateQuery[0],
-        schedule_id: updateQuery[0].schedule_id ? updateQuery[0].schedule_id.toString() : null,
-        class_id: updateQuery[0].class_id ? updateQuery[0].class_id.toString() : null,
-        slot_id: updateQuery[0].slot_id ? updateQuery[0].slot_id.toString() : null,
-        subject_code: updateQuery[0].subject_code ? updateQuery[0].subject_code.toString() : null,
-        teacher_id: updateQuery[0].teacher_id ? updateQuery[0].teacher_id.toString() : null,
-      };
-
-      return res.json(normalizedResult);
-    }
-
-    // Otherwise, find by class/section/day/slot and update
-    const existingSchedule = await prisma.$queryRaw`
-      SELECT * FROM class_schedule
-      WHERE class_id = ${parseInt(classId)}
-        AND section = ${section}
-        AND day_of_week = ${parseInt(dayOfWeek)}
-        AND slot_id = ${parseInt(slotId)}
-        AND academic_year = ${academicYear || '2024-2025'}
-    `;
-
-    if (existingSchedule.length === 0) {
-      return res.status(404).json({ error: 'Schedule entry not found' });
-    }
-
-    const updateQuery = await prisma.$queryRaw`
-      UPDATE class_schedule
-      SET subject_id = ${subjectId ? parseInt(subjectId) : null},
-          teacher_id = ${finalTeacherId ? BigInt(finalTeacherId) : null},
-          updated_at = NOW()
-      WHERE schedule_id = ${existingSchedule[0].schedule_id}
-      RETURNING *
-    `;
-
-    // Convert BigInt fields to strings for JSON serialization
-    const normalizedResult = {
-      ...updateQuery[0],
-      schedule_id: updateQuery[0].schedule_id ? updateQuery[0].schedule_id.toString() : null,
-      class_id: updateQuery[0].class_id ? updateQuery[0].class_id.toString() : null,
-      slot_id: updateQuery[0].slot_id ? updateQuery[0].slot_id.toString() : null,
-      subject_id: updateQuery[0].subject_id ? updateQuery[0].subject_id.toString() : null,
-      teacher_id: updateQuery[0].teacher_id ? updateQuery[0].teacher_id.toString() : null,
-    };
-
-    res.json(normalizedResult);
   } catch (error) {
-    console.error('Error updating schedule:', error);
-    res.status(500).json({ error: 'Failed to update schedule' });
+    console.error('Error fetching calendar grid:', error);
+    res.status(500).json({ error: 'Failed to fetch calendar grid' });
   }
 });
 
-// Delete schedule entry
-router.delete('/schedule/:scheduleId', authenticateToken, async (req, res) => {
+// GET /api/timemanagement/schedule/:academicYear
+// Get all schedule data for a specific academic year
+router.get('/schedule/:academicYear', authenticateToken, async (req, res) => {
   try {
-    const { scheduleId } = req.params;
+    const { academicYear } = req.params;
 
-    await prisma.$queryRaw`
-      DELETE FROM class_schedule 
-      WHERE schedule_id = ${BigInt(scheduleId)}
-    `;
-
-    res.json({ message: 'Schedule entry deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting schedule:', error);
-    res.status(500).json({ error: 'Failed to delete schedule' });
-  }
-});
-
-// Get all schedule exceptions (events/exams)
-router.get('/exceptions', authenticateToken, async (req, res) => {
-  try {
-    const { academicYear, classId, section } = req.query;
-    
-    const whereClause = {
-      academicYear: academicYear || '2024-25'
-    };
-
-    if (classId && section) {
-      whereClause.OR = [
-        {
-          classId: parseInt(classId),
-          section: section
-        },
-        {
-          affectsAllClasses: true
-        }
-      ];
-    }
-
-    const exceptions = await prisma.scheduleException.findMany({
-      where: whereClause,
+    const schedules = await prisma.scheduleData.findMany({
+      where: { academicYear },
       include: {
         class: true,
-        timeSlot: true,
         subject: true,
-        teacher: true,
-        creator: {
-          select: {
-            firstName: true,
-            lastName: true
-          }
-        }
-      },
-      orderBy: { exceptionDate: 'asc' }
-    });
-
-    res.json(exceptions);
-  } catch (error) {
-    console.error('Error fetching exceptions:', error);
-    res.status(500).json({ error: 'Failed to fetch exceptions' });
-  }
-});
-
-// Get schedule exceptions
-router.get('/exceptions', authenticateToken, async (req, res) => {
-  try {
-    const { academicYear, classId, section, startDate, endDate } = req.query;
-
-    let whereClause = {
-      academicYear: academicYear || '2024-2025'
-    };
-
-    if (classId) {
-      whereClause.classId = parseInt(classId);
-    }
-
-
-    if (startDate && endDate) {
-      whereClause.exceptionDate = {
-        gte: new Date(startDate),
-        lte: new Date(endDate)
-      };
-    }
-
-    const exceptions = await prisma.scheduleException.findMany({
-      where: whereClause,
-      include: {
-        class: true,
-        timeSlot: true,
-        subject: true,
-        teacher: true,
-        creator: {
-          select: {
-            username: true,
-            firstName: true,
-            lastName: true
-          }
-        }
+        teacher: true
       },
       orderBy: [
-        { exceptionDate: 'asc' },
-        { slotId: 'asc' }
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' }
       ]
     });
 
-    // Convert BigInt fields to strings for JSON serialization
-    const exceptionsWithStringIds = exceptions.map(exc => ({
-      ...exc,
-      exception_id: exc.exceptionId.toString(),
-      class_id: exc.classId ? exc.classId.toString() : null,
-      slot_id: exc.slotId ? exc.slotId.toString() : null,
-      subject_code: exc.subjectCode ? exc.subjectCode.toString() : null,
-      teacher_id: exc.teacherId ? exc.teacherId.toString() : null,
-      created_by: exc.createdBy.toString(),
-      exception_date: exc.exceptionDate.toISOString().split('T')[0] // Format date
-    }));
-
-    res.json(exceptionsWithStringIds);
-  } catch (error) {
-    console.error('Error fetching exceptions:', error);
-    res.status(500).json({ error: 'Failed to fetch exceptions' });
-  }
-});
-
-// Create schedule exception (exam/event)
-router.post('/exceptions', authenticateToken, async (req, res) => {
-  try {
-    const {
-      classId,
-      section,
-      exceptionDate,
-      slotId,
-      exceptionType,
-      title,
-      description,
-      subjectId,
-      teacherId,
-      academicYear,
-      affectsAllClasses
-    } = req.body;
-
-    const exception = await prisma.scheduleException.create({
-      data: {
-        classId: classId ? parseInt(classId) : null,
-        section: section || null,
-        exceptionDate: new Date(exceptionDate),
-        slotId: slotId ? parseInt(slotId) : null,
-        exceptionType: exceptionType,
-        title: title,
-        description: description || null,
-        subjectId: subjectId ? parseInt(subjectId) : null,
-        teacherId: teacherId || null,
-        academicYear: academicYear || '2024-25',
-        affectsAllClasses: affectsAllClasses || false,
-        createdBy: req.user.username
-      },
-      include: {
-        class: true,
-        timeSlot: true,
-        subject: true,
-        teacher: true
-      }
+    res.json({
+      success: true,
+      data: schedules
     });
-
-    // Convert BigInt fields to strings for JSON serialization
-    const exceptionWithStringIds = {
-      ...exception,
-      exceptionId: exception.exceptionId.toString(),
-      classId: exception.classId ? exception.classId.toString() : null,
-      slotId: exception.slotId ? exception.slotId.toString() : null,
-      subjectId: exception.subjectId ? exception.subjectId.toString() : null,
-      teacherId: exception.teacherId ? exception.teacherId.toString() : null,
-      createdBy: exception.createdBy.toString()
-    };
-
-    res.json(exceptionWithStringIds);
   } catch (error) {
-    console.error('Error creating exception:', error);
-    res.status(500).json({ error: 'Failed to create exception' });
+    console.error('Error fetching schedule data:', error);
+    res.status(500).json({ error: 'Failed to fetch schedule data' });
   }
 });
 
-// Update schedule exception
-router.put('/exceptions/:exceptionId', authenticateToken, async (req, res) => {
+// POST /api/timemanagement/schedule
+// Create a new schedule entry
+router.post('/schedule', authenticateToken, async (req, res) => {
   try {
-    const { exceptionId } = req.params;
-    const {
-      exceptionDate,
-      slotId,
-      title,
-      description,
-      subjectId,
-      teacherId
-    } = req.body;
+    const scheduleData = req.body;
 
-    const exception = await prisma.scheduleException.update({
-      where: { exceptionId: BigInt(exceptionId) },
-      data: {
-        exceptionDate: exceptionDate ? new Date(exceptionDate) : undefined,
-        slotId: slotId ? parseInt(slotId) : undefined,
-        title: title,
-        description: description,
-        subjectId: subjectId ? parseInt(subjectId) : undefined,
-        teacherId: teacherId ? BigInt(teacherId) : undefined
-      },
-      include: {
-        class: true,
-        timeSlot: true,
-        subject: true,
-        teacher: true
-      }
-    });
+    // Validate the schedule data
+    validateScheduleData(scheduleData);
 
-    // Convert BigInt fields to strings for JSON serialization
-    const exceptionWithStringIds = {
-      ...exception,
-      exceptionId: exception.exceptionId.toString(),
-      classId: exception.classId ? exception.classId.toString() : null,
-      slotId: exception.slotId ? exception.slotId.toString() : null,
-      subjectId: exception.subjectId ? exception.subjectId.toString() : null,
-      teacherId: exception.teacherId ? exception.teacherId.toString() : null,
-      createdBy: exception.createdBy.toString()
-    };
-
-    res.json(exceptionWithStringIds);
-  } catch (error) {
-    console.error('Error updating exception:', error);
-    res.status(500).json({ error: 'Failed to update exception' });
-  }
-});
-
-// Delete schedule exception
-router.delete('/exceptions/:exceptionId', authenticateToken, async (req, res) => {
-  try {
-    const { exceptionId } = req.params;
-
-    await prisma.scheduleException.delete({
-      where: { exceptionId: BigInt(exceptionId) }
-    });
-
-    res.json({ message: 'Exception deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting exception:', error);
-    res.status(500).json({ error: 'Failed to delete exception' });
-  }
-});
-
-// Get schedule for multiple classes (for bulk exam scheduling)
-router.get('/bulk-schedule', authenticateToken, async (req, res) => {
-  try {
-    const { academicYear, grade } = req.query;
-
-    // Get all classes for the grade or all classes
-    const whereClause = { academicYear: academicYear || '2024-25' };
-    if (grade) {
-      whereClause.className = { startsWith: grade };
+    // Check if calendar grid exists for the academic year
+    const calendarGrid = await getCalendarGrid(scheduleData.academicYear);
+    if (!calendarGrid) {
+      return res.status(404).json({ error: 'Calendar grid not found for this academic year' });
     }
 
-    const classes = await prisma.class.findMany({
-      where: whereClause,
-      include: {
-        classSchedules: {
-          include: {
-            timeSlot: true,
-            subject: true,
-            teacher: true
+    // Check for teacher conflicts
+    const teacherConflict = await prisma.scheduleData.findFirst({
+      where: {
+        academicYear: scheduleData.academicYear,
+        teacherId: scheduleData.teacherId,
+        dayOfWeek: scheduleData.dayOfWeek,
+        OR: [
+          {
+            AND: [
+              { startTime: { lte: scheduleData.startTime } },
+              { endTime: { gt: scheduleData.startTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { lt: scheduleData.endTime } },
+              { endTime: { gte: scheduleData.endTime } }
+            ]
           }
-        }
+        ]
       }
     });
 
-    res.json(classes);
+    if (teacherConflict) {
+      return res.status(409).json({
+        error: 'Teacher scheduling conflict detected',
+        conflict: teacherConflict
+      });
+    }
+
+    // Create the schedule entry
+    const newSchedule = await prisma.scheduleData.create({
+      data: scheduleData,
+      include: {
+        class: true,
+        subject: true,
+        teacher: true
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: newSchedule,
+      message: 'Schedule entry created successfully'
+    });
   } catch (error) {
-    console.error('Error fetching bulk schedule:', error);
-    res.status(500).json({ error: 'Failed to fetch bulk schedule' });
+    console.error('Error creating schedule entry:', error);
+    if (error.message.includes('Missing required fields') || error.message.includes('must be')) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create schedule entry' });
+  }
+});
+
+// PUT /api/timemanagement/schedule/:id
+// Update an existing schedule entry
+router.put('/schedule/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Validate the update data if provided
+    if (updateData.dayOfWeek !== undefined || updateData.startTime !== undefined ||
+        updateData.endTime !== undefined || updateData.teacherId !== undefined) {
+      validateScheduleData({ ...updateData, id });
+    }
+
+    // Check if schedule exists
+    const existingSchedule = await prisma.scheduleData.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingSchedule) {
+      return res.status(404).json({ error: 'Schedule entry not found' });
+    }
+
+    // If updating teacher or time, check for conflicts
+    if (updateData.teacherId || updateData.dayOfWeek || updateData.startTime || updateData.endTime) {
+      const checkData = {
+        academicYear: updateData.academicYear || existingSchedule.academicYear,
+        teacherId: updateData.teacherId || existingSchedule.teacherId,
+        dayOfWeek: updateData.dayOfWeek !== undefined ? updateData.dayOfWeek : existingSchedule.dayOfWeek,
+        startTime: updateData.startTime || existingSchedule.startTime,
+        endTime: updateData.endTime || existingSchedule.endTime
+      };
+
+      const conflict = await prisma.scheduleData.findFirst({
+        where: {
+          academicYear: checkData.academicYear,
+          teacherId: checkData.teacherId,
+          dayOfWeek: checkData.dayOfWeek,
+          id: { not: parseInt(id) }, // Exclude current entry
+          OR: [
+            {
+              AND: [
+                { startTime: { lte: checkData.startTime } },
+                { endTime: { gt: checkData.startTime } }
+              ]
+            },
+            {
+              AND: [
+                { startTime: { lt: checkData.endTime } },
+                { endTime: { gte: checkData.endTime } }
+              ]
+            }
+          ]
+        }
+      });
+
+      if (conflict) {
+        return res.status(409).json({
+          error: 'Teacher scheduling conflict detected',
+          conflict: conflict
+        });
+      }
+    }
+
+    // Update the schedule entry
+    const updatedSchedule = await prisma.scheduleData.update({
+      where: { id: parseInt(id) },
+      data: updateData,
+      include: {
+        class: true,
+        subject: true,
+        teacher: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updatedSchedule,
+      message: 'Schedule entry updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating schedule entry:', error);
+    if (error.message.includes('Missing required fields') || error.message.includes('must be')) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to update schedule entry' });
+  }
+});
+
+// DELETE /api/timemanagement/schedule/:id
+// Delete a schedule entry
+router.delete('/schedule/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if schedule exists
+    const existingSchedule = await prisma.scheduleData.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingSchedule) {
+      return res.status(404).json({ error: 'Schedule entry not found' });
+    }
+
+    // Delete the schedule entry
+    await prisma.scheduleData.delete({
+      where: { id: parseInt(id) }
+    });
+
+    res.json({
+      success: true,
+      message: 'Schedule entry deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting schedule entry:', error);
+    res.status(500).json({ error: 'Failed to delete schedule entry' });
+  }
+});
+
+// GET /api/timemanagement/teacher-schedule/:teacherId/:academicYear
+// Get schedule for a specific teacher in an academic year
+router.get('/teacher-schedule/:teacherId/:academicYear', authenticateToken, async (req, res) => {
+  try {
+    const { teacherId, academicYear } = req.params;
+
+    const schedules = await prisma.scheduleData.findMany({
+      where: {
+        teacherId: parseInt(teacherId),
+        academicYear
+      },
+      include: {
+        class: true,
+        subject: true
+      },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' }
+      ]
+    });
+
+    res.json({
+      success: true,
+      data: schedules
+    });
+  } catch (error) {
+    console.error('Error fetching teacher schedule:', error);
+    res.status(500).json({ error: 'Failed to fetch teacher schedule' });
+  }
+});
+
+// GET /api/timemanagement/class-schedule/:classId/:academicYear
+// Get schedule for a specific class in an academic year
+router.get('/class-schedule/:classId/:academicYear', authenticateToken, async (req, res) => {
+  try {
+    const { classId, academicYear } = req.params;
+
+    const schedules = await prisma.scheduleData.findMany({
+      where: {
+        classId: parseInt(classId),
+        academicYear
+      },
+      include: {
+        subject: true,
+        teacher: true
+      },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' }
+      ]
+    });
+
+    res.json({
+      success: true,
+      data: schedules
+    });
+  } catch (error) {
+    console.error('Error fetching class schedule:', error);
+    res.status(500).json({ error: 'Failed to fetch class schedule' });
   }
 });
 

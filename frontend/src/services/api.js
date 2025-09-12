@@ -419,17 +419,21 @@ class ApiService {
     });
   }
 
-  // Time Management
-  async getTimeSlots() {
-    return this.request('/timemanagement/timeslots');
+  // Time Management - Updated for 2-table system
+  async getCalendarGrid(academicYear = '2024-2025') {
+    return this.request(`/timemanagement/calendar/${academicYear}`);
   }
 
-  async getClassSchedule(classId, section, academicYear = '2024-2025', startDate = null) {
-    let url = `/timemanagement/schedule/${classId}/${section}?academicYear=${academicYear}`;
-    if (startDate) {
-      url += `&startDate=${startDate}`;
-    }
-    return this.request(url);
+  async getAllSchedules(academicYear = '2024-2025') {
+    return this.request(`/timemanagement/schedule/${academicYear}`);
+  }
+
+  async getClassSchedule(classId, academicYear = '2024-2025') {
+    return this.request(`/timemanagement/class-schedule/${classId}/${academicYear}`);
+  }
+
+  async getTeacherSchedule(teacherId, academicYear = '2024-2025') {
+    return this.request(`/timemanagement/teacher-schedule/${teacherId}/${academicYear}`);
   }
 
   async createScheduleEntry(scheduleData) {
@@ -439,8 +443,8 @@ class ApiService {
     });
   }
 
-  async updateScheduleEntry(scheduleData) {
-    return this.request('/timemanagement/schedule', {
+  async updateScheduleEntry(scheduleId, scheduleData) {
+    return this.request(`/timemanagement/schedule/${scheduleId}`, {
       method: 'PUT',
       body: JSON.stringify(scheduleData),
     });
@@ -452,8 +456,15 @@ class ApiService {
     });
   }
 
+  // Legacy methods for backward compatibility (deprecated)
+  async getTimeSlots() {
+    console.warn('getTimeSlots() is deprecated. Use getCalendarGrid() instead.');
+    return this.getCalendarGrid();
+  }
+
   async getEvents(academicYear = '2024-2025') {
-    return this.request(`/timemanagement/exceptions?academicYear=${academicYear}`);
+    console.warn('getEvents() is deprecated. Use getCalendarGrid() instead.');
+    return this.getCalendarGrid(academicYear);
   }
 }
 

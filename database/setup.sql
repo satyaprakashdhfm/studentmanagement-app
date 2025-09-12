@@ -122,28 +122,32 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to prevent teacher schedule conflicts
+-- Function to prevent teacher schedule conflicts (Updated for 2-table system)
 CREATE OR REPLACE FUNCTION check_teacher_schedule_conflict()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Check if teacher is already scheduled for the same day, slot, and academic year
+    -- Check if teacher is already scheduled for the same day, time slot, and academic year
     IF EXISTS (
-        SELECT 1 FROM class_schedule
+        SELECT 1 FROM schedule_data
         WHERE teacher_id = NEW.teacher_id
         AND day_of_week = NEW.day_of_week
-        AND slot_id = NEW.slot_id
         AND academic_year = NEW.academic_year
+        AND (
+            (NEW.start_time BETWEEN start_time AND end_time) OR
+            (NEW.end_time BETWEEN start_time AND end_time) OR
+            (start_time BETWEEN NEW.start_time AND NEW.end_time)
+        )
         AND schedule_id != COALESCE(NEW.schedule_id, '')
     ) THEN
-        RAISE EXCEPTION 'Teacher % is already scheduled for day %, slot % in academic year %',
-            NEW.teacher_id, NEW.day_of_week, NEW.slot_id, NEW.academic_year;
+        RAISE EXCEPTION 'Teacher % is already scheduled for day %, time %-% in academic year %',
+            NEW.teacher_id, NEW.day_of_week, NEW.start_time, NEW.end_time, NEW.academic_year;
     END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to validate teacher qualification for subject
+-- Function to validate teacher qualification for subject (Updated for 2-table system)
 CREATE OR REPLACE FUNCTION validate_teacher_subject_qualification()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -340,38 +344,51 @@ CREATE TABLE IF NOT EXISTS subjects (
 );
 
 -- ============================================================================
--- SCHEDULING SYSTEM
+-- SCHEDULING SYSTEM (UPDATED: 2-TABLE ARCHITECTURE)
 -- ============================================================================
 
--- Create time_slots table
-CREATE TABLE IF NOT EXISTS time_slots (
-    slot_id      VARCHAR(20) PRIMARY KEY,
-    slot_name    VARCHAR(50) NOT NULL,
-    start_time   TIME NOT NULL,
-    end_time     TIME NOT NULL,
-    slot_order   INTEGER NOT NULL CHECK (slot_order > 0),
-    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (start_time < end_time)
+-- Create calendar_grid table (Foundation for yearly calendar)
+CREATE TABLE IF NOT EXISTS calendar_grid (
+    grid_id         VARCHAR(50) PRIMARY KEY,
+    class_id        INTEGER NOT NULL,
+    calendar_date   DATE NOT NULL,
+    morning_slots   TEXT,  -- JSON array of morning slot IDs
+    afternoon_slots TEXT,  -- JSON array of afternoon slot IDs
+    day_of_week     INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    academic_year   VARCHAR(20) NOT NULL,
+    day_type        VARCHAR(20) NOT NULL DEFAULT 'working' CHECK (day_type IN ('working', 'two_exam', 'single_exam', 'holiday')),
+    holiday_name    VARCHAR(100),
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (class_id) REFERENCES classes(class_id),
+    UNIQUE(class_id, calendar_date)
 );
 
--- Create class_schedule table
-CREATE TABLE IF NOT EXISTS class_schedule (
-    schedule_id   VARCHAR(50) PRIMARY KEY,
-    class_id      INTEGER NOT NULL,
-    day_of_week   INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
-    slot_id       VARCHAR(20) NOT NULL,
-    academic_year VARCHAR(20) NOT NULL,
-    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    subject_code  VARCHAR(20),
-    teacher_id    VARCHAR(20),
+-- Create schedule_data table (Weekly templates with subject/teacher assignments)
+CREATE TABLE IF NOT EXISTS schedule_data (
+    schedule_id     VARCHAR(100) PRIMARY KEY,
+    class_id        INTEGER NOT NULL,
+    academic_year   VARCHAR(20) NOT NULL,
+    is_template     BOOLEAN DEFAULT TRUE,
+    day_of_week     INTEGER NOT NULL CHECK (day_of_week BETWEEN 1 AND 7),
+    template_name   VARCHAR(50) DEFAULT 'hulk',
+    subject_code    VARCHAR(20),
+    teacher_id      VARCHAR(20),
+    slot_ids        TEXT,  -- JSON array of slot IDs this schedule applies to
+    slot_names      TEXT,  -- Human readable slot names
+    start_time      TIME NOT NULL,
+    end_time        TIME NOT NULL,
+    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by      VARCHAR(255),
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (class_id) REFERENCES classes(class_id),
-    FOREIGN KEY (slot_id) REFERENCES time_slots(slot_id),
     FOREIGN KEY (subject_code) REFERENCES subjects(subject_code),
-    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id)
+    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id),
+    FOREIGN KEY (created_by) REFERENCES users(username),
+    CHECK (start_time < end_time),
+    CHECK (academic_year ~ '^\d{4}-\d{4}$'),
+    UNIQUE (teacher_id, academic_year, day_of_week, start_time, end_time)  -- Prevent teacher conflicts
 );
 
 -- ============================================================================
@@ -483,29 +500,6 @@ CREATE TABLE IF NOT EXISTS academic_calendar (
     CHECK (start_date < end_date)
 );
 
--- Create schedule_exceptions table
-CREATE TABLE IF NOT EXISTS schedule_exceptions (
-    exception_id       VARCHAR(50) PRIMARY KEY,
-    exception_date     DATE NOT NULL,
-    exception_type     VARCHAR(50) NOT NULL CHECK (exception_type IN ('holiday', 'exam')),
-    title              VARCHAR(255) NOT NULL,
-    description        TEXT,
-    academic_year      VARCHAR(20) NOT NULL,
-    affects_all_classes BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    class_id           INTEGER,
-    slot_id            VARCHAR(20),
-    subject_code       VARCHAR(20),
-    teacher_id         VARCHAR(20),
-    created_by         VARCHAR(255) NOT NULL,
-    FOREIGN KEY (class_id) REFERENCES classes(class_id),
-    FOREIGN KEY (slot_id) REFERENCES time_slots(slot_id),
-    FOREIGN KEY (subject_code) REFERENCES subjects(subject_code),
-    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id),
-    FOREIGN KEY (created_by) REFERENCES users(username)
-);
-
 -- Create triggers for updated_at
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -522,10 +516,10 @@ CREATE TRIGGER update_classes_updated_at BEFORE UPDATE ON classes
 CREATE TRIGGER update_subjects_updated_at BEFORE UPDATE ON subjects
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_time_slots_updated_at BEFORE UPDATE ON time_slots
+CREATE TRIGGER update_calendar_grid_updated_at BEFORE UPDATE ON calendar_grid
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_class_schedule_updated_at BEFORE UPDATE ON class_schedule
+CREATE TRIGGER update_schedule_data_updated_at BEFORE UPDATE ON schedule_data
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_attendance_updated_at BEFORE UPDATE ON attendance
@@ -543,9 +537,6 @@ CREATE TRIGGER update_syllabus_updated_at BEFORE UPDATE ON syllabus
 CREATE TRIGGER update_academic_calendar_updated_at BEFORE UPDATE ON academic_calendar
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_schedule_exceptions_updated_at BEFORE UPDATE ON schedule_exceptions
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 -- ============================================================================
 -- BUSINESS LOGIC TRIGGERS
 -- ============================================================================
@@ -556,16 +547,16 @@ CREATE TRIGGER trigger_create_student_fees
     FOR EACH ROW
     EXECUTE FUNCTION create_student_fees();
 
--- Trigger to prevent teacher schedule conflicts
+-- Trigger to prevent teacher schedule conflicts (Updated for 2-table system)
 CREATE TRIGGER trigger_check_teacher_schedule_conflict
-    BEFORE INSERT OR UPDATE ON class_schedule
+    BEFORE INSERT OR UPDATE ON schedule_data
     FOR EACH ROW
     WHEN (NEW.teacher_id IS NOT NULL)
     EXECUTE FUNCTION check_teacher_schedule_conflict();
 
--- Trigger to validate teacher qualification
+-- Trigger to validate teacher qualification (Updated for 2-table system)
 CREATE TRIGGER trigger_validate_teacher_qualification
-    BEFORE INSERT OR UPDATE ON class_schedule
+    BEFORE INSERT OR UPDATE ON schedule_data
     FOR EACH ROW
     WHEN (NEW.teacher_id IS NOT NULL AND NEW.subject_code IS NOT NULL)
     EXECUTE FUNCTION validate_teacher_subject_qualification();

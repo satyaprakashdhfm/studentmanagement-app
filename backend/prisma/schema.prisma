@@ -20,8 +20,8 @@ model User {
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   academicCalendars  AcademicCalendar[]
-  scheduleExceptions ScheduleException[]
   attendances        Attendance[]
+  scheduleData       ScheduleData[]
   students           Student?
   teachers           Teacher?
 
@@ -69,10 +69,9 @@ model Teacher {
   updatedAt          DateTime            @updatedAt @map("updated_at")
   qualified_subjects String[]
   teacherId          String              @id @map("teacher_id") @db.VarChar(255)
-  classSchedules     ClassSchedule[]
   classesTeaching    Class[]
   marks              Mark[]
-  scheduleExceptions ScheduleException[]
+  scheduleData       ScheduleData[]
   syllabi            Syllabus[]
   users              User                @relation(fields: [teacherId], references: [username], onDelete: NoAction, onUpdate: NoAction)
 
@@ -89,11 +88,11 @@ model Class {
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
   attendances        Attendance[]
-  classSchedules     ClassSchedule[]
+  calendarGrid       CalendarGrid[]
   classTeacher       Teacher?            @relation(fields: [classTeacherId], references: [teacherId], onDelete: NoAction, onUpdate: NoAction)
   fees               Fee[]
   marks              Mark[]
-  scheduleExceptions ScheduleException[]
+  scheduleData       ScheduleData[]
   students           Student[]
   syllabi            Syllabus[]
 
@@ -108,46 +107,55 @@ model Subject {
   isActive           Boolean             @default(true) @map("is_active")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
-  classSchedules     ClassSchedule[]
   marks              Mark[]
-  scheduleExceptions ScheduleException[]
+  scheduleData       ScheduleData[]
   syllabi            Syllabus[]
 
   @@map("subjects")
 }
 
-model TimeSlot {
-  slotId         String          @id @default(dbgenerated("nextval('time_slots_slot_id_seq'::regclass)")) @map("slot_id") @db.VarChar(50)
-  slotName       String          @map("slot_name") @db.VarChar(50)
-  startTime      DateTime        @map("start_time") @db.Time(6)
-  endTime        DateTime        @map("end_time") @db.Time(6)
-  slotOrder      Int             @map("slot_order")
-  isActive       Boolean         @default(true) @map("is_active")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  classSchedules ClassSchedule[]
+model CalendarGrid {
+  gridId        String   @id @map("grid_id") @db.VarChar(50)
+  classId       Int      @map("class_id")
+  calendarDate  DateTime @map("calendar_date") @db.Date
+  morningSlots  String?  @map("morning_slots")
+  afternoonSlots String? @map("afternoon_slots")
+  dayOfWeek     Int      @map("day_of_week")
+  academicYear  String   @map("academic_year") @db.VarChar(20)
+  dayType       String   @default("working") @map("day_type") @db.VarChar(20)
+  holidayName   String?  @map("holiday_name") @db.VarChar(100)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  class         Class    @relation(fields: [classId], references: [classId])
 
-  @@map("time_slots")
+  @@unique([classId, calendarDate])
+  @@map("calendar_grid")
 }
 
-model ClassSchedule {
-  scheduleId   String       @id @default(dbgenerated("nextval('class_schedule_schedule_id_seq'::regclass)")) @map("schedule_id") @db.VarChar(100)
-  classId      Int          @map("class_id")
-  dayOfWeek    Int          @map("day_of_week")
-  slotId       String       @map("slot_id") @db.VarChar(50)
-  academicYear String       @map("academic_year") @db.VarChar(20)
-  isActive     Boolean      @default(true) @map("is_active")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
-  subjectCode  String?      @map("subject_code") @db.VarChar(20)
-  teacherId    String?      @map("teacher_id") @db.VarChar(255)
-  attendances  Attendance[]
-  class        Class        @relation(fields: [classId], references: [classId], onDelete: Cascade)
-  timeSlot     TimeSlot     @relation(fields: [slotId], references: [slotId], onDelete: NoAction, onUpdate: NoAction)
-  subject      Subject?     @relation(fields: [subjectCode], references: [subjectCode], onDelete: NoAction, onUpdate: NoAction)
-  teacher      Teacher?     @relation(fields: [teacherId], references: [teacherId], onDelete: NoAction, onUpdate: NoAction)
+model ScheduleData {
+  scheduleId   String    @id @map("schedule_id") @db.VarChar(100)
+  classId      Int       @map("class_id")
+  academicYear String    @map("academic_year") @db.VarChar(20)
+  isTemplate   Boolean?  @default(true) @map("is_template")
+  dayOfWeek    Int       @map("day_of_week")
+  templateName String?   @default("hulk") @map("template_name") @db.VarChar(50)
+  subjectCode  String?   @map("subject_code") @db.VarChar(20)
+  teacherId    String?   @map("teacher_id") @db.VarChar(255)
+  slotIds      String?   @map("slot_ids")
+  slotNames    String?   @map("slot_names")
+  startTime    DateTime  @map("start_time") @db.Time(6)
+  endTime      DateTime  @map("end_time") @db.Time(6)
+  isActive     Boolean   @default(true) @map("is_active")
+  createdBy    String?   @map("created_by") @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  class        Class     @relation(fields: [classId], references: [classId])
+  subject      Subject?  @relation(fields: [subjectCode], references: [subjectCode])
+  teacher      Teacher?  @relation(fields: [teacherId], references: [teacherId])
+  creator      User?     @relation(fields: [createdBy], references: [username])
 
-  @@map("class_schedule")
+  @@unique([teacherId, academicYear, dayOfWeek, startTime, endTime])
+  @@map("schedule_data")
 }
 
 model Attendance {
@@ -164,7 +172,6 @@ model Attendance {
   scheduleId   String?        @map("schedule_id") @db.VarChar(100)
   class        Class          @relation(fields: [classId], references: [classId])
   markedByUser User           @relation(fields: [markedBy], references: [username], onDelete: NoAction, onUpdate: NoAction)
-  schedule     ClassSchedule? @relation(fields: [scheduleId], references: [scheduleId], onDelete: NoAction, onUpdate: NoAction)
   student      Student        @relation(fields: [studentId], references: [studentId], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("attendance")
@@ -244,26 +251,4 @@ model AcademicCalendar {
   @@map("academic_calendar")
 }
 
-model ScheduleException {
-  exceptionId       String   @id @default(dbgenerated("nextval('schedule_exceptions_exception_id_seq'::regclass)")) @map("exception_id") @db.VarChar(50)
-  classId           Int?     @map("class_id")
-  exceptionDate     DateTime @map("exception_date") @db.Date
-  slotId            String?  @map("slot_id") @db.VarChar(255)
-  exceptionType     String   @map("exception_type") @db.VarChar(50)
-  title             String   @map("title") @db.VarChar(255)
-  description       String?
-  academicYear      String   @map("academic_year") @db.VarChar(20)
-  affectsAllClasses Boolean  @default(false) @map("affects_all_classes")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  subjectCode       String?  @map("subject_code") @db.VarChar(20)
-  teacherId         String?  @map("teacher_id") @db.VarChar(255)
-  createdBy         String?  @map("created_by") @db.VarChar(255)
-  day_of_week       Int?
-  class             Class?   @relation(fields: [classId], references: [classId], onDelete: Cascade)
-  creator           User?    @relation(fields: [createdBy], references: [username], onDelete: NoAction, onUpdate: NoAction)
-  subject           Subject? @relation(fields: [subjectCode], references: [subjectCode], onDelete: NoAction, onUpdate: NoAction)
-  teacher           Teacher? @relation(fields: [teacherId], references: [teacherId], onDelete: NoAction, onUpdate: NoAction)
 
-  @@map("schedule_exceptions")
-}
