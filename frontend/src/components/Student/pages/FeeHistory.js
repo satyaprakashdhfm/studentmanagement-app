@@ -15,7 +15,7 @@ const FeeHistory = () => {
           return;
         }
 
-        const studentId = currentUser.student.id;
+        const studentId = currentUser.student.studentId;
         const response = await apiService.getStudentFees(studentId);
         
         if (response.fees) {

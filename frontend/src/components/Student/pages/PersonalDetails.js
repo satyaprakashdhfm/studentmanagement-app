@@ -15,7 +15,7 @@ const PersonalDetails = () => {
           return;
         }
 
-        const studentId = currentUser.student.id;
+        const studentId = currentUser.student.studentId;
         const response = await apiService.getStudent(studentId);
         
         if (response.success) {

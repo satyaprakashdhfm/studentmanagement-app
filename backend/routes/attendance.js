@@ -53,51 +53,107 @@ router.get('/', authenticateToken, async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
+    // For class-specific queries, show ALL records without pagination
+    // Also disable pagination for general queries when high limit is requested
+    const shouldPaginate = !classId && limitNum <= 1000;
+
+        // Build WHERE conditions
+    let whereConditions = 'WHERE 1=1';
+
+    if (studentId) {
+      whereConditions += ` AND a.student_id = '${studentId.replace(/'/g, "''")}'`;
+    }
+
+    if (classId) {
+      whereConditions += ` AND a.class_id = ${parseInt(classId)}`;
+    }
+
+    if (teacherId) {
+      whereConditions += ` AND a.marked_by = '${teacherId.replace(/'/g, "''")}'`;
+    }
+
+    if (status) {
+      whereConditions += ` AND a.status = '${status.replace(/'/g, "''")}'`;
+    }
+
+    if (startDate) {
+      whereConditions += ` AND a.date >= '${startDate.replace(/'/g, "''")}'`;
+    }
+
+    if (endDate) {
+      whereConditions += ` AND a.date <= '${endDate.replace(/'/g, "''")}'`;
+    }
+
+    // Add pagination
+    let limitOffset = '';
+    if (shouldPaginate) {
+      limitOffset = ` LIMIT ${limitNum} OFFSET ${skip}`;
+    }
+
     // Get attendance records with pagination and relations
-    const attendance = await prisma.attendance.findMany({
-      where,
-      include: {
-        student: {
-          select: {
-            name: true,
-            email: true
-          }
-        },
-        class: {
-          select: {
-            className: true,
-            section: true,
-            academicYear: true
-          }
-        },
-        markedByUser: {
-          select: {
-            username: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      },
-      orderBy: [
-        { date: 'desc' },
-        { period: 'asc' }
-      ],
-      skip,
-      take: limitNum
-    });
+    const query = `
+      SELECT
+        a.attendance_id, a.student_id, a.class_id, a.date, a.period, a.status, a.marked_by, a.timestamp, a.created_at, a.updated_at, a.schedule_id,
+        COALESCE(s.subject_code, a.subject_code) as subject_code,
+        sub.subject_name as subject_name,
+        sub.subject_code as subject_code_key,
+        st.name as student_name,
+        st.email as student_email,
+        c.class_name as class_name,
+        c.section as section,
+        c.academic_year as academic_year,
+        u.username as marked_by_username,
+        u.first_name as marked_by_firstname,
+        u.last_name as marked_by_lastname
+      FROM attendance a
+      LEFT JOIN schedule_data s ON a.schedule_id = s.schedule_id
+      LEFT JOIN subjects sub ON COALESCE(s.subject_code, a.subject_code) = sub.subject_code
+      LEFT JOIN students st ON a.student_id = st.student_id
+      LEFT JOIN classes c ON a.class_id = c.class_id
+      LEFT JOIN users u ON a.marked_by = u.username
+      ${whereConditions}
+      ORDER BY a.date DESC, a.period ASC
+      ${limitOffset}
+    `;
+
+    const attendance = await prisma.$queryRawUnsafe(query);
 
     // Get total count
     const total = await prisma.attendance.count({ where });
 
-    // Convert BigInt IDs to Numbers for JSON serialization
-    const attendanceWithNumericIds = attendance.map(record => {
-      return JSON.parse(JSON.stringify(record, (key, value) =>
-        typeof value === 'bigint' ? Number(value) : value
-      ));
-    });
+    // Format the raw query results to match the expected structure
+    const formattedAttendance = attendance.map(record => ({
+      attendanceId: record.attendance_id,
+      studentId: record.student_id,
+      classId: record.class_id,
+      date: record.date.toISOString().split('T')[0],
+      period: record.period,
+      status: record.status,
+      markedBy: record.marked_by,
+      timestamp: record.timestamp,
+      createdAt: record.created_at,
+      updatedAt: record.updated_at,
+      scheduleId: record.schedule_id,
+      subjectCode: record.subject_code || record.subject_code_key,
+      subjectName: record.subject_name,
+      student: {
+        name: record.student_name,
+        email: record.student_email
+      },
+      class: {
+        className: record.class_name,
+        section: record.section,
+        academicYear: record.academic_year
+      },
+      markedByUser: {
+        username: record.marked_by_username,
+        firstName: record.marked_by_firstname,
+        lastName: record.marked_by_lastname
+      }
+    }));
 
     res.json({
-      attendance: attendanceWithNumericIds,
+      attendance: formattedAttendance,
       pagination: {
         page: pageNum,
         limit: limitNum,

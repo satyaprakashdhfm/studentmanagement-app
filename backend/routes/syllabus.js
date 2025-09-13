@@ -51,6 +51,35 @@ router.get('/', authenticateToken, async (req, res) => {
       where.subjectCode = { in: allowedSubjectCodes };
     }
     
+    // Add student authorization - students can only see syllabus for their class and grade subjects
+    if (user.role === 'student') {
+      // Get student's class to determine grade
+      const student = await prisma.student.findUnique({
+        where: { studentId: user.username },
+        select: { classId: true }
+      });
+      
+      if (!student) {
+        return res.status(404).json({ error: 'Student not found' });
+      }
+      
+      const classData = await prisma.class.findUnique({
+        where: { classId: student.classId },
+        select: { className: true }
+      });
+      
+      if (!classData) {
+        return res.status(404).json({ error: 'Class not found' });
+      }
+      
+      // Extract grade from class name (e.g., "8 Grade" -> "8")
+      const grade = classData.className.split(' ')[0];
+      
+      // Filter syllabus by student's class and grade subjects
+      where.classId = student.classId;
+      where.subjectCode = { startsWith: `${grade}_` };
+    }
+    
     // Add filters
     if (classId) {
       where.classId = parseInt(classId);

@@ -125,6 +125,28 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
     const { studentId } = req.params;
     const { subjectCode, examinationType, page = 1, limit = 50 } = req.query;
     
+    // Get student's class to determine grade for subject filtering
+    const student = await prisma.student.findUnique({
+      where: { studentId: studentId },
+      select: { classId: true }
+    });
+    
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    
+    const classData = await prisma.class.findUnique({
+      where: { classId: student.classId },
+      select: { className: true }
+    });
+    
+    if (!classData) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+    
+    // Extract grade from class name (e.g., "8 Grade" -> "8")
+    const grade = classData.className.split(' ')[0];
+    
     // Build where clause
     const where = {
       studentId: studentId
@@ -132,6 +154,8 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
     
     if (subjectCode) {
       where.subjectCode = subjectCode;
+    } else {
+      where.subjectCode = { startsWith: `${grade}_` };
     }
     
     if (examinationType) {
