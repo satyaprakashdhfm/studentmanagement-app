@@ -282,7 +282,7 @@ router.get('/teacher-schedule/:teacherId/:academicYear', authenticateToken, asyn
 
     const schedules = await prisma.scheduleData.findMany({
       where: {
-        teacherId: parseInt(teacherId),
+        teacherId: teacherId,
         academicYear
       },
       orderBy: [

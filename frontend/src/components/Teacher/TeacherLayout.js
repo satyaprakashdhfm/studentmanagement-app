@@ -16,7 +16,8 @@ const TeacherLayout = ({ children }) => {
     { path: '/teacher/attendance', label: 'Attendance Management', icon: '📅' },
     { path: '/teacher/fees', label: 'Fee Inquiry', icon: '💰' },
     { path: '/teacher/marks', label: 'Marks Management', icon: '📝' },
-    { path: '/teacher/syllabus', label: 'Syllabus Management', icon: '📚' }
+    { path: '/teacher/syllabus', label: 'Syllabus Management', icon: '📚' },
+    { path: '/teacher/timetable', label: 'Timetable', icon: '🕒' }
   ];
 
   return (

@@ -1,0 +1,25 @@
+/* Basic styles for teacher timetable */
+.table-container { overflow-x: hidden; }
+.schedule-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; table-layout: fixed; }
+.schedule-table th, .schedule-table td { border: 1px solid #e9ecef; padding: 6px 4px; text-align: center; vertical-align: middle; word-wrap: break-word; }
+.schedule-table th { background: #f8f9fa; font-weight: 600; font-size: 0.88rem; }
+
+/* Layout: first column is Day, remaining columns are periods. Adjust percentages so table fits common laptop widths */
+.schedule-table th:nth-child(1), .schedule-table td:nth-child(1) { width: 10%; }
+.schedule-table th:not(:first-child), .schedule-table td:not(:first-child) { width: 9%; }
+
+.schedule-table td { white-space: normal; }
+.content-card { padding: 10px; background: var(--card-bg); border-radius: 6px; }
+
+/* Tighter compact mode for smaller screens/laptops */
+@media (max-width: 1400px) {
+	.schedule-table { font-size: 0.82rem; }
+	.schedule-table th, .schedule-table td { padding: 5px 3px; }
+	.schedule-table th:nth-child(1), .schedule-table td:nth-child(1) { width: 12%; }
+	.schedule-table th:not(:first-child), .schedule-table td:not(:first-child) { width: calc(88% / 10); }
+}
+
+/* Extra small screens: allow horizontal scroll if really needed */
+@media (max-width: 900px) {
+	.table-container { overflow-x: auto; }
+}

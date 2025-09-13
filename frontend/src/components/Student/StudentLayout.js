@@ -13,9 +13,10 @@ const StudentLayout = ({ children }) => {
 
   const sidebarItems = [
     { path: '/student/personal-details', label: 'Personal Details', icon: '👤' },
-    { path: '/student/attendance', label: 'Attendance Tracker', icon: '📅' },
+    { path: '/student/timetable', label: 'Timetable', icon: '📅' },
+    { path: '/student/attendance', label: 'Attendance Tracker', icon: '�' },
     { path: '/student/fees', label: 'Fee History', icon: '💰' },
-    { path: '/student/performance', label: 'Academic Performance', icon: '📊' },
+    { path: '/student/performance', label: 'Academic Performance', icon: '�' },
     { path: '/student/syllabus', label: 'Syllabus Progress', icon: '📚' }
   ];
 

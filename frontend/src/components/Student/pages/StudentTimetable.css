@@ -1,0 +1,176 @@
+.student-timetable {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.student-timetable h2 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.class-info {
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 16px;
+  color: #555;
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+.timetable-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  table-layout: fixed;
+}
+
+.schedule-table th,
+.schedule-table td {
+  padding: 8px 4px;
+  text-align: center;
+  border: 1px solid #ddd;
+  font-size: 12px;
+  word-wrap: break-word;
+}
+
+.schedule-table th {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.schedule-table th small {
+  font-size: 10px;
+  font-weight: normal;
+  display: block;
+  margin-top: 2px;
+}
+
+.day-column {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #2c3e50;
+  width: 80px;
+  min-width: 80px;
+}
+
+.schedule-cell {
+  height: 60px;
+  vertical-align: middle;
+  position: relative;
+}
+
+.schedule-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 2px;
+}
+
+.subject-info {
+  font-weight: 600;
+  color: #2c3e50;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.study-lunch {
+  font-weight: 500;
+  color: #666;
+  background: #f0f0f0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  text-align: center;
+}
+
+.no-class {
+  color: #999;
+  font-size: 14px;
+}
+
+.loading {
+  text-align: center;
+  padding: 50px;
+  font-size: 18px;
+  color: #666;
+}
+
+.error {
+  text-align: center;
+  padding: 50px;
+  font-size: 18px;
+  color: #e74c3c;
+  background: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-radius: 5px;
+  margin: 20px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .student-timetable {
+    padding: 10px;
+  }
+
+  .schedule-table th,
+  .schedule-table td {
+    padding: 4px 2px;
+    font-size: 10px;
+  }
+
+  .schedule-table th small {
+    font-size: 8px;
+  }
+
+  .day-column {
+    width: 60px;
+    min-width: 60px;
+  }
+
+  .schedule-cell {
+    height: 50px;
+  }
+
+  .subject-info,
+  .study-lunch {
+    font-size: 9px;
+    padding: 2px 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .schedule-table th,
+  .schedule-table td {
+    font-size: 9px;
+    padding: 2px 1px;
+  }
+
+  .day-column {
+    width: 50px;
+    min-width: 50px;
+  }
+
+  .schedule-cell {
+    height: 40px;
+  }
+}

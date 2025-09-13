@@ -6,6 +6,7 @@ import AttendanceManagement from './pages/AttendanceManagement';
 import FeeInquiry from './pages/FeeInquiry';
 import MarksManagement from './pages/MarksManagement';
 import SyllabusManagement from './pages/SyllabusManagement';
+import TeacherTimetable from './pages/TeacherTimetable';
 
 const TeacherDashboard = () => {
   return (
@@ -16,7 +17,8 @@ const TeacherDashboard = () => {
         <Route path="/attendance" element={<AttendanceManagement />} />
         <Route path="/fees" element={<FeeInquiry />} />
         <Route path="/marks" element={<MarksManagement />} />
-        <Route path="/syllabus" element={<SyllabusManagement />} />
+  <Route path="/syllabus" element={<SyllabusManagement />} />
+  <Route path="/timetable" element={<TeacherTimetable />} />
       </Routes>
     </TeacherLayout>
   );
