@@ -81,11 +81,6 @@ router.get('/schedule/:academicYear', authenticateToken, async (req, res) => {
 
     const schedules = await prisma.scheduleData.findMany({
       where: { academicYear },
-      include: {
-        class: true,
-        subject: true,
-        teacher: true
-      },
       orderBy: [
         { dayOfWeek: 'asc' },
         { startTime: 'asc' }
@@ -149,12 +144,7 @@ router.post('/schedule', authenticateToken, async (req, res) => {
 
     // Create the schedule entry
     const newSchedule = await prisma.scheduleData.create({
-      data: scheduleData,
-      include: {
-        class: true,
-        subject: true,
-        teacher: true
-      }
+      data: scheduleData
     });
 
     res.status(201).json({
@@ -237,12 +227,7 @@ router.put('/schedule/:id', authenticateToken, async (req, res) => {
     // Update the schedule entry
     const updatedSchedule = await prisma.scheduleData.update({
       where: { id: parseInt(id) },
-      data: updateData,
-      include: {
-        class: true,
-        subject: true,
-        teacher: true
-      }
+      data: updateData
     });
 
     res.json({
@@ -300,10 +285,6 @@ router.get('/teacher-schedule/:teacherId/:academicYear', authenticateToken, asyn
         teacherId: parseInt(teacherId),
         academicYear
       },
-      include: {
-        class: true,
-        subject: true
-      },
       orderBy: [
         { dayOfWeek: 'asc' },
         { startTime: 'asc' }
@@ -330,10 +311,6 @@ router.get('/class-schedule/:classId/:academicYear', authenticateToken, async (r
       where: {
         classId: parseInt(classId),
         academicYear
-      },
-      include: {
-        subject: true,
-        teacher: true
       },
       orderBy: [
         { dayOfWeek: 'asc' },

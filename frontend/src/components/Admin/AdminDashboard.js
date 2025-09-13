@@ -63,9 +63,9 @@ const AdminDashboard = () => {
             <Route path="/marks/grade/:grade" element={<MarksManagement />} />
             <Route path="/marks/class/:classId" element={<MarksManagement />} />
             <Route path="/teachers" element={<TeacherManagement />} />
-            <Route path="/time-management" element={<TimeManagement />} />
-            <Route path="/time-management/grade/:grade" element={<TimeManagement />} />
-            <Route path="/time-management/:classId/:section" element={<TimeManagement />} />
+            <Route path="/time-management" element={<TimeManagement key="default" />} />
+            <Route path="/time-management/grade/:grade" element={<TimeManagement key={window.location.pathname} />} />
+            <Route path="/time-management/:classId/:section" element={<TimeManagement key={window.location.pathname} />} />
             <Route path="/system-config" element={<SystemConfiguration />} />
             <Route path="/students" element={<StudentSummary />} />
             <Route path="/students/:classId" element={<StudentManagement />} />

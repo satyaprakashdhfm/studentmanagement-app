@@ -263,7 +263,7 @@ const AdminLayout = ({ children }) => {
 
             {/* Time Management with Dropdown */}
             <li>
-              <div 
+              <div
                 className={`dropdown-header ${location.pathname.includes('/admin/time-management') ? 'active' : ''}`}
                 onClick={handleTimeDropdownToggle}
               >
@@ -275,7 +275,7 @@ const AdminLayout = ({ children }) => {
                 <ul className="dropdown-menu">
                   {uniqueGrades.map(grade => (
                     <li key={grade}>
-                      <Link 
+                      <Link
                         to={`/admin/time-management/grade/${grade}`}
                         className={location.pathname === `/admin/time-management/grade/${grade}` ? 'active' : ''}
                         onClick={handleTimeNavigation}
