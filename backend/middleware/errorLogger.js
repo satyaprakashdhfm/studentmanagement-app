@@ -93,53 +93,71 @@ const errorLogger = (err, req, res, next) => {
 const requestTracker = (req, res, next) => {
   const requestId = `REQ_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   req.requestId = requestId;
-  
+
   // Track request start time
   req.startTime = Date.now();
-  
-  // Enhanced logging for specific routes that might have issues
-  const sensitiveRoutes = ['/api/students', '/api/auth', '/api/classes'];
-  const isSensitiveRoute = sensitiveRoutes.some(route => req.url.includes(route));
-  
-  if (isSensitiveRoute) {
-    console.log(`\n🔍 [TRACKING ${requestId}] ${req.method} ${req.url}`);
-    console.log(`   ⏰ Started at: ${new Date().toISOString()}`);
-    
-    if (req.user) {
-      console.log(`   👤 User: ${req.user.username} (${req.user.role})`);
+
+  // Log all API requests with detailed information
+  const timestamp = new Date().toISOString();
+  console.log(`\n🌐 [${timestamp}] ${req.method} ${req.url}`);
+  console.log(`   📱 User-Agent: ${req.get('User-Agent')?.substring(0, 50)}...`);
+  console.log(`   🔑 Auth: ${req.headers.authorization ? 'Bearer ***' : 'None'}`);
+  console.log(`   🌍 IP: ${req.ip || req.connection.remoteAddress}`);
+
+  // Log query parameters as JSON
+  if (Object.keys(req.query).length > 0) {
+    console.log(`   🔍 Query:`, JSON.stringify(req.query, null, 2));
+  }
+
+  // Log request body for POST/PUT/PATCH (but limit size)
+  if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body && Object.keys(req.body).length > 0) {
+    const bodyStr = JSON.stringify(req.body, null, 2);
+    if (bodyStr.length > 500) {
+      console.log(`   � Body: ${bodyStr.substring(0, 500)}... (truncated)`);
+    } else {
+      console.log(`   📦 Body:`, bodyStr);
     }
   }
-  
+
   // Override res.json to track response data
   const originalJson = res.json;
   res.json = function(data) {
-    if (isSensitiveRoute) {
-      const duration = Date.now() - req.startTime;
-      console.log(`   📤 Response Status: ${res.statusCode}`);
-      
-      if (data && typeof data === 'object') {
-        const keys = Object.keys(data);
-        console.log(`   🔑 Response Keys: [${keys.join(', ')}]`);
-        
-        if (data.success !== undefined) {
-          console.log(`   ✅ Success: ${data.success}`);
-        }
-        
-        if (data.data && Array.isArray(data.data)) {
-          console.log(`   📊 Data Count: ${data.data.length}`);
-        }
-        
-        if (data.error) {
-          console.log(`   ❌ Error: ${data.error}`);
-        }
+    const duration = Date.now() - req.startTime;
+
+    console.log(`   ✅ Response: ${res.statusCode} ${res.statusMessage || ''}`);
+
+    // Log response data
+    if (data && typeof data === 'object') {
+      const keys = Object.keys(data);
+      console.log(`   � Response Keys: [${keys.join(', ')}]`);
+
+      // Show pagination info if present
+      if (data.pagination) {
+        const { page, limit, total, pages } = data.pagination;
+        console.log(`   📄 Pagination: page ${page}/${pages}, total: ${total}`);
       }
-      
-      console.log(`   ⏱️  Total Duration: ${duration}ms\n`);
+
+      // Show response JSON (first 10 lines or limited size)
+      const responseStr = JSON.stringify(data, null, 2);
+      const lines = responseStr.split('\n');
+      const previewLines = lines.slice(0, 10);
+
+      if (lines.length > 10) {
+        console.log(`   � Response JSON (first 10 lines):`);
+        previewLines.forEach(line => console.log(`      ${line}`));
+        console.log(`      ... (${lines.length - 10} more lines)`);
+      } else if (responseStr.length > 1000) {
+        console.log(`   📄 Response JSON (truncated): ${responseStr.substring(0, 1000)}...`);
+      } else {
+        console.log(`   📄 Response JSON:`, responseStr);
+      }
     }
-    
+
+    console.log(`   ⏱️  Duration: ${duration}ms\n`);
+
     return originalJson.call(this, data);
   };
-  
+
   next();
 };
 

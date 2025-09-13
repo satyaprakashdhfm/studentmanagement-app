@@ -29,9 +29,13 @@ router.post('/login', loginValidationRules(), handleValidationErrors, async (req
   try {
     const { username, password } = req.body;
 
-    // Find user by username
+    // Find user by username with related data
     const user = await prisma.user.findUnique({
-      where: { username }
+      where: { username },
+      include: {
+        teachers: true,
+        students: true
+      }
     });
 
     if (!user) {
@@ -70,18 +74,28 @@ router.post('/login', loginValidationRules(), handleValidationErrors, async (req
       role: user.role 
     });
 
+    // Prepare user response with role-specific data
+    const userResponse = {
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+      lastLogin: user.lastLogin
+    };
+
+    // Add role-specific data
+    if (user.role === 'teacher' && user.teachers) {
+      userResponse.teacher = convertBigIntToNumber(user.teachers);
+    } else if (user.role === 'student' && user.students) {
+      userResponse.student = convertBigIntToNumber(user.students);
+    }
+
     res.json({
       success: true,
       message: 'Login successful',
       token,
-      user: {
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        lastLogin: user.lastLogin
-      }
+      user: userResponse
     });
 
   } catch (error) {

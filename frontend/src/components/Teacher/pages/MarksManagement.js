@@ -13,15 +13,32 @@ const MarksManagement = () => {
     const fetchMarks = async () => {
       try {
         setLoading(true);
-        const response = await apiService.getMarks();
-        console.log('Marks API response:', response);
         
-        // The marks API returns { marks: [...], pagination: {...} }
-        if (response.marks) {
-          setMarks(response.marks);
-        } else {
-          setError('Failed to load marks data');
+        // Get current teacher from localStorage
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const teacher = currentUser.teacher;
+        
+        if (!teacher || !teacher.subjectsHandled || teacher.subjectsHandled.length === 0) {
+          setError('Teacher subjects not found. Please login again.');
+          return;
         }
+        
+        // Fetch marks for subjects the teacher handles
+        const allMarks = [];
+        for (const subjectCode of teacher.subjectsHandled) {
+          try {
+            const response = await apiService.request(`/marks?subjectCode=${subjectCode}`);
+            if (response.marks) {
+              allMarks.push(...response.marks);
+            }
+          } catch (err) {
+            console.error(`Error fetching marks for subject ${subjectCode}:`, err);
+          }
+        }
+        
+        console.log('Teacher marks:', allMarks);
+        setMarks(allMarks);
+        
       } catch (err) {
         console.error('Error fetching marks:', err);
         setError('Failed to load marks data');

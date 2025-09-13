@@ -10,15 +10,42 @@ const FeeInquiry = () => {
     const fetchFees = async () => {
       try {
         setLoading(true);
-        const response = await apiService.getFees();
-        console.log('Fees API response:', response);
         
-        // The fees API returns { fees: [...], pagination: {...} }
-        if (response.fees) {
-          setFees(response.fees);
-        } else {
-          setError('Failed to load fee data');
+        // Get current teacher from localStorage
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const teacher = currentUser.teacher;
+        
+        if (!teacher || !teacher.classTeacherOf) {
+          setError('Teacher information not found. Please login again.');
+          return;
         }
+        
+        // Parse classTeacherOf string to get class IDs
+        // Format: "Class 242508002, Class 242510002"
+        const classMatches = teacher.classTeacherOf.match(/Class (\d+)/g);
+        if (!classMatches || classMatches.length === 0) {
+          setError('No classes found for this teacher.');
+          return;
+        }
+        
+        const classIds = classMatches.map(match => match.replace('Class ', ''));
+        
+        // Fetch fees for each class the teacher is class teacher of
+        const allFees = [];
+        for (const classId of classIds) {
+          try {
+            const response = await apiService.request(`/fees?classId=${classId}`);
+            if (response.fees) {
+              allFees.push(...response.fees);
+            }
+          } catch (err) {
+            console.error(`Error fetching fees for class ${classId}:`, err);
+          }
+        }
+        
+        console.log('Teacher fees:', allFees);
+        setFees(allFees);
+        
       } catch (err) {
         console.error('Error fetching fees:', err);
         setError('Failed to load fee data');

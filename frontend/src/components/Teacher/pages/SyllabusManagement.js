@@ -10,15 +10,32 @@ const SyllabusManagement = () => {
     const fetchSyllabusData = async () => {
       try {
         setLoading(true);
-        const response = await apiService.getSyllabus();
-        console.log('Syllabus API response:', response);
         
-        // The syllabus API returns { syllabus: [...], pagination: {...} }
-        if (response.syllabus) {
-          setSyllabusData(response.syllabus);
-        } else {
-          setError('Failed to load syllabus data');
+        // Get current teacher from localStorage
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const teacher = currentUser.teacher;
+        
+        if (!teacher || !teacher.subjectsHandled || teacher.subjectsHandled.length === 0) {
+          setError('Teacher subjects not found. Please login again.');
+          return;
         }
+        
+        // Fetch syllabus for subjects the teacher handles
+        const allSyllabus = [];
+        for (const subjectCode of teacher.subjectsHandled) {
+          try {
+            const response = await apiService.request(`/syllabus?subjectCode=${subjectCode}`);
+            if (response.syllabus) {
+              allSyllabus.push(...response.syllabus);
+            }
+          } catch (err) {
+            console.error(`Error fetching syllabus for subject ${subjectCode}:`, err);
+          }
+        }
+        
+        console.log('Teacher syllabus:', allSyllabus);
+        setSyllabusData(allSyllabus);
+        
       } catch (err) {
         console.error('Error fetching syllabus:', err);
         setError('Failed to load syllabus data');

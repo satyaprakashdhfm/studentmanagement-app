@@ -9,6 +9,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const { 
       classId, 
       subjectId,
+      subjectCode,
       teacherId,
       completionStatus,
       page = 1, 
@@ -25,6 +26,10 @@ router.get('/', authenticateToken, async (req, res) => {
     
     if (subjectId) {
       where.subjectId = parseInt(subjectId);
+    }
+    
+    if (subjectCode) {
+      where.subjectCode = subjectCode;
     }
     
     if (teacherId) {

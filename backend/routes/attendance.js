@@ -302,6 +302,23 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    // Get the day of week from the date (0 = Sunday, 1 = Monday, etc.)
+    const attendanceDate = new Date(date);
+    const dayOfWeek = attendanceDate.getDay();
+    // Convert to match schedule_data format (1 = Monday, 7 = Sunday)
+    const scheduleDayOfWeek = dayOfWeek === 0 ? 7 : dayOfWeek;
+
+    // Find the schedule for this class, day, and period
+    const schedule = await prisma.scheduleData.findFirst({
+      where: {
+        classId: parseInt(classId),
+        dayOfWeek: scheduleDayOfWeek,
+        slotNames: {
+          has: `P${period}`
+        }
+      }
+    });
+
     // Create attendance record
     const newAttendance = await prisma.attendance.create({
       data: {
@@ -311,7 +328,8 @@ router.post('/', authenticateToken, async (req, res) => {
         period: parseInt(period),
         status,
         markedBy,
-        timestamp: new Date()
+        timestamp: new Date(),
+        scheduleId: schedule?.scheduleId || null
       },
       include: {
         student: {
