@@ -16,6 +16,9 @@ router.get('/', authenticateToken, async (req, res) => {
       limit = 50 
     } = req.query;
     
+        // Get user info from token
+    const user = req.user;
+    
     // Build where clause
     const where = {};
     
@@ -265,11 +268,6 @@ router.post('/', authenticateToken, async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!studentId || !classId || !subjectCode || !teacherId || !examinationType || marksObtained === undefined || !maxMarks) {
-      return res.status(400).json({ 
-        error: 'Missing required fields: studentId, classId, subjectCode, teacherId, examinationType, marksObtained, maxMarks' 
-      });
-    }
 
     // Check if student exists
     const student = await prisma.student.findUnique({
@@ -400,9 +398,6 @@ router.post('/bulk', authenticateToken, async (req, res) => {
     }
 
     // Validate common fields
-    if (!classId || !subjectCode || !examinationType || !maxMarks || !teacherId) {
-      return res.status(400).json({ error: 'All required common fields must be provided' });
-    }
 
     // Validate teacher exists
     const teacher = await prisma.teacher.findUnique({
@@ -517,16 +512,9 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const markId = req.params.id;
-    const updateData = req.body;
+    const { marksObtained, maxMarks, grade, examinationType } = req.body;
 
     // Check if mark exists
-    const existingMark = await prisma.marks.findUnique({
-      where: { marksId: markId }
-    });
-
-    if (!existingMark) {
-      return res.status(404).json({ error: 'Mark not found' });
-    }
 
     // Validate marks if provided
     const newMarksObtained = marksObtained !== undefined ? parseInt(marksObtained) : existingMark.marksObtained;
@@ -607,13 +595,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const markId = req.params.id;
 
     // Check if mark exists
-    const existingMark = await prisma.mark.findUnique({
-      where: { marksId: markId }
-    });
-
-    if (!existingMark) {
-      return res.status(404).json({ error: 'Mark not found' });
-    }
 
     // Delete mark
     await prisma.mark.delete({
