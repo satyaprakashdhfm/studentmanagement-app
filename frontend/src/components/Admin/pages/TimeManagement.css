@@ -301,6 +301,12 @@
   font-weight: 600;
   font-size: 0.85rem;
 }
+
+.period-header .period-title {
+  color: #000000 !important;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
 .schedule-table th:last-child {
   border-right: none;
 }
