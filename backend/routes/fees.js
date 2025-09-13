@@ -13,11 +13,35 @@ router.get('/', authenticateToken, async (req, res) => {
       academicYear,
       paymentStatus,
       page = 1, 
-      limit = 50 
+      limit = 50,
+      all = 'false'
     } = req.query;
+    
+    // Get user info from token
+    const user = req.user;
     
     // Build where clause
     const where = {};
+    
+    // Add teacher authorization - teachers can only see fees for their classes
+    if (user.role === 'teacher') {
+      const teacher = await prisma.teacher.findUnique({
+        where: { teacherId: user.username }
+      });
+      
+      if (!teacher || !teacher.classTeacherOf) {
+        return res.status(403).json({ error: 'Access denied. No classes assigned as class teacher.' });
+      }
+      
+      // Parse class IDs from classTeacherOf string
+      const classMatches = teacher.classTeacherOf.match(/Class (\d+)/g);
+      if (!classMatches || classMatches.length === 0) {
+        return res.status(403).json({ error: 'Access denied. No classes assigned as class teacher.' });
+      }
+      
+      const allowedClassIds = classMatches.map(match => parseInt(match.replace('Class ', '')));
+      where.classId = { in: allowedClassIds };
+    }
     
     // Add filters
     if (studentId) {
@@ -50,10 +74,12 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     }
 
-    // Calculate pagination
+    // Calculate pagination or skip if all records requested
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    const getAllRecords = all === 'true';
+    const skip = getAllRecords ? undefined : (pageNum - 1) * limitNum;
+    const take = getAllRecords ? undefined : limitNum;
 
     // Get fee records with pagination and relations
     const fees = await prisma.fee.findMany({
@@ -83,7 +109,7 @@ router.get('/', authenticateToken, async (req, res) => {
         { createdAt: 'desc' }
       ],
       skip,
-      take: limitNum
+      take
     });
 
     // Get total count
@@ -98,15 +124,21 @@ router.get('/', authenticateToken, async (req, res) => {
       }));
     });
 
-    res.json({
-      fees: feesWithNumericIds,
-      pagination: {
+    const response = {
+      fees: feesWithNumericIds
+    };
+
+    // Include pagination info only when not requesting all records
+    if (!getAllRecords) {
+      response.pagination = {
         page: pageNum,
         limit: limitNum,
         total: Number(total),
         pages: Math.ceil(Number(total) / limitNum)
-      }
-    });
+      };
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('Get fees error:', error);
@@ -126,10 +158,33 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
       limit = 50 
     } = req.query;
     
+    // Get user info from token
+    const user = req.user;
+    
     // Build where clause
     const where = {
       studentId: studentId
     };
+    
+    // Add teacher authorization - teachers can only see fees for students in their classes
+    if (user.role === 'teacher') {
+      const teacher = await prisma.teacher.findUnique({
+        where: { teacherId: user.username }
+      });
+      
+      if (!teacher || !teacher.classTeacherOf) {
+        return res.status(403).json({ error: 'Access denied. No classes assigned as class teacher.' });
+      }
+      
+      // Parse class IDs from classTeacherOf string
+      const classMatches = teacher.classTeacherOf.match(/Class (\d+)/g);
+      if (!classMatches || classMatches.length === 0) {
+        return res.status(403).json({ error: 'Access denied. No classes assigned as class teacher.' });
+      }
+      
+      const allowedClassIds = classMatches.map(match => parseInt(match.replace('Class ', '')));
+      where.classId = { in: allowedClassIds };
+    }
     
     // Add filters
     if (academicYear) {
