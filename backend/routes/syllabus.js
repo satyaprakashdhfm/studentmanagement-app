@@ -13,11 +13,43 @@ router.get('/', authenticateToken, async (req, res) => {
       teacherId,
       completionStatus,
       page = 1, 
-      limit = 50 
+      limit = 50,
+      all = 'false'
     } = req.query;
+    
+    // Get user info from token
+    const user = req.user;
     
     // Build where clause
     const where = {};
+    
+    // Add teacher authorization - teachers can only see syllabus for their assigned classes and subjects
+    if (user.role === 'teacher') {
+      // Get teacher's schedule data to determine which classes and subjects they teach
+      const teacherSchedules = await prisma.scheduleData.findMany({
+        where: {
+          teacherId: user.username,
+          isActive: true
+        },
+        select: {
+          classId: true,
+          subjectCode: true
+        },
+        distinct: ['classId', 'subjectCode']
+      });
+      
+      if (teacherSchedules.length === 0) {
+        return res.status(403).json({ error: 'Access denied. No classes or subjects assigned.' });
+      }
+      
+      // Create arrays of allowed class IDs and subject codes
+      const allowedClassIds = [...new Set(teacherSchedules.map(s => s.classId))];
+      const allowedSubjectCodes = [...new Set(teacherSchedules.map(s => s.subjectCode))];
+      
+      // Filter syllabus by teacher's assigned classes and subjects
+      where.classId = { in: allowedClassIds };
+      where.subjectCode = { in: allowedSubjectCodes };
+    }
     
     // Add filters
     if (classId) {
@@ -40,10 +72,12 @@ router.get('/', authenticateToken, async (req, res) => {
       where.completionStatus = completionStatus;
     }
 
-    // Calculate pagination
+    // Calculate pagination or skip if all records requested
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    const getAllRecords = all === 'true';
+    const skip = getAllRecords ? undefined : (pageNum - 1) * limitNum;
+    const take = getAllRecords ? undefined : limitNum;
 
     // Get syllabus records with pagination and relations
     const syllabus = await prisma.syllabus.findMany({
@@ -73,21 +107,27 @@ router.get('/', authenticateToken, async (req, res) => {
         { lastUpdated: 'desc' }
       ],
       skip,
-      take: limitNum
+      take
     });
 
     // Get total count
     const total = await prisma.syllabus.count({ where });
 
-    res.json({
-      syllabus,
-      pagination: {
+    const response = {
+      syllabus: syllabus
+    };
+
+    // Include pagination info only when not requesting all records
+    if (!getAllRecords) {
+      response.pagination = {
         page: pageNum,
         limit: limitNum,
         total,
         pages: Math.ceil(total / limitNum)
-      }
-    });
+      };
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('Get syllabus error:', error);
@@ -262,6 +302,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       teacherId 
     } = req.body;
 
+    // Get user info from token
+    const user = req.user;
+
     // Check if syllabus record exists
     const existingSyllabus = await prisma.syllabus.findUnique({
       where: { syllabusId: parseInt(id) }
@@ -269,6 +312,32 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     if (!existingSyllabus) {
       return res.status(404).json({ error: 'Syllabus record not found' });
+    }
+
+    // Add teacher authorization - teachers can only update syllabus for their assigned classes and subjects
+    if (user.role === 'teacher') {
+      // Get teacher's schedule data to determine which classes and subjects they teach
+      const teacherSchedules = await prisma.scheduleData.findMany({
+        where: {
+          teacherId: user.username,
+          isActive: true
+        },
+        select: {
+          classId: true,
+          subjectCode: true
+        },
+        distinct: ['classId', 'subjectCode']
+      });
+      
+      // Check if teacher is assigned to this class and subject
+      const isAuthorized = teacherSchedules.some(schedule => 
+        schedule.classId === existingSyllabus.classId && 
+        schedule.subjectCode === existingSyllabus.subjectCode
+      );
+      
+      if (!isAuthorized) {
+        return res.status(403).json({ error: 'Access denied. You can only update syllabus for your assigned classes and subjects.' });
+      }
     }
 
     // Validate completion percentage if provided
