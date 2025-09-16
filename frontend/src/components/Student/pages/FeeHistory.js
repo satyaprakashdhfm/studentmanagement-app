@@ -5,6 +5,39 @@ const FeeHistory = () => {
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [paymentLoading, setPaymentLoading] = useState({});
+
+  const handlePayment = async (fee) => {
+    setPaymentLoading(prev => ({ ...prev, [fee.id]: true }));
+    
+    try {
+      const paymentData = {
+        amountPaid: fee.balance,
+        paymentMethod: 'online'
+      };
+
+      const response = await apiService.recordPayment(fee.id, paymentData);
+      
+      if (response && response.fee) {
+        // Update the fee in the state
+        setFees(prevFees => 
+          prevFees.map(f => 
+            f.id === fee.id 
+              ? { ...response.fee, id: response.fee.feeId } 
+              : f
+          )
+        );
+        
+        // Show success message (you can add a toast notification here)
+        alert('Payment successful! The fee has been paid.');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('Payment failed. Please try again.');
+    } finally {
+      setPaymentLoading(prev => ({ ...prev, [fee.id]: false }));
+    }
+  };
 
   useEffect(() => {
     const fetchFeeHistory = async () => {
@@ -19,7 +52,12 @@ const FeeHistory = () => {
         const response = await apiService.getStudentFees(studentId);
         
         if (response.fees) {
-          setFees(response.fees);
+          // Map the fees to include the feeId as id for easier handling
+          const feesWithId = response.fees.map(fee => ({
+            ...fee,
+            id: fee.feeId
+          }));
+          setFees(feesWithId);
         } else {
           setError('Failed to fetch fee history');
         }
@@ -95,6 +133,7 @@ const FeeHistory = () => {
               <th>Balance</th>
               <th>Academic Year</th>
               <th>Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -121,6 +160,45 @@ const FeeHistory = () => {
                     {fee.balance === 0 ? 'PAID' : 'PENDING'}
                   </span>
                 </td>
+                <td>
+                  {fee.balance > 0 ? (
+                    <button
+                      onClick={() => handlePayment(fee)}
+                      disabled={paymentLoading[fee.id]}
+                      style={{
+                        backgroundColor: paymentLoading[fee.id] ? '#95a5a6' : '#27ae60',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        cursor: paymentLoading[fee.id] ? 'not-allowed' : 'pointer',
+                        transition: 'background-color 0.3s ease'
+                      }}
+                      onMouseOver={(e) => {
+                        if (!paymentLoading[fee.id]) {
+                          e.target.style.backgroundColor = '#219a52';
+                        }
+                      }}
+                      onMouseOut={(e) => {
+                        if (!paymentLoading[fee.id]) {
+                          e.target.style.backgroundColor = '#27ae60';
+                        }
+                      }}
+                    >
+                      {paymentLoading[fee.id] ? 'Processing...' : `Pay ₹${Number(fee.balance || 0).toLocaleString()}`}
+                    </button>
+                  ) : (
+                    <span style={{
+                      color: '#27ae60',
+                      fontSize: '12px',
+                      fontWeight: 'bold'
+                    }}>
+                      ✓ Paid
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -131,10 +209,10 @@ const FeeHistory = () => {
       <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#e8f4f8', borderRadius: '8px' }}>
         <h4 style={{ color: '#2c3e50', marginBottom: '10px' }}>Payment Instructions</h4>
         <ul style={{ color: '#555', lineHeight: '1.6' }}>
-          <li>Fees can be paid online through the school portal or at the school office</li>
-          <li>Please keep payment receipts for your records</li>
-          <li>Late payment charges may apply after the due date</li>
-          <li>For any fee-related queries, contact the accounts department</li>
+          <li>Click the "Pay" button next to any pending fee to make an online payment</li>
+          <li>Payments are processed instantly and will reflect immediately in your account</li>
+          <li>You will receive a confirmation after successful payment</li>
+          <li>For any payment-related queries, contact the accounts department</li>
         </ul>
       </div>
     </div>

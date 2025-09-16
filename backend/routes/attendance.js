@@ -53,9 +53,9 @@ router.get('/', authenticateToken, async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // For class-specific queries, show ALL records without pagination
-    // Also disable pagination for general queries when high limit is requested
-    const shouldPaginate = !classId && limitNum <= 1000;
+    // For class-specific queries, student-specific queries, or when high limit is requested, show ALL records without pagination
+    // This ensures attendance tracker gets full academic year data
+    const shouldPaginate = !classId && !studentId && limitNum <= 1000;
 
         // Build WHERE conditions
     let whereConditions = 'WHERE 1=1';

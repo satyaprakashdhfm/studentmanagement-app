@@ -312,6 +312,20 @@ router.get('/class-schedule/:classId/:academicYear', authenticateToken, async (r
         classId: parseInt(classId),
         academicYear
       },
+      include: {
+        teacher: {
+          select: {
+            teacherId: true,
+            name: true
+          }
+        },
+        subject: {
+          select: {
+            subjectCode: true,
+            subjectName: true
+          }
+        }
+      },
       orderBy: [
         { dayOfWeek: 'asc' },
         { startTime: 'asc' }

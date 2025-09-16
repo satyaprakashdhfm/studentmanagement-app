@@ -165,25 +165,113 @@ const AcademicPerformance = () => {
 
   return (
     <div className="content-card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>📊 Academic Performance</h2>
-        <div style={{ fontSize: '14px', color: '#7f8c8d' }}>
-          View your marks and grades across all subjects
+      <style>
+        {`
+          .performance-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+          }
+          
+          .performance-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          }
+          
+          .data-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            font-weight: 600;
+          }
+          
+          .data-table tbody tr:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.01);
+            transition: all 0.2s ease;
+          }
+          
+          .grade-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 45px;
+            height: 30px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+        `}
+      </style>
+      
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <div>
+          <h2 style={{ margin: 0, color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            📊 Academic Performance
+          </h2>
+          <p style={{ margin: '5px 0 0 0', color: '#7f8c8d', fontSize: '14px' }}>
+            Track your academic progress and performance across all examinations
+          </p>
+        </div>
+        <div style={{
+          padding: '10px 15px',
+          backgroundColor: '#3498db',
+          color: 'white',
+          borderRadius: '20px',
+          fontSize: '14px',
+          fontWeight: '600'
+        }}>
+          {examMarks.length} Subjects
         </div>
       </div>
       
       {/* Examination Type Selector */}
-      <div style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-        <h3 style={{ marginBottom: '15px', color: '#2c3e50' }}>📝 Select Examination Type:</h3>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={selectedExam} onChange={(e) => setSelectedExam(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #dfe6e9' }}>
-            {examinationTypes.map(examType => (
-              <option key={examType} value={examType}>{examType}</option>
-            ))}
-          </select>
+      <div style={{ marginBottom: '30px', padding: '25px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e9ecef', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+        <h3 style={{ marginBottom: '20px', color: '#2c3e50', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          📝 Examination Selection
+        </h3>
+        <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <label style={{ fontSize: '14px', color: '#555', fontWeight: '500' }}>Choose Exam:</label>
+            <select 
+              value={selectedExam} 
+              onChange={(e) => setSelectedExam(e.target.value)} 
+              style={{ 
+                padding: '12px 15px', 
+                borderRadius: '8px', 
+                border: '2px solid #dfe6e9',
+                fontSize: '14px',
+                fontWeight: '500',
+                backgroundColor: '#fff',
+                cursor: 'pointer',
+                minWidth: '150px'
+              }}
+            >
+              {examinationTypes.map(examType => (
+                <option key={examType} value={examType}>{examType}</option>
+              ))}
+            </select>
+          </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
-            <button onClick={exportCSV} style={{ padding: '8px 12px', borderRadius: '6px', border: 'none', background: '#2ecc71', color: 'white', cursor: 'pointer' }}>Export CSV</button>
+          <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto' }}>
+            <button 
+              onClick={exportCSV} 
+              style={{ 
+                padding: '12px 18px', 
+                borderRadius: '8px', 
+                border: 'none', 
+                background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)', 
+                color: 'white', 
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 4px rgba(46, 204, 113, 0.3)'
+              }}
+            >
+              📥 Export CSV
+            </button>
           </div>
         </div>
       </div>
@@ -263,69 +351,6 @@ const AcademicPerformance = () => {
             <div>No marks found for {selectedExam} examination</div>
           </div>
         )}
-      </div>
-
-      {/* Overall Performance Summary */}
-      <div style={{ marginTop: '40px' }}>
-        <h3 style={{ marginBottom: '20px', color: '#2c3e50', borderBottom: '2px solid #3498db', paddingBottom: '10px' }}>
-          📊 Overall Performance Summary
-        </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
-          {overallPerformance.map((performance) => (
-            <div 
-              key={performance.examType}
-              style={{
-                padding: '25px',
-                backgroundColor: '#fff',
-                borderRadius: '12px',
-                textAlign: 'center',
-                border: '1px solid #e9ecef',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                transition: 'transform 0.2s'
-              }}
-            >
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2c3e50', marginBottom: '10px' }}>
-                {performance.examType}
-              </div>
-              <div style={{ 
-                fontSize: '32px', 
-                fontWeight: 'bold', 
-                color: performance.percentage >= 75 ? '#27ae60' : performance.percentage >= 60 ? '#f39c12' : '#e74c3c',
-                marginBottom: '8px' 
-              }}>
-                {performance.percentage}%
-              </div>
-              <div style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '5px' }}>
-                {performance.totalMarks}/{performance.maxMarks} marks
-              </div>
-              <div style={{ fontSize: '12px', color: '#95a5a6' }}>
-                {performance.subjects} subject{performance.subjects !== 1 ? 's' : ''}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Performance Insights */}
-      <div style={{ marginTop: '40px', padding: '30px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
-        <h4 style={{ color: '#2c3e50', marginBottom: '15px', textAlign: 'center' }}>🎯 Performance Insights</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', marginBottom: '5px' }}>📈</div>
-            <div style={{ fontSize: '14px', color: '#7f8c8d' }}>Track your progress</div>
-            <div style={{ fontSize: '12px', color: '#95a5a6' }}>Monitor improvement over time</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', marginBottom: '5px' }}>🎓</div>
-            <div style={{ fontSize: '14px', color: '#7f8c8d' }}>Subject-wise analysis</div>
-            <div style={{ fontSize: '12px', color: '#95a5a6' }}>Identify strengths & weaknesses</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '24px', marginBottom: '5px' }}>📊</div>
-            <div style={{ fontSize: '14px', color: '#7f8c8d' }}>Grade distribution</div>
-            <div style={{ fontSize: '12px', color: '#95a5a6' }}>Visual performance metrics</div>
-          </div>
-        </div>
       </div>
     </div>
   );

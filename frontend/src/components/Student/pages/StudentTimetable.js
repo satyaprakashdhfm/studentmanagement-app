@@ -8,7 +8,7 @@ const StudentTimetable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
   const subjectNames = {
     '8_MATH': 'Mathematics',
@@ -129,9 +129,21 @@ const StudentTimetable = () => {
                               {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode}
                             </span>
                           ) : (
-                            <span className="subject-info">
-                              {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode}
-                            </span>
+                            <div className="subject-info">
+                              <div className="subject-name">
+                                {scheduleItem.subject?.subjectName || subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode}
+                              </div>
+                              {scheduleItem.teacher?.name && (
+                                <div className="teacher-name">
+                                  {scheduleItem.teacher.name}
+                                </div>
+                              )}
+                              {scheduleItem.room && (
+                                <div className="room-info">
+                                  Room: {scheduleItem.room}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       ) : (

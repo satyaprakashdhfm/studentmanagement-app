@@ -80,8 +80,8 @@ const SyllabusProgress = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed': return '#27ae60';
-      case 'in_progress': return '#f39c12';
-      case 'not_started': return '#e74c3c';
+      case 'in-progress': return '#f39c12';
+      case 'not-started': return '#95a5a6';
       default: return '#7f8c8d';
     }
   };
@@ -89,8 +89,8 @@ const SyllabusProgress = () => {
   const getStatusText = (status) => {
     switch (status) {
       case 'completed': return 'Completed';
-      case 'in_progress': return 'In Progress';
-      case 'not_started': return 'Not Started';
+      case 'in-progress': return 'In Progress';
+      case 'not-started': return 'Not Started';
       default: return 'Unknown';
     }
   };
@@ -117,7 +117,34 @@ const SyllabusProgress = () => {
 
   return (
     <div className="content-card">
-      <h2>Syllabus Progress</h2>
+      <style>
+        {`
+          @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+          }
+          
+          .progress-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+          }
+          
+          .progress-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          }
+          
+          .subject-header {
+            transition: background-color 0.2s ease;
+          }
+          
+          .subject-header:hover {
+            background-color: #d5dbdb !important;
+          }
+        `}
+      </style>
+      
+      <h2 style={{ marginBottom: '30px', color: '#2c3e50' }}>📚 Syllabus Progress</h2>
       
       {/* Overall Progress Summary */}
       <div style={{ marginBottom: '30px' }}>
@@ -126,18 +153,20 @@ const SyllabusProgress = () => {
           {Object.values(syllabusData).map(subjectData => {
             const totalUnits = subjectData.units.length;
             const completedUnits = subjectData.units.filter(unit => unit.completionStatus === 'completed').length;
-            const inProgressUnits = subjectData.units.filter(unit => unit.completionStatus === 'in_progress').length;
+            const inProgressUnits = subjectData.units.filter(unit => unit.completionStatus === 'in-progress').length;
             const overallPercentage = totalUnits > 0 ? 
               Math.round(subjectData.units.reduce((sum, unit) => sum + unit.completionPercentage, 0) / totalUnits) : 0;
 
             return (
               <div 
                 key={subjectData.subjectCode}
+                className="progress-card"
                 style={{
                   padding: '20px',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '8px',
-                  border: '1px solid #dee2e6'
+                  backgroundColor: '#ffffff',
+                  borderRadius: '10px',
+                  border: '1px solid #e1e8ed',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                 }}
               >
                 <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#2c3e50', marginBottom: '10px' }}>
@@ -164,14 +193,16 @@ const SyllabusProgress = () => {
         {Object.values(syllabusData).map(subjectData => (
           <div key={subjectData.subjectCode} style={{ marginBottom: '20px' }}>
             <div 
+              className="subject-header"
               style={{ 
                 padding: '15px',
                 backgroundColor: '#ecf0f1',
-                borderRadius: '5px',
+                borderRadius: '8px',
                 cursor: 'pointer',
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center'
+                alignItems: 'center',
+                marginBottom: expandedSubjects.has(subjectData.subjectCode) ? '15px' : '0'
               }}
               onClick={() => toggleSubjectExpansion(subjectData.subjectCode)}
             >
@@ -197,22 +228,30 @@ const SyllabusProgress = () => {
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <h5 style={{ color: '#2c3e50', marginBottom: '5px' }}>
                           {unit.unitName}
                         </h5>
-                        <div style={{ fontSize: '14px', color: '#7f8c8d' }}>
-                          Current Topic: <strong>{unit.currentTopic}</strong>
-                        </div>
+                        {unit.completionStatus === 'in-progress' && (
+                          <div style={{ fontSize: '14px', color: '#2980b9', marginBottom: '5px' }}>
+                            🎯 <strong>Current Topic:</strong> {unit.currentTopic || unit.current_topic || 'Topic not specified'}
+                          </div>
+                        )}
+                        {unit.completionStatus === 'completed' && (
+                          <div style={{ fontSize: '14px', color: '#27ae60', marginBottom: '5px' }}>
+                            ✅ <strong>Unit Completed</strong>
+                          </div>
+                        )}
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <span style={{
-                          padding: '4px 8px',
-                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          borderRadius: '15px',
                           fontSize: '12px',
                           fontWeight: 'bold',
                           backgroundColor: getStatusColor(unit.completionStatus) + '20',
-                          color: getStatusColor(unit.completionStatus)
+                          color: getStatusColor(unit.completionStatus),
+                          border: `1px solid ${getStatusColor(unit.completionStatus)}40`
                         }}>
                           {getStatusText(unit.completionStatus)}
                         </span>
@@ -252,33 +291,6 @@ const SyllabusProgress = () => {
             )}
           </div>
         ))}
-      </div>
-
-      {/* Upcoming Topics */}
-      <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#e8f4f8', borderRadius: '8px' }}>
-        <h4 style={{ color: '#2c3e50', marginBottom: '15px' }}>📅 Upcoming Topics</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-          {Object.values(syllabusData).flatMap(subjectData => 
-            subjectData.units.filter(unit => unit.completionStatus === 'in_progress')
-          ).map(unit => {
-            const subject = syllabusData[unit.subjectCode];
-            return (
-              <div key={unit.syllabusId} style={{
-                padding: '15px',
-                backgroundColor: 'white',
-                borderRadius: '6px',
-                border: '1px solid #bee5eb'
-              }}>
-                <div style={{ fontWeight: 'bold', color: '#2c3e50', marginBottom: '5px' }}>
-                  {subject?.subjectName}
-                </div>
-                <div style={{ fontSize: '14px', color: '#555' }}>
-                  {unit.unitName} - {unit.currentTopic}
-                </div>
-              </div>
-            );
-          })}
-        </div>
       </div>
     </div>
   );

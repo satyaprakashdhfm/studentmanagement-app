@@ -1,13 +1,22 @@
 .student-timetable {
   padding: 20px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+.student-timetable * {
+  box-sizing: border-box;
 }
 
 .student-timetable h2 {
-  color: #2c3e50;
+  color: #2c3e50 !important;
   margin-bottom: 10px;
   text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .class-info {
@@ -15,15 +24,19 @@
   margin-bottom: 30px;
   font-size: 16px;
   color: #555;
-  background: #f8f9fa;
-  padding: 10px;
-  border-radius: 5px;
+  background: linear-gradient(135deg, #ffffff 0%, #f1f3f4 100%);
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .timetable-container {
   overflow-x: auto;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  background: white;
+  border: 1px solid #e0e0e0;
 }
 
 .schedule-table {
@@ -31,45 +44,79 @@
   border-collapse: collapse;
   background: white;
   table-layout: fixed;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .schedule-table th,
 .schedule-table td {
-  padding: 8px 4px;
+  padding: 10px 6px;
   text-align: center;
-  border: 1px solid #ddd;
+  border: 1px solid #e0e0e0;
   font-size: 12px;
   word-wrap: break-word;
 }
 
 .schedule-table th {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-weight: 600;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
   position: sticky;
   top: 0;
   z-index: 10;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+  font-size: 12px !important;
 }
 
 .schedule-table th small {
-  font-size: 10px;
-  font-weight: normal;
-  display: block;
-  margin-top: 2px;
+  font-size: 10px !important;
+  font-weight: normal !important;
+  display: block !important;
+  margin-top: 2px !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3) !important;
 }
 
-.day-column {
-  background: #f8f9fa;
-  font-weight: 600;
-  color: #2c3e50;
-  width: 80px;
-  min-width: 80px;
+.schedule-table thead th {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
 }
+
+.schedule-table thead th small {
+  color: #ffffff !important;
+  opacity: 0.95 !important;
+}
+
+/* Additional specificity for header visibility */
+.student-timetable .schedule-table thead tr th {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+.student-timetable .schedule-table thead tr th small {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3) !important;
+  font-weight: normal !important;
+}
+
+/* Force visibility with highest specificity */
+table.schedule-table thead th,
+table.schedule-table thead th small {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
 
 .schedule-cell {
-  height: 60px;
+  height: 80px;
   vertical-align: middle;
   position: relative;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
 }
 
 .schedule-item {
@@ -78,34 +125,82 @@
   justify-content: center;
   align-items: center;
   height: 100%;
-  padding: 2px;
+  padding: 4px;
 }
 
 .subject-info {
-  font-weight: 600;
-  color: #2c3e50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
   font-size: 11px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  width: 100%;
+  min-height: 60px;
+}
+
+.subject-name {
+  font-weight: 600;
+  font-size: 11px;
+  margin-bottom: 3px;
+  line-height: 1.2;
+}
+
+.teacher-name {
+  font-weight: 400;
+  font-size: 9px;
+  opacity: 0.9;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-top: 2px;
+  line-height: 1.1;
+}
+
+.room-info {
+  font-size: 8px;
+  opacity: 0.8;
+  margin-top: 1px;
+  font-style: italic;
 }
 
 .study-lunch {
   font-weight: 500;
-  color: #666;
-  background: #f0f0f0;
-  padding: 4px 6px;
-  border-radius: 4px;
-  font-size: 10px;
+  color: #6c757d;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
   text-align: center;
+  border: 2px solid #dee2e6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .no-class {
-  color: #999;
-  font-size: 14px;
+  color: #adb5bd;
+  font-size: 16px;
+  font-weight: 300;
+}
+
+.day-column {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  font-weight: 700;
+  color: #2c3e50;
+  width: 100px;
+  min-width: 100px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .loading {
@@ -132,9 +227,13 @@
     padding: 10px;
   }
 
+  .student-timetable h2 {
+    font-size: 22px;
+  }
+
   .schedule-table th,
   .schedule-table td {
-    padding: 4px 2px;
+    padding: 6px 3px;
     font-size: 10px;
   }
 
@@ -143,34 +242,80 @@
   }
 
   .day-column {
-    width: 60px;
-    min-width: 60px;
+    width: 70px;
+    min-width: 70px;
+    font-size: 11px;
   }
 
   .schedule-cell {
-    height: 50px;
+    height: 70px;
   }
 
-  .subject-info,
+  .subject-info {
+    font-size: 9px;
+    padding: 4px 6px;
+    min-height: 50px;
+  }
+
+  .subject-name {
+    font-size: 9px;
+  }
+
+  .teacher-name {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+
+  .room-info {
+    font-size: 7px;
+  }
+
   .study-lunch {
     font-size: 9px;
-    padding: 2px 4px;
+    padding: 4px 6px;
+    min-height: 30px;
   }
 }
 
 @media (max-width: 480px) {
   .schedule-table th,
   .schedule-table td {
-    font-size: 9px;
-    padding: 2px 1px;
+    font-size: 8px;
+    padding: 4px 2px;
   }
 
   .day-column {
     width: 50px;
     min-width: 50px;
+    font-size: 9px;
   }
 
   .schedule-cell {
-    height: 40px;
+    height: 60px;
+  }
+
+  .subject-info {
+    font-size: 8px;
+    padding: 3px 4px;
+    min-height: 40px;
+  }
+
+  .subject-name {
+    font-size: 8px;
+  }
+
+  .teacher-name {
+    font-size: 7px;
+    padding: 1px 3px;
+  }
+
+  .room-info {
+    font-size: 6px;
+  }
+
+  .study-lunch {
+    font-size: 8px;
+    padding: 3px 4px;
+    min-height: 25px;
   }
 }
