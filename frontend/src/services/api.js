@@ -84,6 +84,31 @@ class ApiService {
     }
   }
 
+  // Generic HTTP methods
+  async get(endpoint) {
+    return this.request(endpoint);
+  }
+
+  async post(endpoint, data) {
+    return this.request(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async put(endpoint, data) {
+    return this.request(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async delete(endpoint) {
+    return this.request(endpoint, {
+      method: 'DELETE',
+    });
+  }
+
   // Authentication
   async login(credentials) {
     return this.request('/auth/login', {
@@ -440,8 +465,8 @@ class ApiService {
     return this.request(`/timemanagement/teacher-schedule/${teacherId}/${academicYear}`);
   }
 
-  async getCalendarWeekSchedule(classId, academicYear = '2024-2025') {
-    return this.request(`/timemanagement/calendar-week/${classId}/${academicYear}`);
+  async getCalendarWeekSchedule(classId, academicYear = '2024-2025', weekOffset = 0) {
+    return this.request(`/timemanagement/calendar-week/${classId}/${academicYear}/${weekOffset}`);
   }
 
   async createScheduleEntry(scheduleData) {
@@ -473,6 +498,45 @@ class ApiService {
   async getEvents(academicYear = '2024-2025') {
     console.warn('getEvents() is deprecated. Use getCalendarGrid() instead.');
     return this.getCalendarGrid(academicYear);
+  }
+
+  // Reactivation API methods
+  async getDeactivatedRecords() {
+    try {
+      const response = await this.request('/reactivation/deactivated');
+      return response;
+    } catch (error) {
+      logger.error('Failed to get deactivated records:', error);
+      throw error;
+    }
+  }
+
+  async reactivateClass(classId, includeStudents = false) {
+    const endpoint = includeStudents 
+      ? `/reactivation/class/${classId}/students`
+      : `/reactivation/class/${classId}`;
+      
+    try {
+      const response = await this.request(endpoint, {
+        method: 'POST'
+      });
+      return response;
+    } catch (error) {
+      logger.error(`Failed to reactivate class ${classId}:`, error);
+      throw error;
+    }
+  }
+
+  async reactivateStudent(studentId) {
+    try {
+      const response = await this.request(`/reactivation/student/${studentId}`, {
+        method: 'POST'
+      });
+      return response;
+    } catch (error) {
+      logger.error(`Failed to reactivate student ${studentId}:`, error);
+      throw error;
+    }
   }
 }
 

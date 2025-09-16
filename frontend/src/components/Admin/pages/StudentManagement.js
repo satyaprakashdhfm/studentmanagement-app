@@ -20,7 +20,6 @@ const StudentManagement = () => {
   const [expandedStudents, setExpandedStudents] = useState({});
   const [newStudent, setNewStudent] = useState({
     name: '',
-    email: '',
     phone: '',
     address: '',
     dateOfBirth: '',
@@ -31,11 +30,46 @@ const StudentManagement = () => {
     parentContact: '',
     classId: '',
     section: '',
-    admissionDate: ''
+    admissionDate: '',
+    studentId: ''
   });
   
   // Use the academic year context
   const { selectedAcademicYear, classes } = useAcademicYear();
+
+  // Reusable function to fetch students
+  const fetchStudents = async () => {
+    try {
+      setLoading(true);
+      let response;
+      
+      if (classId) {
+        // Fetch students for specific class
+        response = await apiService.getStudentsByClass(classId);
+      } else if (!grade) {
+        // Fetch all students if no grade or class is selected
+        response = await apiService.getStudents();
+      } else {
+        // If grade is selected but no specific class, don't fetch students yet
+        setStudents([]);
+        return;
+      }
+      
+      if (response.success) {
+        const studentData = response.data || response.students || [];
+        setStudents(studentData);
+        setError('');
+      } else {
+        const errorMsg = response.message || 'Failed to fetch students';
+        setError(errorMsg);
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      setError('Failed to load students');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -131,12 +165,19 @@ const StudentManagement = () => {
   };
 
   const handleDeleteStudent = async (studentId) => {
-    if (window.confirm('Are you sure you want to delete this student?')) {
+    // For active students, show soft delete option
+    const confirmText = prompt('⚠️ This will DEACTIVATE the student and user account.\n\nTo confirm SOFT deletion, please type "student" (without quotes):');
+    if (confirmText === 'student') {
       try {
         const response = await apiService.deleteStudent(studentId);
         if (response.success || response.message) {
-          setStudents(students.filter(student => student.id !== studentId));
-          alert('Student deleted successfully');
+          setShowStudentModal(false);
+          setSelectedStudent(null);
+          setEditMode(false);
+          
+          await fetchStudents();
+          
+          alert('Student and user account deactivated successfully (data preserved for history)');
         } else {
           alert('Failed to delete student');
         }
@@ -147,10 +188,76 @@ const StudentManagement = () => {
     }
   };
 
+  const handleHardDeleteStudent = async (student) => {
+    const finalConfirm = window.confirm(
+      `⚠️⚠️ PERMANENT HARD DELETE ⚠️⚠️\n\nThis will PERMANENTLY DELETE student "${student.name}" (ID: ${student.studentId}) and ALL their data from the database.\n\n🚨 This action CANNOT be undone!\n🚨 All attendance, marks, fees, and personal data will be LOST FOREVER!\n\nAre you absolutely sure you want to HARD DELETE this student?`
+    );
+    
+    if (!finalConfirm) return;
+    
+    const typeConfirm = prompt('Type "HARD DELETE" to confirm permanent deletion:');
+    if (typeConfirm !== 'HARD DELETE') return;
+    
+    try {
+      const response = await apiService.request(`/students/${student.studentId}/hard-delete`, {
+        method: 'DELETE'
+      });
+      
+      setShowStudentModal(false);
+      setSelectedStudent(null);
+      setEditMode(false);
+      
+      await fetchStudents();
+      alert('Student permanently deleted from database');
+    } catch (err) {
+      console.error('Hard delete error', err);
+      const errorMessage = err.response?.data?.error || 'Failed to hard delete student';
+      alert(errorMessage);
+    }
+  };
+
+  const handleReactivateStudent = async (student) => {
+    const message = `🔄 This student "${student.name}" (ID: ${student.studentId}) is currently DEACTIVATED.\n\nReactivating will:\n- Restore the student to active status\n- Reactivate their user account\n- Make them visible in normal operations\n\nDo you want to REACTIVATE this student?`;
+    
+    const confirmed = window.confirm(message);
+    if (!confirmed) return;
+    
+    try {
+      const response = await apiService.post(`/reactivation/student/${student.studentId}`);
+      
+      // Refresh the student list
+      await fetchStudents();
+      
+      const successMessage = response?.message || 
+        `✅ Student "${student.name}" has been reactivated successfully!`;
+      alert(successMessage);
+      
+    } catch (err) {
+      console.error('Reactivation error:', err);
+      const errorMessage = err.response?.data?.error || 'Failed to reactivate student';
+      alert(`❌ Error: ${errorMessage}`);
+    }
+  };
+
   const handleStudentClick = (student) => {
     setSelectedStudent(student);
     setEditMode(false);
     setShowStudentModal(true);
+  };
+
+  // Handle opening add modal with pre-populated class
+  const handleOpenAddModal = () => {
+    // If we're in a specific class view, pre-populate the class
+    if (selectedClass) {
+      const autoStudentId = generateStudentId(selectedClass);
+      setNewStudent({
+        ...newStudent,
+        classId: selectedClass.classId.toString(),
+        section: selectedClass.section,
+        studentId: autoStudentId
+      });
+    }
+    setShowAddModal(true);
   };
 
   const handleCloseModal = () => {
@@ -158,9 +265,10 @@ const StudentManagement = () => {
     setShowAddModal(false);
     setSelectedStudent(null);
     setEditMode(false);
-    setNewStudent({
+    
+    // Reset form - keep class info if in specific class view
+    const resetForm = {
       name: '',
-      email: '',
       phone: '',
       address: '',
       dateOfBirth: '',
@@ -169,9 +277,59 @@ const StudentManagement = () => {
       motherName: '',
       motherOccupation: '',
       parentContact: '',
-      classId: '',
-      section: '',
-      admissionDate: ''
+      classId: selectedClass ? selectedClass.classId.toString() : '',
+      section: selectedClass ? selectedClass.section : '',
+      admissionDate: '',
+      studentId: selectedClass ? generateStudentId(selectedClass) : ''
+    };
+    
+    setNewStudent(resetForm);
+  };
+
+  // Generate student ID based on class and existing pattern
+  const generateStudentId = (classData) => {
+    if (!classData) return '';
+    
+    // Use classId + sequence number (001, 002, 003...)
+    const classId = classData.classId.toString();
+    
+    // Find the highest existing student ID for this class to avoid reusing deleted IDs
+    const studentsInClass = students.filter(s => s.classId === classData.classId);
+    let maxRollNumber = 0;
+    
+    studentsInClass.forEach(student => {
+      const studentIdStr = student.studentId || student.id || '';
+      // Extract the last 3 digits (roll number) from studentId
+      const rollNumberStr = studentIdStr.toString().slice(-3);
+      const rollNumber = parseInt(rollNumberStr, 10);
+      if (!isNaN(rollNumber) && rollNumber > maxRollNumber) {
+        maxRollNumber = rollNumber;
+      }
+    });
+    
+    const nextRollNumber = (maxRollNumber + 1).toString().padStart(3, '0');
+    
+    return `${classId}${nextRollNumber}`;
+  };
+
+  // Handle name change (removed auto-email generation since it's optional)
+  const handleNameChange = (name) => {
+    setNewStudent({
+      ...newStudent, 
+      name: name
+    });
+  };
+
+  // Handle class selection and auto-generate student ID
+  const handleClassChange = (classId) => {
+    const classData = classes.find(c => c.classId === parseInt(classId));
+    const autoStudentId = generateStudentId(classData);
+    
+    setNewStudent({
+      ...newStudent,
+      classId: classId,
+      studentId: autoStudentId,
+      section: classData?.section || ''
     });
   };
 
@@ -180,7 +338,9 @@ const StudentManagement = () => {
       const studentData = {
         ...newStudent,
         classId: selectedClass ? selectedClass.classId : parseInt(newStudent.classId),
-        username: newStudent.email.split('@')[0],
+        studentId: newStudent.studentId, // Use auto-generated student ID
+        username: newStudent.studentId, // Username same as student ID
+        email: `student_${newStudent.studentId}@school.edu`, // School email for both tables
         password: 'student123',
         firstName: newStudent.name.split(' ')[0],
         lastName: newStudent.name.split(' ').slice(1).join(' ')
@@ -268,13 +428,20 @@ const StudentManagement = () => {
           {filteredClasses.map(cls => (
             <div 
               key={cls.classId} 
-              className="class-box"
+              className={`class-box ${!cls.active ? 'deactivated' : ''}`}
               onClick={() => handleClassClick(cls.classId)}
             >
-              <h4>{cls.className} {cls.section}</h4>
+              <h4>
+                {cls.className} {cls.section}
+                {!cls.active && <span className="deactivated-badge">DEACTIVATED</span>}
+              </h4>
               <div className="class-info">
                 <p>Academic Year: {cls.academicYear}</p>
                 <p>Max Students: {cls.maxStudents}</p>
+                <p>Current Students: {cls.students?.length || 0}</p>
+                {!cls.active && (
+                  <p className="inactive-notice">⚠️ This class is deactivated but students are still viewable</p>
+                )}
               </div>
             </div>
           ))}
@@ -427,7 +594,7 @@ const StudentManagement = () => {
           <div className="academic-year-info">
             <span>Academic Year: {selectedAcademicYear}</span>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button className="btn btn-primary" onClick={handleOpenAddModal}>
             Add Student
           </button>
         </div>
@@ -464,13 +631,18 @@ const StudentManagement = () => {
               return (
                 <React.Fragment key={studentId}>
                   {/* Student Summary Row */}
-                  <tr className="student-summary-row">
+                  <tr 
+                    className={`student-summary-row ${student.status !== 'active' ? 'deactivated' : ''}`}
+                  >
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <span style={{ marginRight: '8px' }}>
                           {isExpanded ? '▼' : '▶'}
                         </span>
-                        <strong>{student.name}</strong>
+                        <strong>
+                          {student.name}
+                          {student.status !== 'active' && <span className="deactivated-badge"> (DEACTIVATED)</span>}
+                        </strong>
                       </div>
                     </td>
                     <td><strong>{student.class ? `${student.class.className} ${student.class.section}` : 'N/A'}</strong></td>
@@ -488,19 +660,41 @@ const StudentManagement = () => {
                       >
                         {isExpanded ? 'Collapse' : 'View Details'}
                       </button>
-                      <button 
-                        className="btn btn-warning btn-sm" 
-                        onClick={() => handleEditStudent(student)}
-                        style={{ marginRight: '5px' }}
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-sm" 
-                        onClick={() => handleDeleteStudent(student.id)}
-                      >
-                        Delete
-                      </button>
+                      
+                      {student.status === 'active' ? (
+                        <>
+                          <button 
+                            className="btn btn-warning btn-sm" 
+                            onClick={() => handleEditStudent(student)}
+                            style={{ marginRight: '5px' }}
+                          >
+                            Edit
+                          </button>
+                          <button 
+                            className="btn btn-danger btn-sm" 
+                            onClick={() => handleDeleteStudent(student.studentId)}
+                          >
+                            Soft Delete
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button 
+                            className="btn btn-success btn-sm" 
+                            onClick={() => handleReactivateStudent(student)}
+                            style={{ marginRight: '5px' }}
+                          >
+                            🔄 Reactivate
+                          </button>
+                          <button 
+                            className="btn btn-dark btn-sm" 
+                            onClick={() => handleHardDeleteStudent(student)}
+                            style={{ marginRight: '5px' }}
+                          >
+                            💀 Hard Delete
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                   
@@ -583,7 +777,7 @@ const StudentManagement = () => {
                     <button className="btn btn-warning btn-sm" onClick={() => setEditMode(true)}>
                       Edit
                     </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteStudent(selectedStudent.id)}>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteStudent(selectedStudent.studentId)}>
                       Delete
                     </button>
                   </>
@@ -743,19 +937,44 @@ const StudentManagement = () => {
                   <input
                     type="text"
                     value={newStudent.name}
-                    onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label>Email *</label>
-                  <input
-                    type="email"
-                    value={newStudent.email}
-                    onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
-                    required
-                  />
-                </div>
+                
+                {/* Only show class dropdown if not pre-selected */}
+                {!selectedClass && (
+                  <div className="form-group">
+                    <label>Class *</label>
+                    <select
+                      value={newStudent.classId}
+                      onChange={(e) => handleClassChange(e.target.value)}
+                      required
+                    >
+                      <option value="">Select Class</option>
+                      {classes.map(cls => (
+                        <option key={cls.classId} value={cls.classId}>
+                          {cls.className}th Grade - Section {cls.section}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
+                {/* Show selected class info if pre-selected */}
+                {selectedClass && (
+                  <div className="form-group">
+                    <label>Class</label>
+                    <input
+                      type="text"
+                      value={`${selectedClass.className}th Grade - Section ${selectedClass.section}`}
+                      readOnly
+                      style={{backgroundColor: '#f8f9fa', color: '#6c757d'}}
+                    />
+                  </div>
+                )}
+                
+
                 <div className="form-group">
                   <label>Phone</label>
                   <input
@@ -846,7 +1065,7 @@ const StudentManagement = () => {
               <button 
                 className="btn btn-primary" 
                 onClick={handleAddStudent}
-                disabled={!newStudent.name || !newStudent.email}
+                disabled={!newStudent.name}
               >
                 Add Student
               </button>

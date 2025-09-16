@@ -24,6 +24,9 @@ router.get('/', authenticateToken, async (req, res) => {
       where.academicYear = academicYear;
     }
 
+    // Include both active and inactive classes for management interface
+    // where.active = true;  // Removed this filter to show all classes
+
     // Calculate pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
@@ -42,6 +45,7 @@ router.get('/', authenticateToken, async (req, res) => {
           }
         },
         students: {
+          // Include all students (active and inactive) for management interface
           select: {
             studentId: true,
             name: true,
@@ -227,13 +231,19 @@ router.post('/', authenticateToken, async (req, res) => {
       maxStudents
     } = req.body;
 
-    // Check if class already exists
-    const existingClass = await prisma.class.findUnique({
-      where: { classId: parseInt(classId) }
+    // Check if class combination already exists (className + section + academicYear)
+    const existingClass = await prisma.class.findFirst({
+      where: {
+        className: className,
+        section: section,
+        academicYear: academicYear
+      }
     });
 
     if (existingClass) {
-      return res.status(409).json({ error: 'Class ID already exists' });
+      return res.status(409).json({ 
+        error: `Class ${className} - Section ${section} already exists for academic year ${academicYear}` 
+      });
     }
 
     // Check if class teacher exists
@@ -247,30 +257,117 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     }
 
-    // Create new class
-    const newClass = await prisma.class.create({
-      data: {
-        classId: parseInt(classId),
-        className,
-        section,
-        classTeacherId: classTeacherId || null,
-        academicYear,
-        maxStudents: maxStudents ? parseInt(maxStudents) : null
-      },
+    // Generate a unique classId following the pattern: ACADEMIC_YEAR + GRADE + SECTION_SEQUENCE
+    // Example: 242510001 = 2425(2024-2025) + 10(Grade 10) + 001(Section A)
+    
+    // Extract academic year digits (e.g., "2024-2025" -> "2425")
+    const academicYearParts = academicYear.split('-');
+    const yearPrefix = academicYearParts[0].slice(2) + academicYearParts[1].slice(2); // "24" + "25"
+    
+    // Grade part (ensure 2 digits for grades 1-9, keep as-is for 10)
+    const gradePart = className.padStart(2, '0');
+    
+    // Section sequence (A=001, B=002, C=003, D=004, etc.)
+    const sectionSequence = (section.charCodeAt(0) - 65 + 1).toString().padStart(3, '0');
+    
+    // Generate the class ID
+    const newClassId = parseInt(`${yearPrefix}${gradePart}${sectionSequence}`);
+
+    // Check if a deactivated class with the same classId already exists
+    const existingDeactivatedClass = await prisma.class.findUnique({
+      where: { classId: newClassId },
       include: {
         classTeacher: {
           select: {
-            id: true,
+            teacherId: true,
             name: true,
-            email: true
+            email: true,
+            qualification: true,
+            subjectsHandled: true
+          }
+        },
+        _count: {
+          select: {
+            students: true
           }
         }
       }
     });
 
+    let newClass;
+    let message;
+
+    if (existingDeactivatedClass && !existingDeactivatedClass.active) {
+      // Reactivate the existing deactivated class
+      newClass = await prisma.class.update({
+        where: { classId: newClassId },
+        data: {
+          className,
+          section,
+          classTeacherId: classTeacherId || null,
+          academicYear,
+          maxStudents: maxStudents ? parseInt(maxStudents) : null,
+          active: true, // Reactivate the class
+          updatedAt: new Date()
+        },
+        include: {
+          classTeacher: {
+            select: {
+              teacherId: true,
+              name: true,
+              email: true,
+              qualification: true,
+              subjectsHandled: true
+            }
+          },
+          _count: {
+            select: {
+              students: true
+            }
+          }
+        }
+      });
+      message = 'Class reactivated successfully (existing class was restored)';
+    } else if (existingDeactivatedClass && existingDeactivatedClass.active) {
+      // Active class already exists
+      return res.status(409).json({ 
+        error: `Class ${className} - ${section} already exists and is active` 
+      });
+    } else {
+      // Create completely new class
+      newClass = await prisma.class.create({
+        data: {
+          classId: newClassId,
+          className,
+          section,
+          classTeacherId: classTeacherId || null,
+          academicYear,
+          maxStudents: maxStudents ? parseInt(maxStudents) : null,
+          active: true // Explicitly set as active
+        },
+        include: {
+          classTeacher: {
+            select: {
+              teacherId: true,
+              name: true,
+              email: true,
+              qualification: true,
+              subjectsHandled: true
+            }
+          },
+          _count: {
+            select: {
+              students: true
+            }
+          }
+        }
+      });
+      message = 'Class created successfully';
+    }
+
     res.status(201).json({
       class: newClass,
-      message: 'Class created successfully'
+      message: message
     });
 
   } catch (error) {
@@ -365,19 +462,68 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Class not found' });
     }
 
-    // Check if class has students
-    if (existingClass._count.students > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete class with enrolled students. Please transfer students first.' 
-      });
-    }
-
-    // Delete class
-    await prisma.class.delete({
-      where: { classId: parseInt(id) }
+    // Get count of active students in this class for reporting
+    const activeStudentsCount = await prisma.student.count({
+      where: { 
+        classId: parseInt(id),
+        status: 'active'
+      }
     });
 
-    res.json({ message: 'Class deleted successfully' });
+    // Use transaction to deactivate class and all its students
+    await prisma.$transaction(async (prisma) => {
+      // Step 1: Deactivate all active students in this class
+      if (activeStudentsCount > 0) {
+        await prisma.student.updateMany({
+          where: { 
+            classId: parseInt(id),
+            status: 'active'
+          },
+          data: { 
+            status: 'inactive',
+            updatedAt: new Date()
+          }
+        });
+
+        // Step 2: Deactivate corresponding user accounts for those students
+        const activeStudents = await prisma.student.findMany({
+          where: { 
+            classId: parseInt(id),
+            status: 'inactive'  // Just deactivated above
+          },
+          select: { studentId: true }
+        });
+
+        if (activeStudents.length > 0) {
+          await prisma.user.updateMany({
+            where: {
+              username: {
+                in: activeStudents.map(s => s.studentId)
+              }
+            },
+            data: {
+              active: false,
+              updatedAt: new Date()
+            }
+          });
+        }
+      }
+
+      // Step 3: Deactivate the class itself
+      await prisma.class.update({
+        where: { classId: parseInt(id) },
+        data: { 
+          active: false,
+          updatedAt: new Date()
+        }
+      });
+    });
+
+    const message = activeStudentsCount > 0 
+      ? `Class deactivated successfully. ${activeStudentsCount} students were also deactivated (data preserved for history)`
+      : 'Class deactivated successfully (data preserved for history)';
+
+    res.json({ message });
 
   } catch (error) {
     console.error('Delete class error:', error);
@@ -440,6 +586,96 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get class stats error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/classes/:id/hard-delete - Permanently delete class from database
+router.delete('/:id/hard-delete', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if class exists
+    const existingClass = await prisma.class.findUnique({
+      where: { classId: parseInt(id) },
+      include: {
+        _count: {
+          select: {
+            students: true,
+            attendance: true,
+            marks: true,
+            fees: true
+          }
+        }
+      }
+    });
+
+    if (!existingClass) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
+
+    // Use transaction to permanently delete everything
+    await prisma.$transaction(async (prisma) => {
+      // Step 1: Delete all related data
+      
+      // Delete attendance records
+      await prisma.attendance.deleteMany({
+        where: { classId: parseInt(id) }
+      });
+
+      // Delete marks records
+      await prisma.marks.deleteMany({
+        where: { classId: parseInt(id) }
+      });
+
+      // Delete fees records
+      await prisma.fees.deleteMany({
+        where: { classId: parseInt(id) }
+      });
+
+      // Delete syllabus records
+      await prisma.syllabus.deleteMany({
+        where: { classId: parseInt(id) }
+      });
+
+      // Step 2: Get all students in this class
+      const studentsInClass = await prisma.student.findMany({
+        where: { classId: parseInt(id) },
+        select: { studentId: true }
+      });
+
+      // Step 3: Delete user accounts for these students
+      if (studentsInClass.length > 0) {
+        await prisma.user.deleteMany({
+          where: {
+            username: {
+              in: studentsInClass.map(s => s.studentId)
+            }
+          }
+        });
+      }
+
+      // Step 4: Delete all students in this class
+      await prisma.student.deleteMany({
+        where: { classId: parseInt(id) }
+      });
+
+      // Step 5: Finally delete the class itself
+      await prisma.class.delete({
+        where: { classId: parseInt(id) }
+      });
+    });
+
+    res.json({ 
+      message: `Class permanently deleted from database. All related data has been removed.`,
+      studentsDeleted: existingClass._count.students,
+      attendanceRecordsDeleted: existingClass._count.attendance,
+      marksRecordsDeleted: existingClass._count.marks,
+      feesRecordsDeleted: existingClass._count.fees
+    });
+
+  } catch (error) {
+    console.error('Hard delete class error:', error);
+    res.status(500).json({ error: 'Failed to permanently delete class' });
   }
 });
 

@@ -382,3 +382,61 @@
   color: #6c757d;
   font-size: 0.85em;
 }
+
+/* Deactivated student styles */
+.student-summary-row.deactivated {
+  background: #f8f9fa;
+  border-left: 4px solid #dc3545;
+  opacity: 0.7;
+}
+
+.student-summary-row.deactivated:hover {
+  background: #fff5f5;
+  opacity: 0.9;
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.1);
+}
+
+.student-summary-row.deactivated td {
+  color: #6c757d;
+}
+
+.student-summary-row.deactivated strong {
+  text-decoration: line-through;
+  color: #868e96;
+}
+
+.deactivated-badge {
+  color: #dc3545;
+  font-size: 10px;
+  font-weight: bold;
+  background: #fff5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 8px;
+}
+
+.reactivation-hint {
+  color: #28a745;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 4px;
+  padding: 2px 6px;
+  background: #f8fff9;
+  border-radius: 3px;
+  border-left: 2px solid #28a745;
+}
+
+.inactive-notice {
+  color: #28a745;
+  font-size: 12px;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.status.inactive {
+  background: #dc3545;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}

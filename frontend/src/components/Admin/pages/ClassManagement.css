@@ -6,7 +6,30 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e9ecef;
+}
+.content-header h2 {
+  color: #2c3e50;
+  font-size: 24px;
+  margin: 0;
+}
+.content-header button {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.content-header button:hover {
+  background: #0056b3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,123,255,0.3);
 }
 .grades-list {
   display: flex;
@@ -15,30 +38,77 @@
 }
 .grade-block {
   background: #fff;
-  padding: 12px;
-  border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border: 1px solid #e1e5e9;
+}
+.grade-block h3 {
+  margin: 0 0 16px 0;
+  color: #2c3e50;
+  font-size: 18px;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e9ecef;
 }
 .sections {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
+  margin-top: 12px;
 }
 .section-card {
-  border: 1px solid #eee;
-  padding: 10px;
-  border-radius: 6px;
-  min-width: 180px;
+  border: 1px solid #ddd;
+  padding: 16px;
+  border-radius: 8px;
+  min-width: 220px;
+  background: #f9f9f9;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  transition: all 0.2s ease;
+}
+.section-card:hover {
+  background: #f5f5f5;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+.section-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.section-info strong {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 4px;
 }
 .meta {
-  font-size: 12px;
+  font-size: 13px;
   color: #666;
+  line-height: 1.4;
+}
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 16px;
 }
 .actions button {
-  margin-left: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 60px;
+}
+.actions button:hover {
+  background: #f0f0f0;
+  border-color: #999;
 }
 .modal-overlay {
   position: fixed;
@@ -73,4 +143,135 @@
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* Deactivated class styles */
+.section-card.deactivated {
+  background: #f8f9fa;
+  border: 2px dashed #dc3545;
+  opacity: 0.8;
+  position: relative;
+}
+
+.section-card.deactivated:hover {
+  background: #fff5f5;
+  border-color: #dc3545;
+  opacity: 1;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(220, 53, 69, 0.2);
+}
+
+.deactivated-badge {
+  color: #dc3545;
+  font-size: 10px;
+  font-weight: bold;
+  background: #fff5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 8px;
+}
+
+.reactivation-hint {
+  color: #28a745;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 4px;
+  padding: 2px 6px;
+  background: #f8fff9;
+  border-radius: 3px;
+  border-left: 2px solid #28a745;
+}
+
+.btn-view-students {
+  background: #343a40;
+  color: #000000;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: background-color 0.2s;
+}
+
+.btn-view-students:hover {
+  background: #23272b;
+  color: #000000;
+}
+
+.btn-edit {
+  background: #ffc107;
+  color: #000000;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: background-color 0.2s;
+}
+
+.btn-edit:hover {
+  background: #e0a800;
+  color: #000000;
+}
+
+.btn-soft-delete {
+  background: #dc3545;
+  color: #000000;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: background-color 0.2s;
+}
+
+.btn-soft-delete:hover {
+  background: #c82333;
+  color: #000000;
+}
+
+.btn-reactivate {
+  background: #28a745;
+  color: #000000;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: background-color 0.2s;
+}
+
+.btn-reactivate:hover {
+  background: #218838;
+  color: #000000;
+}
+
+.btn-hard-delete {
+  background: #6c757d;
+  color: #000000;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: background-color 0.2s;
+}
+
+.btn-hard-delete:hover {
+  background: #5a6268;
+  color: #000000;
+}
+
+.section-card.deactivated .section-info strong {
+  color: #6c757d;
+  text-decoration: line-through;
+}
+
+.section-card.deactivated .meta {
+  color: #868e96;
 }

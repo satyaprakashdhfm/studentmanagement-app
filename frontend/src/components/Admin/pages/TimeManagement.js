@@ -19,6 +19,7 @@ const TimeManagement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [weekDates, setWeekDates] = useState([]);
+  const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // 0 = current week, +1 = next week, -1 = previous week
 
   // Use local classes if available, otherwise use context classes
   const effectiveClasses = localClasses.length > 0 ? localClasses : classes;
@@ -85,18 +86,19 @@ const TimeManagement = () => {
       setLoading(true);
       setError(null);
 
-      console.log('📅 Fetching calendar week schedule for class:', selectedClass.classId, 'academic year:', selectedAcademicYear);
+      console.log('📅 Fetching calendar week schedule for class:', selectedClass.classId, 'academic year:', selectedAcademicYear, 'week offset:', currentWeekOffset);
 
       const response = await apiService.getCalendarWeekSchedule(
         selectedClass.classId,
-        selectedAcademicYear
+        selectedAcademicYear,
+        currentWeekOffset
       );
 
       console.log('📊 Calendar week API response:', response);
 
       if (response && response.data) {
         console.log('📅 Calendar week data received:', response.data.length, 'days');
-        console.log('📅 Week range:', response.weekRange);
+        console.log('📅 Week info:', response.weekInfo);
         
         // Set the schedule data
         setSchedule(response.data);
@@ -134,6 +136,7 @@ const TimeManagement = () => {
     setSchedule([]);
     setError(null);
     setWeekDates([]);
+    setCurrentWeekOffset(0); // Reset to current week when navigating
   }, [classId, section, grade]);
 
   // Set selected class when component mounts or params change
@@ -188,6 +191,35 @@ const TimeManagement = () => {
       fetchSchedule();
     }
   }, [selectedClass]);
+
+  // Fetch schedule when week offset changes
+  useEffect(() => {
+    if (selectedClass) {
+      fetchSchedule();
+    }
+  }, [currentWeekOffset]);
+
+  // Week navigation functions
+  const goToPreviousWeek = () => {
+    setCurrentWeekOffset(prev => prev - 1);
+  };
+
+  const goToNextWeek = () => {
+    setCurrentWeekOffset(prev => prev + 1);
+  };
+
+  const goToCurrentWeek = () => {
+    setCurrentWeekOffset(0);
+  };
+
+  // Format week display
+  const getWeekLabel = () => {
+    if (currentWeekOffset === 0) return 'Current Week';
+    if (currentWeekOffset === 1) return 'Next Week';
+    if (currentWeekOffset === -1) return 'Previous Week';
+    if (currentWeekOffset > 1) return `${currentWeekOffset} Weeks Ahead`;
+    return `${Math.abs(currentWeekOffset)} Weeks Ago`;
+  };
 
   // Debug schedule state changes
   useEffect(() => {
@@ -465,11 +497,47 @@ const TimeManagement = () => {
             {!effectiveLoading && !error && (
               <div className="schedule-container">
                 <div className="schedule-header">
-                  <h3>Weekly Schedule - Class {selectedClass.className} {selectedClass.section}</h3>
-                  <div className="schedule-stats">
-                    {schedule.length > 0 && (
-                      <span>{schedule.length} periods scheduled</span>
-                    )}
+                  <div className="schedule-title-section">
+                    <h3>Weekly Schedule - Class {selectedClass.className} {selectedClass.section}</h3>
+                    <div className="week-info">
+                      <span className="week-label">{getWeekLabel()}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="schedule-controls">
+                    <div className="week-navigation">
+                      <button 
+                        className="week-nav-btn prev-btn" 
+                        onClick={goToPreviousWeek}
+                        disabled={loading}
+                      >
+                        ◀ Previous Week
+                      </button>
+                      
+                      {currentWeekOffset !== 0 && (
+                        <button 
+                          className="week-nav-btn current-btn" 
+                          onClick={goToCurrentWeek}
+                          disabled={loading}
+                        >
+                          Current Week
+                        </button>
+                      )}
+                      
+                      <button 
+                        className="week-nav-btn next-btn" 
+                        onClick={goToNextWeek}
+                        disabled={loading}
+                      >
+                        Next Week ▶
+                      </button>
+                    </div>
+                    
+                    <div className="schedule-stats">
+                      {schedule.length > 0 && (
+                        <span>{schedule.length} days scheduled</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

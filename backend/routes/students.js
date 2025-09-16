@@ -44,6 +44,11 @@ router.get('/', authenticateToken, async (req, res) => {
     if (status) {
       where.status = status;
     }
+    // Removed default filter to show ALL students (active and inactive) for management interface
+    // else {
+    //   // Default: only show active students (exclude inactive/deleted)
+    //   where.status = 'active';
+    // }
 
     // Get students with pagination
     const [students, total] = await Promise.all([
@@ -256,7 +261,9 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
       parentContact, 
       classId, 
       section, 
-      admissionDate 
+      admissionDate,
+      studentId,
+      personalEmail
     } = req.body;
 
     // Check if user email already exists
@@ -286,8 +293,13 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
     // Hash the password
     const hashedPassword = await hashPassword(password);
 
-    // Generate student ID
-    const studentId = `STU${Date.now()}`;
+    // Use the studentId from request (auto-generated on frontend)
+    if (!studentId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Student ID is required' 
+      });
+    }
 
     // Create user and student in a transaction
     const result = await prisma.$transaction(async (prisma) => {
@@ -310,7 +322,7 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
           studentId,
           name: name || `${firstName} ${lastName}`.trim(),
           address,
-          email,
+          email: email, // Use the same auto-generated school email as in users table
           phone,
           dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
           fatherName,
@@ -333,33 +345,49 @@ router.post('/', authenticateToken, studentValidationRules(), handleValidationEr
         }
       });
 
-      // Create default fee records for all fee types
+      // Create default fee records for all fee types with proper amounts
       const defaultFeeTypes = [
-        'tuition_term1',
-        'tuition_term2',
-        'tuition_term3',
-        'bus_fee',
-        'books_fee',
-        'dress_fee'
+        { type: 'tuition_term1', amount: 15000 },
+        { type: 'tuition_term2', amount: 15000 },
+        { type: 'tuition_term3', amount: 15000 },
+        { type: 'bus_fee', amount: 5000 },
+        { type: 'books_fee', amount: 3000 },
+        { type: 'dress_fee', amount: 2000 }
       ];
 
-      // Get the current academic year from the class or use current year
-      const academicYear = newStudent.class?.academicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+      // Get the academic year from the class
+      const classData = await prisma.class.findUnique({
+        where: { classId: parseInt(classId) }
+      });
+      const academicYear = classData?.academicYear || `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
 
-      // Create fee records for each type with zero amounts
-      for (const feeType of defaultFeeTypes) {
-        await prisma.fee.create({
-          data: {
-            feeId: `FEE${Date.now()}_${feeType}`,
-            studentId: newStudent.studentId,
-            classId: newStudent.classId,
-            feeType: feeType,
-            amountDue: 0,
-            amountPaid: 0,
-            balance: 0,
+      // Create unique fee records for each type
+      for (const feeTypeData of defaultFeeTypes) {
+        const feeId = `${studentId}_${feeTypeData.type}_${academicYear}`;
+        
+        // Check if fee already exists to prevent duplicates
+        const existingFee = await prisma.fee.findFirst({
+          where: {
+            studentId: studentId,
+            feeType: feeTypeData.type,
             academicYear: academicYear
           }
         });
+
+        if (!existingFee) {
+          await prisma.fee.create({
+            data: {
+              feeId: feeId,
+              studentId: studentId,
+              classId: parseInt(classId),
+              feeType: feeTypeData.type,
+              amountDue: feeTypeData.amount,
+              amountPaid: 0,
+              balance: feeTypeData.amount,
+              academicYear: academicYear
+            }
+          });
+        }
       }
 
       return newStudent;
@@ -462,14 +490,33 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Delete student (related records will be handled by database constraints)
-    await prisma.student.delete({
-      where: { studentId }
+    // Use transaction to soft delete (preserves historical data)
+    await prisma.$transaction(async (prisma) => {
+      // Step 1: Soft delete student record (set status to inactive)
+      await prisma.student.update({
+        where: { studentId },
+        data: { 
+          status: 'inactive',
+          updatedAt: new Date()
+        }
+      });
+
+      // Step 2: Soft delete corresponding user account (set active to false)
+      await prisma.user.update({
+        where: { username: studentId },
+        data: { 
+          active: false,
+          updatedAt: new Date()
+        }
+      });
+
+      // Note: Fee, attendance, and marks records are preserved for historical data
+      // They remain linked to the inactive student for reporting and audit purposes
     });
 
     res.json({ 
       success: true,
-      message: 'Student deleted successfully' 
+      message: 'Student and user account deactivated successfully (data preserved for history)' 
     });
 
   } catch (error) {
@@ -622,6 +669,73 @@ router.get('/grade/:gradeName', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get students by grade error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/students/:studentId/hard-delete - Permanently delete student from database
+router.delete('/:studentId/hard-delete', authenticateToken, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // Check if student exists
+    const existingStudent = await prisma.student.findUnique({
+      where: { studentId: studentId },
+      include: {
+        _count: {
+          select: {
+            attendance: true,
+            marks: true,
+            fees: true
+          }
+        }
+      }
+    });
+
+    if (!existingStudent) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Use transaction to permanently delete everything
+    await prisma.$transaction(async (prisma) => {
+      // Step 1: Delete all related data
+      
+      // Delete attendance records
+      await prisma.attendance.deleteMany({
+        where: { studentId: studentId }
+      });
+
+      // Delete marks records
+      await prisma.marks.deleteMany({
+        where: { studentId: studentId }
+      });
+
+      // Delete fees records
+      await prisma.fees.deleteMany({
+        where: { studentId: studentId }
+      });
+
+      // Step 2: Delete user account
+      await prisma.user.deleteMany({
+        where: { username: studentId }
+      });
+
+      // Step 3: Finally delete the student record
+      await prisma.student.delete({
+        where: { studentId: studentId }
+      });
+    });
+
+    res.json({ 
+      message: `Student "${existingStudent.name}" permanently deleted from database. All related data has been removed.`,
+      studentName: existingStudent.name,
+      attendanceRecordsDeleted: existingStudent._count.attendance,
+      marksRecordsDeleted: existingStudent._count.marks,
+      feesRecordsDeleted: existingStudent._count.fees
+    });
+
+  } catch (error) {
+    console.error('Hard delete student error:', error);
+    res.status(500).json({ error: 'Failed to permanently delete student' });
   }
 });
 

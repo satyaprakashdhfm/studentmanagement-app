@@ -76,7 +76,14 @@ const FeeManagement = () => {
     const grouped = {};
     console.log('Raw fees data:', fees.slice(0, 2)); // Debug: check first 2 fees
     
-    fees.forEach((fee, index) => {
+    // Deduplicate fees first by feeId
+    const uniqueFees = fees.filter((fee, index, self) => 
+      index === self.findIndex(f => f.feeId === fee.feeId)
+    );
+    
+    console.log(`Deduplication: ${fees.length} fees reduced to ${uniqueFees.length} unique fees`);
+    
+    uniqueFees.forEach((fee, index) => {
       // Try multiple possible student ID fields
       const studentKey = String(
         fee.student?.studentId || 

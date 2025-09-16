@@ -407,24 +407,28 @@ router.get('/class-schedule/:classId/:academicYear', authenticateToken, async (r
 });
 
 // GET /api/timemanagement/calendar-week/:classId/:academicYear
-// Get current week's schedule from calendar grid with real dates
-router.get('/calendar-week/:classId/:academicYear', authenticateToken, async (req, res) => {
+// Get week's schedule from calendar grid with real dates (with optional week offset)
+router.get('/calendar-week/:classId/:academicYear/:weekOffset?', authenticateToken, async (req, res) => {
   try {
-    const { classId, academicYear } = req.params;
+    const { classId, academicYear, weekOffset } = req.params;
+    const offset = weekOffset ? parseInt(weekOffset) : 0; // Default to current week (0)
     
-    // Get current date (or you could pass a specific week date)
+    // Get current date and apply week offset
     const today = new Date();
     const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
     
-    // Calculate the start of the current week (Monday)
+    // Calculate the start of the target week (Monday)
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+    
+    // Apply week offset (0 = current week, +1 = next week, -1 = previous week)
+    startOfWeek.setDate(startOfWeek.getDate() + (offset * 7));
     
     // Calculate end of week (Friday for school week)
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 4); // Monday + 4 = Friday
     
-    console.log('📅 Fetching calendar week from', startOfWeek.toISOString().split('T')[0], 'to', endOfWeek.toISOString().split('T')[0]);
+    console.log('📅 Fetching calendar week from', startOfWeek.toISOString().split('T')[0], 'to', endOfWeek.toISOString().split('T')[0], 'with offset:', offset);
     
     const calendarData = await prisma.calendarGrid.findMany({
       where: {
@@ -483,6 +487,18 @@ router.get('/calendar-week/:classId/:academicYear', authenticateToken, async (re
     res.json({
       success: true,
       data: weeklySchedule,
+      weekInfo: {
+        offset: offset,
+        startDate: startOfWeek.toISOString().split('T')[0],
+        endDate: endOfWeek.toISOString().split('T')[0],
+        isCurrentWeek: offset === 0,
+        weekLabel: offset === 0 ? 'Current Week' : 
+                   offset === 1 ? 'Next Week' : 
+                   offset === -1 ? 'Previous Week' :
+                   offset > 1 ? `${offset} Weeks Ahead` :
+                   `${Math.abs(offset)} Weeks Ago`
+      },
+      // Keep backward compatibility
       weekRange: {
         start: startOfWeek.toISOString().split('T')[0],
         end: endOfWeek.toISOString().split('T')[0]
