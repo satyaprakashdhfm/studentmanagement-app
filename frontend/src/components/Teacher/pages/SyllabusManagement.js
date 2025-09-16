@@ -51,6 +51,20 @@ const SyllabusManagement = () => {
             return acc;
           }, {});
           
+          // Sort units within each class by unit number
+          Object.values(groupedSyllabus).forEach(subjectData => {
+            Object.values(subjectData.classes).forEach(classData => {
+              classData.units.sort((a, b) => {
+                // Extract numbers from unit names like "Unit 1", "Unit 2", etc.
+                const aMatch = a.unitName.match(/(\d+)/);
+                const bMatch = b.unitName.match(/(\d+)/);
+                const aNum = aMatch ? parseInt(aMatch[1]) : 0;
+                const bNum = bMatch ? parseInt(bMatch[1]) : 0;
+                return aNum - bNum;
+              });
+            });
+          });
+          
           console.log('Grouped syllabus by subject:', groupedSyllabus);
           setSyllabusData(groupedSyllabus);
         }
@@ -149,6 +163,50 @@ const SyllabusManagement = () => {
       case 'completed': return '#27ae60';
       case 'in_progress': return '#f39c12';
       default: return '#7f8c8d';
+    }
+  };
+
+  const handleSubTopicToggle = async (syllabusId, subTopicName) => {
+    try {
+      // Call the sub-topic toggle API
+      const response = await apiService.request(`/syllabus/${syllabusId}/subtopic`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subTopicName: subTopicName
+        })
+      });
+
+      if (response && response.syllabus) {
+        // Update local state with the new syllabus data
+        setSyllabusData(prev => {
+          const updated = { ...prev };
+          
+          // Find and update the specific unit
+          Object.keys(updated).forEach(subjectCode => {
+            Object.keys(updated[subjectCode].classes).forEach(classId => {
+              updated[subjectCode].classes[classId].units = updated[subjectCode].classes[classId].units.map(unit =>
+                unit.syllabusId === syllabusId ? {
+                  ...unit,
+                  completedSubTopics: response.syllabus.completedSubTopics,
+                  completionPercentage: response.syllabus.completionPercentage,
+                  completionStatus: response.syllabus.completionStatus
+                } : unit
+              );
+            });
+          });
+          
+          return updated;
+        });
+
+        console.log(`Sub-topic "${subTopicName}" ${response.newStatus === 'completed' ? 'completed' : 'marked as pending'}`);
+      }
+
+    } catch (err) {
+      console.error('Error toggling sub-topic:', err);
+      alert('Failed to update sub-topic. Please try again.');
     }
   };
 
@@ -366,31 +424,83 @@ const SyllabusManagement = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {classData.units.map(unit => (
-                              <tr key={unit.syllabusId}>
-                                <td style={{ fontSize: '11px' }}>{unit.unitName}</td>
-                                <td style={{ color: getStatusColor(unit.completionStatus), fontSize: '11px' }}>
-                                  {unit.completionStatus.replace('_', ' ')}
-                                </td>
-                                <td style={{ fontSize: '11px' }}>{unit.completionPercentage}%</td>
-                                <td>
-                                  <button 
-                                    onClick={() => handleCompletionToggle(unit.syllabusId)}
-                                    style={{
-                                      padding: '2px 6px',
-                                      fontSize: '10px',
-                                      backgroundColor: '#f39c12',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer'
-                                    }}
-                                  >
-                                    Toggle
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
+                            {classData.units.map(unit => {
+                              const subTopics = unit.subTopics || [];
+                              const completedSubTopics = unit.completedSubTopics || [];
+                              const subTopicProgress = subTopics.length > 0 ? Math.round((completedSubTopics.length / subTopics.length) * 100) : 0;
+                              
+                              return (
+                                <React.Fragment key={unit.syllabusId}>
+                                  <tr style={{ borderBottom: '2px solid #ecf0f1' }}>
+                                    <td style={{ fontSize: '12px', fontWeight: 'bold', padding: '8px' }}>
+                                      {unit.unitName}
+                                      {subTopics.length > 0 && (
+                                        <div style={{ fontSize: '10px', color: '#7f8c8d', marginTop: '2px' }}>
+                                          {completedSubTopics.length}/{subTopics.length} sub-topics completed
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td style={{ color: getStatusColor(unit.completionStatus), fontSize: '11px', padding: '8px' }}>
+                                      {unit.completionStatus.replace(/[-_]/g, ' ')}
+                                    </td>
+                                    <td style={{ fontSize: '11px', fontWeight: 'bold', padding: '8px' }}>{subTopicProgress}%</td>
+                                    <td style={{ padding: '8px' }}>
+                                      <button 
+                                        onClick={() => handleCompletionToggle(unit.syllabusId)}
+                                        style={{
+                                          padding: '3px 8px',
+                                          fontSize: '10px',
+                                          backgroundColor: '#f39c12',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '3px',
+                                          cursor: 'pointer',
+                                          marginRight: '5px'
+                                        }}
+                                      >
+                                        Toggle Unit
+                                      </button>
+                                    </td>
+                                  </tr>
+                                  {subTopics.length > 0 && subTopics.map((subTopic, index) => {
+                                    const isCompleted = completedSubTopics.includes(subTopic);
+                                    return (
+                                      <tr key={`${unit.syllabusId}-subtopic-${index}`} style={{ backgroundColor: '#f8f9fa' }}>
+                                        <td style={{ fontSize: '10px', paddingLeft: '20px', color: '#6c757d' }}>
+                                          └ {subTopic}
+                                        </td>
+                                        <td style={{ 
+                                          fontSize: '9px', 
+                                          color: isCompleted ? '#27ae60' : '#e74c3c',
+                                          fontWeight: 'bold'
+                                        }}>
+                                          {isCompleted ? '✓ Completed' : '○ Pending'}
+                                        </td>
+                                        <td style={{ fontSize: '9px', color: '#6c757d' }}>
+                                          {isCompleted ? '100%' : '0%'}
+                                        </td>
+                                        <td>
+                                          <button 
+                                            onClick={() => handleSubTopicToggle(unit.syllabusId, subTopic)}
+                                            style={{
+                                              padding: '2px 6px',
+                                              fontSize: '9px',
+                                              backgroundColor: isCompleted ? '#e74c3c' : '#27ae60',
+                                              color: 'white',
+                                              border: 'none',
+                                              borderRadius: '2px',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            {isCompleted ? 'Mark Pending' : 'Mark Done'}
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </React.Fragment>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>

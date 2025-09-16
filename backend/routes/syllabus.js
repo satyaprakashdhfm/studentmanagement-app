@@ -595,4 +595,123 @@ router.get('/stats/overview', authenticateToken, async (req, res) => {
   }
 });
 
+// PUT /api/syllabus/:id/subtopic - Toggle sub-topic completion
+router.put('/:id/subtopic', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subTopicName } = req.body;
+    const user = req.user;
+
+    if (!subTopicName) {
+      return res.status(400).json({ error: 'Sub-topic name is required' });
+    }
+
+    // Check if syllabus record exists
+    const existingSyllabus = await prisma.syllabus.findUnique({
+      where: { syllabusId: id }
+    });
+
+    if (!existingSyllabus) {
+      return res.status(404).json({ error: 'Syllabus record not found' });
+    }
+
+    // Add teacher authorization for sub-topic completion
+    if (user.role === 'teacher') {
+      const teacherSchedules = await prisma.scheduleData.findMany({
+        where: {
+          teacherId: user.username,
+          isActive: true
+        },
+        select: {
+          classId: true,
+          subjectCode: true
+        },
+        distinct: ['classId', 'subjectCode']
+      });
+      
+      const isAuthorized = teacherSchedules.some(schedule => 
+        schedule.classId === existingSyllabus.classId && 
+        schedule.subjectCode === existingSyllabus.subjectCode
+      );
+      
+      if (!isAuthorized) {
+        return res.status(403).json({ error: 'Access denied. You can only update syllabus for your assigned classes and subjects.' });
+      }
+    }
+
+    // Check if sub-topic exists in the sub_topics array
+    if (!existingSyllabus.subTopics.includes(subTopicName)) {
+      return res.status(400).json({ error: 'Sub-topic not found in this unit' });
+    }
+
+    let updatedCompletedSubTopics = [...existingSyllabus.completedSubTopics];
+    let isCompleted = false;
+
+    // Toggle sub-topic completion
+    if (updatedCompletedSubTopics.includes(subTopicName)) {
+      // Remove from completed (mark as not completed)
+      updatedCompletedSubTopics = updatedCompletedSubTopics.filter(topic => topic !== subTopicName);
+      isCompleted = false;
+    } else {
+      // Add to completed
+      updatedCompletedSubTopics.push(subTopicName);
+      isCompleted = true;
+    }
+
+    // Calculate new completion percentage based on sub-topics
+    const totalSubTopics = existingSyllabus.subTopics.length;
+    const completedCount = updatedCompletedSubTopics.length;
+    const newCompletionPercentage = totalSubTopics > 0 ? Math.round((completedCount / totalSubTopics) * 100) : 0;
+
+    // Determine completion status based on percentage
+    let newCompletionStatus = 'not-started';
+    if (newCompletionPercentage === 100) {
+      newCompletionStatus = 'completed';
+    } else if (newCompletionPercentage > 0) {
+      newCompletionStatus = 'in-progress';
+    }
+
+    // Update syllabus record
+    const updatedSyllabus = await prisma.syllabus.update({
+      where: { syllabusId: id },
+      data: {
+        completedSubTopics: updatedCompletedSubTopics,
+        completionPercentage: newCompletionPercentage,
+        completionStatus: newCompletionStatus,
+        lastUpdated: new Date()
+      },
+      include: {
+        class: {
+          select: {
+            className: true,
+            section: true
+          }
+        },
+        subject: {
+          select: {
+            subjectName: true,
+            subjectCode: true
+          }
+        },
+        teacher: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
+
+    res.json({
+      syllabus: updatedSyllabus,
+      subTopicToggled: subTopicName,
+      newStatus: isCompleted ? 'completed' : 'not-completed',
+      message: `Sub-topic "${subTopicName}" ${isCompleted ? 'marked as completed' : 'marked as not completed'}`
+    });
+
+  } catch (error) {
+    console.error('Toggle sub-topic completion error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;

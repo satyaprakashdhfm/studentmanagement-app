@@ -502,6 +502,28 @@ CREATE TABLE IF NOT EXISTS academic_calendar (
     CHECK (start_date < end_date)
 );
 
+-- Create syllabus table
+CREATE TABLE IF NOT EXISTS syllabus (
+    syllabus_id           VARCHAR(50) PRIMARY KEY,
+    class_id              INTEGER NOT NULL,
+    unit_name             VARCHAR(255) NOT NULL,
+    completion_status     VARCHAR(20) NOT NULL DEFAULT 'not-started',
+    completion_percentage INTEGER NOT NULL DEFAULT 0,
+    current_topic         VARCHAR(255),
+    last_updated          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    subject_code          VARCHAR(20),
+    teacher_id            VARCHAR(255),
+    sub_topics            TEXT[] DEFAULT '{}',
+    completed_sub_topics  TEXT[] DEFAULT '{}',
+    FOREIGN KEY (class_id) REFERENCES classes(class_id),
+    FOREIGN KEY (subject_code) REFERENCES subjects(subject_code),
+    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id),
+    CHECK (completion_status IN ('not-started', 'in-progress', 'completed')),
+    CHECK (completion_percentage >= 0 AND completion_percentage <= 100)
+);
+
 -- Create triggers for updated_at
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

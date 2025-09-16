@@ -353,8 +353,8 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Generate marks ID
-    const marksId = `MRK${Date.now()}`;
+    // Generate marks ID using consistent pattern: studentId_subjectCode_examinationType
+    const marksId = `${studentId}_${subjectCode}_${examinationType}`;
 
     // Create mark record
     const newMark = await prisma.mark.create({
@@ -487,8 +487,12 @@ router.post('/bulk', authenticateToken, async (req, res) => {
             else calculatedGrade = 'F';
           }
 
+          // Generate marksId using pattern: studentId_subjectCode_examinationType
+          const marksId = `${studentId}_${subjectCode}_${examinationType}`;
+
           const newMark = await prisma.mark.create({
             data: {
+              marksId,
               studentId,
               classId: parseInt(classId),
               subjectCode,
@@ -511,7 +515,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
 
           createdRecords.push({
             ...newMark,
-            marksId: Number(newMark.marksId),
+            marksId: newMark.marksId, // Keep as string
             studentId: Number(newMark.studentId),
             teacherId: Number(newMark.teacherId)
           });
@@ -522,6 +526,7 @@ router.post('/bulk', authenticateToken, async (req, res) => {
     });
 
     res.status(201).json({
+      success: true,
       marks: result,
       message: `${result.length} mark records created successfully`
     });

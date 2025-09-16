@@ -73,6 +73,70 @@ router.get('/calendar/:academicYear', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/timemanagement/calendar-slots/:classId/:date
+// Get calendar slots for a specific class and date
+router.get('/calendar-slots/:classId/:date', authenticateToken, async (req, res) => {
+  try {
+    const { classId, date } = req.params;
+    
+    // Convert date to get day of week (1=Monday, 7=Sunday)
+    const selectedDate = new Date(date);
+    const dayOfWeek = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay(); // Convert Sunday from 0 to 7
+    
+    // Get calendar grid for the specific class and date
+    const calendarGrid = await prisma.calendarGrid.findFirst({
+      where: {
+        classId: parseInt(classId),
+        calendarDate: selectedDate
+      }
+    });
+
+    if (!calendarGrid) {
+      return res.status(404).json({ 
+        error: 'Calendar grid not found for this class and date',
+        classId: parseInt(classId),
+        date: date,
+        dayOfWeek: dayOfWeek
+      });
+    }
+
+    // Parse morning and afternoon slots
+    const morningSlots = calendarGrid.morningSlots ? JSON.parse(calendarGrid.morningSlots) : [];
+    const afternoonSlots = calendarGrid.afternoonSlots ? JSON.parse(calendarGrid.afternoonSlots) : [];
+    const allSlots = [...morningSlots, ...afternoonSlots];
+
+    // Get detailed schedule information for each slot
+    const slotsWithDetails = await Promise.all(
+      allSlots.map(async (scheduleId) => {
+        const scheduleData = await prisma.scheduleData.findFirst({
+          where: { scheduleId }
+        });
+        
+        return {
+          scheduleId,
+          ...scheduleData,
+          period: scheduleData ? parseInt(scheduleId.split('_')[2].replace('P', '')) : null
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        classId: parseInt(classId),
+        date: date,
+        dayOfWeek: dayOfWeek,
+        morningSlots: morningSlots,
+        afternoonSlots: afternoonSlots,
+        allSlots: slotsWithDetails.filter(slot => slot.scheduleId) // Remove any null results
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching calendar slots:', error);
+    res.status(500).json({ error: 'Failed to fetch calendar slots' });
+  }
+});
+
 // GET /api/timemanagement/schedule/:academicYear
 // Get all schedule data for a specific academic year
 router.get('/schedule/:academicYear', authenticateToken, async (req, res) => {

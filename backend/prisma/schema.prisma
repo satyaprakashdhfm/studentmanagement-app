@@ -219,20 +219,22 @@ model Fee {
 }
 
 model Syllabus {
-  syllabusId           String   @id @map("syllabus_id") @db.VarChar(50)
-  classId              Int      @map("class_id")
-  unitName             String   @map("unit_name") @db.VarChar(255)
-  completionStatus     String   @map("completion_status") @db.VarChar(20)
-  completionPercentage Int      @map("completion_percentage")
-  current_topic        String?
-  lastUpdated          DateTime @map("last_updated")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
-  subjectCode          String?  @map("subject_code") @db.VarChar(20)
-  teacherId            String?  @map("teacher_id") @db.VarChar(255)
-  class                Class    @relation(fields: [classId], references: [classId])
-  subject              Subject? @relation(fields: [subjectCode], references: [subjectCode], onDelete: NoAction, onUpdate: NoAction)
-  teacher              Teacher? @relation(fields: [teacherId], references: [teacherId], onDelete: NoAction, onUpdate: NoAction)
+  syllabusId            String   @id @map("syllabus_id") @db.VarChar(50)
+  classId               Int      @map("class_id")
+  unitName              String   @map("unit_name") @db.VarChar(255)
+  completionStatus      String   @map("completion_status") @db.VarChar(20)
+  completionPercentage  Int      @map("completion_percentage")
+  current_topic         String?
+  lastUpdated           DateTime @map("last_updated")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  subjectCode           String?  @map("subject_code") @db.VarChar(20)
+  teacherId             String?  @map("teacher_id") @db.VarChar(255)
+  subTopics             String[] @default([]) @map("sub_topics")
+  completedSubTopics    String[] @default([]) @map("completed_sub_topics")
+  class                 Class    @relation(fields: [classId], references: [classId])
+  subject               Subject? @relation(fields: [subjectCode], references: [subjectCode], onDelete: NoAction, onUpdate: NoAction)
+  teacher               Teacher? @relation(fields: [teacherId], references: [teacherId], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("syllabus")
 }

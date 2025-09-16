@@ -424,6 +424,10 @@ class ApiService {
     return this.request(`/timemanagement/calendar/${academicYear}`);
   }
 
+  async getCalendarSlots(classId, date) {
+    return this.request(`/timemanagement/calendar-slots/${classId}/${date}`);
+  }
+
   async getAllSchedules(academicYear = '2024-2025') {
     return this.request(`/timemanagement/schedule/${academicYear}`);
   }

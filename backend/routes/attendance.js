@@ -308,7 +308,9 @@ router.post('/', authenticateToken, async (req, res) => {
       date, 
       period, 
       status, 
-      markedBy 
+      markedBy,
+      scheduleId,
+      subjectCode
     } = req.body;
 
     // Validate required fields
@@ -370,14 +372,19 @@ router.post('/', authenticateToken, async (req, res) => {
         classId: parseInt(classId),
         dayOfWeek: scheduleDayOfWeek,
         slotNames: {
-          has: `P${period}`
+          contains: `P${period}`
         }
       }
     });
 
+    // Generate attendance ID in format: YYYYMMDD_classId_period_studentId
+    const dateStr = new Date(date).toISOString().split('T')[0].replace(/-/g, '');
+    const attendanceId = `${dateStr}_${classId}_${period}_${studentId}`;
+
     // Create attendance record
     const newAttendance = await prisma.attendance.create({
       data: {
+        attendanceId,
         studentId,
         classId: parseInt(classId),
         date: new Date(date),
@@ -385,7 +392,8 @@ router.post('/', authenticateToken, async (req, res) => {
         status,
         markedBy,
         timestamp: new Date(),
-        scheduleId: schedule?.scheduleId || null
+        scheduleId: schedule?.scheduleId || null,
+        subjectCode: subjectCode || null
       },
       include: {
         student: {
