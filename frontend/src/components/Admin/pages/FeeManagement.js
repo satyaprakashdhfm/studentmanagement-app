@@ -190,11 +190,11 @@ const FeeManagement = () => {
       if (response.fee) {
         setFees(fees.map(f => f.feeId === selectedFee.feeId ? response.fee : f));
         handleCloseModal();
-        alert('Payment recorded successfully');
+        alert('Fee record updated successfully');
       }
     } catch (error) {
-      console.error('Error recording payment:', error);
-      alert('Failed to record payment');
+      console.error('Error updating fee record:', error);
+      alert('Failed to update fee record');
     }
   };
 
@@ -500,7 +500,7 @@ const FeeManagement = () => {
                             className="btn btn-warning btn-sm" 
                             onClick={() => handleRecordPayment(fee)}
                           >
-                            Pay
+                            Update Record
                           </button>
                         )}
                       </td>
@@ -533,7 +533,7 @@ const FeeManagement = () => {
                     </button>
                     {selectedFee.balance > 0 && (
                       <button className="btn btn-primary btn-sm" onClick={() => handleRecordPayment(selectedFee)}>
-                        Record Payment
+                        Edit Fee
                       </button>
                     )}
                   </>
@@ -619,6 +619,23 @@ const FeeManagement = () => {
                       <strong>Payment Method:</strong> {selectedFee.paymentMethod}
                     </div>
                   )}
+                  <div className="detail-item">
+                    <strong>Created:</strong> {new Date(selectedFee.createdAt).toLocaleString()}
+                  </div>
+                  <div className="detail-item">
+                    <strong>Last Updated:</strong> {new Date(selectedFee.updatedAt).toLocaleString()}
+                  </div>
+                  {selectedFee.updatedBy && (
+                    <div className="detail-item">
+                      <strong>Updated By:</strong> 
+                      <span style={{ color: '#3498db', fontWeight: 'bold', marginLeft: '8px' }}>
+                        {selectedFee.updatedByUser ? 
+                          `${selectedFee.updatedByUser.firstName || ''} ${selectedFee.updatedByUser.lastName || ''}`.trim() || selectedFee.updatedByUser.username :
+                          selectedFee.updatedBy
+                        } ({selectedFee.updatedBy})
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -636,12 +653,12 @@ const FeeManagement = () => {
         </div>
       )}
 
-      {/* Payment Modal */}
+      {/* Update Record Modal */}
       {showPaymentModal && selectedFee && (
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Record Payment</h3>
+              <h3>Edit Fee Record</h3>
               <button className="btn btn-light btn-sm" onClick={handleCloseModal}>
                 ×
               </button>
@@ -660,7 +677,7 @@ const FeeManagement = () => {
               </div>
               <div className="form-grid">
                 <div className="form-group">
-                  <label>Payment Amount *</label>
+                  <label>Amount to Record *</label>
                   <input
                     type="number"
                     value={paymentData.paymentAmount}
@@ -670,7 +687,7 @@ const FeeManagement = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Payment Method</label>
+                  <label>Transaction Method</label>
                   <select
                     value={paymentData.paymentMethod}
                     onChange={(e) => setPaymentData({...paymentData, paymentMethod: e.target.value})}
@@ -683,7 +700,7 @@ const FeeManagement = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Payment Date</label>
+                  <label>Transaction Date</label>
                   <input
                     type="date"
                     value={paymentData.paymentDate}
@@ -701,7 +718,7 @@ const FeeManagement = () => {
                 onClick={handleSubmitPayment}
                 disabled={!paymentData.paymentAmount || parseFloat(paymentData.paymentAmount) <= 0}
               >
-                Record Payment
+                Update Fee Record
               </button>
             </div>
           </div>

@@ -24,6 +24,7 @@ model User {
   scheduleData       ScheduleData[]
   students           Student?
   teachers           Teacher?
+  feesUpdated        Fee[]
 
   @@map("users")
 }
@@ -212,8 +213,10 @@ model Fee {
   academicYear  String    @map("academic_year") @db.VarChar(20)
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+  updatedBy     String?   @map("updated_by") @db.VarChar(255)
   class         Class     @relation(fields: [classId], references: [classId])
   student       Student   @relation(fields: [studentId], references: [studentId], onDelete: NoAction, onUpdate: NoAction)
+  updatedByUser User?     @relation(fields: [updatedBy], references: [username], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("fees")
 }

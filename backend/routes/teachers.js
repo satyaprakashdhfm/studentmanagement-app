@@ -199,12 +199,18 @@ router.post('/', authenticateToken, async (req, res) => {
       name, 
       phoneNumber, 
       qualification, 
-      subjectsHandled, 
-      classesAssigned, 
+      qualifiedSubjects,  // Array of subject names like ["English", "Mathematics"]
+      subjectsHandled,    // Array of subject codes like ["8_ENG", "9_ENG", "10_ENG"]
+      classesAssigned,    // Array of class IDs
       classTeacherOf, 
       hireDate, 
-      salary 
+      salary,
+      teacherId           // Custom teacher ID like "amiteng080910"
     } = req.body;
+
+    console.log('🎓 Creating teacher with data:', {
+      username, email, name, qualifiedSubjects, subjectsHandled, classesAssigned, teacherId
+    });
 
     // Check if user email already exists
     const existingUser = await prisma.user.findUnique({
@@ -218,47 +224,69 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if username already exists
-    const existingUsername = await prisma.user.findUnique({
-      where: { username }
+    // Check if teacher ID already exists
+    const existingTeacher = await prisma.teacher.findUnique({
+      where: { teacherId: teacherId || username }
     });
 
-    if (existingUsername) {
+    if (existingTeacher) {
       return res.status(409).json({ 
         success: false,
-        message: 'Username already exists' 
+        message: 'Teacher ID already exists' 
       });
     }
 
-    // Generate teacher ID
-    const teacherId = `TCH${Date.now()}`;
+    // Use provided teacher ID or generate one
+    const finalTeacherId = teacherId || username || `TCH${Date.now()}`;
 
     // Hash the password
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await hashPassword(password || 'teacher123');
 
     // Create user and teacher in a transaction
     const result = await prisma.$transaction(async (prisma) => {
+      console.log('🔄 Starting transaction for teacher creation...');
+      
       // Create user first
+      console.log('👤 Creating user with data:', {
+        username: finalTeacherId,
+        email,
+        firstName: firstName || name.split(' ')[0],
+        lastName: lastName || name.split(' ').slice(1).join(' '),
+        role: 'teacher'
+      });
+      
       const newUser = await prisma.user.create({
         data: {
-          username,
+          username: finalTeacherId, // Use teacher ID as username
           email,
           password: hashedPassword,
-          firstName,
-          lastName,
+          firstName: firstName || name.split(' ')[0],
+          lastName: lastName || name.split(' ').slice(1).join(' '),
           role: 'teacher',
           active: true
         }
       });
-
+      
+      console.log('✅ User created successfully:', newUser.username);
+      
       // Create teacher
+      console.log('🎓 Creating teacher with data:', {
+        teacherId: finalTeacherId,
+        name: name || `${firstName} ${lastName}`.trim(),
+        email,
+        qualified_subjects: qualifiedSubjects || [],
+        subjectsHandled: subjectsHandled || [],
+        classesAssigned: classesAssigned || []
+      });
+      
       const newTeacher = await prisma.teacher.create({
         data: {
-          teacherId,
+          teacherId: finalTeacherId,
           name: name || `${firstName} ${lastName}`.trim(),
           email,
           phoneNumber,
           qualification,
+          qualified_subjects: qualifiedSubjects || [], // Note: snake_case for database field
           subjectsHandled: subjectsHandled || [],
           classesAssigned: classesAssigned || [],
           classTeacherOf,
@@ -268,6 +296,7 @@ router.post('/', authenticateToken, async (req, res) => {
         }
       });
 
+      console.log('✅ Teacher created successfully:', newTeacher.teacherId);
       return newTeacher;
     });
 
@@ -276,6 +305,7 @@ router.post('/', authenticateToken, async (req, res) => {
       message: 'Teacher created successfully',
       teacher: {
         ...result,
+        id: result.teacherId, // Add id field for frontend compatibility
         salary: result.salary ? Number(result.salary) : null
       }
     });
@@ -285,12 +315,19 @@ router.post('/', authenticateToken, async (req, res) => {
     if (error.code === 'P2002') { // Prisma unique constraint violation
       return res.status(409).json({ 
         success: false,
-        message: 'Email or username already exists' 
+        message: 'Email or Teacher ID already exists' 
+      });
+    }
+    if (error.code === 'P2003') { // Foreign key constraint violation
+      return res.status(400).json({ 
+        success: false,
+        message: `Foreign key constraint error: ${error.meta?.field_name || 'unknown field'}`,
+        details: 'This usually means a referenced record does not exist'
       });
     }
     res.status(500).json({ 
       success: false,
-      message: 'Internal server error' 
+      message: 'Internal server error: ' + error.message 
     });
   }
 });

@@ -440,6 +440,10 @@ class ApiService {
     return this.request(`/timemanagement/teacher-schedule/${teacherId}/${academicYear}`);
   }
 
+  async getCalendarWeekSchedule(classId, academicYear = '2024-2025') {
+    return this.request(`/timemanagement/calendar-week/${classId}/${academicYear}`);
+  }
+
   async createScheduleEntry(scheduleData) {
     return this.request('/timemanagement/schedule', {
       method: 'POST',

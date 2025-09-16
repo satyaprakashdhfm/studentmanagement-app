@@ -103,6 +103,13 @@ router.get('/', authenticateToken, async (req, res) => {
             section: true,
             academicYear: true
           }
+        },
+        updatedByUser: {
+          select: {
+            username: true,
+            firstName: true,
+            lastName: true
+          }
         }
       },
       orderBy: [
@@ -281,6 +288,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
             section: true,
             academicYear: true
           }
+        },
+        updatedByUser: {
+          select: {
+            username: true,
+            firstName: true,
+            lastName: true
+          }
         }
       }
     });
@@ -405,9 +419,17 @@ router.post('/', authenticateToken, async (req, res) => {
 router.post('/:id/payment', authenticateToken, async (req, res) => {
   try {
     const feeId = req.params.id;
-    const { amountPaid, paymentMethod = 'cash' } = req.body;
+    const { amountPaid, paymentAmount, paymentMethod = 'cash' } = req.body;
+    
+    console.log('💰 Payment request data:', { amountPaid, paymentAmount, paymentMethod });
+    
+    // Accept either amountPaid or paymentAmount field names
+    const amount = amountPaid || paymentAmount;
+    
+    console.log('💸 Final amount:', amount, 'Type:', typeof amount);
 
-    if (!amountPaid || amountPaid <= 0) {
+    if (!amount || parseFloat(amount) <= 0 || isNaN(parseFloat(amount))) {
+      console.log('❌ Invalid payment amount:', amount);
       return res.status(400).json({ error: 'Valid payment amount is required' });
     }
 
@@ -428,7 +450,7 @@ router.post('/:id/payment', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Fee record not found' });
     }
 
-    const newAmountPaid = parseFloat(fee.amountPaid) + parseFloat(amountPaid);
+    const newAmountPaid = parseFloat(fee.amountPaid) + parseFloat(amount);
     const newBalance = parseFloat(fee.amountDue) - newAmountPaid;
 
     // Validate payment doesn't exceed due amount
@@ -448,13 +470,21 @@ router.post('/:id/payment', authenticateToken, async (req, res) => {
         amountPaid: newAmountPaid,
         balance: newBalance,
         paymentDate: new Date(),
-        paymentMethod
+        paymentMethod,
+        updatedBy: req.user.username // Track who updated the fee record
       },
       include: {
         student: {
           select: {
             name: true,
             email: true
+          }
+        },
+        updatedByUser: {
+          select: {
+            username: true,
+            firstName: true,
+            lastName: true
           }
         }
       }
@@ -469,11 +499,11 @@ router.post('/:id/payment', authenticateToken, async (req, res) => {
     res.json({
       fee: feeResponse,
       payment: {
-        amount: parseFloat(amountPaid),
+        amount: parseFloat(amount),
         method: paymentMethod,
         date: new Date().toISOString()
       },
-      message: 'Payment recorded successfully'
+      message: 'Fee record updated successfully'
     });
 
   } catch (error) {
@@ -514,6 +544,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       data.amountDue = newAmountDue;
       data.balance = newAmountDue - currentAmountPaid;
     }
+    
+    // Always track who updated the fee record
+    data.updatedBy = req.user.username;
 
     // Update fee record
     const updatedFee = await prisma.fee.update({

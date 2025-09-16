@@ -18,6 +18,7 @@ const TimeManagement = () => {
   const [selectedClass, setSelectedClass] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [weekDates, setWeekDates] = useState([]);
 
   // Use local classes if available, otherwise use context classes
   const effectiveClasses = localClasses.length > 0 ? localClasses : classes;
@@ -76,7 +77,7 @@ const TimeManagement = () => {
     { slot_name: 'Period 9', start_time: '15:00:00', end_time: '15:40:00' }
   ];
 
-  // Fetch schedule data
+  // Fetch schedule data from calendar grid
   const fetchSchedule = async () => {
     if (!selectedClass) return;
 
@@ -84,28 +85,44 @@ const TimeManagement = () => {
       setLoading(true);
       setError(null);
 
-      console.log('Fetching schedule for class:', selectedClass.classId, 'academic year:', selectedAcademicYear);
+      console.log('📅 Fetching calendar week schedule for class:', selectedClass.classId, 'academic year:', selectedAcademicYear);
 
-      const response = await apiService.getClassSchedule(
+      const response = await apiService.getCalendarWeekSchedule(
         selectedClass.classId,
         selectedAcademicYear
       );
 
-      console.log('Schedule API response:', response);
+      console.log('📊 Calendar week API response:', response);
 
       if (response && response.data) {
-        console.log('Schedule data received:', response.data.length, 'entries');
-        console.log('Sample schedule item:', response.data[0]);
+        console.log('📅 Calendar week data received:', response.data.length, 'days');
+        console.log('📅 Week range:', response.weekRange);
+        
+        // Set the schedule data
         setSchedule(response.data);
-        console.log('Schedule state updated with', response.data.length, 'items');
+        
+        // Extract week dates for headers
+        const dates = response.data.map(dayData => {
+          const date = new Date(dayData.calendar_date);
+          return {
+            dayName: dayData.day_name || dayNames[dayData.day_of_week - 1],
+            date: date,
+            formatted: date.getDate()
+          };
+        });
+        setWeekDates(dates);
+        
+        console.log('📊 Schedule state updated with calendar data, week dates:', dates);
       } else {
-        console.log('No schedule data received');
+        console.log('📅 No calendar data received');
         setSchedule([]);
+        setWeekDates([]);
       }
     } catch (error) {
-      console.error('Error fetching schedule:', error);
-      setError('Failed to load schedule data');
+      console.error('❌ Error fetching calendar schedule:', error);
+      setError('Failed to load calendar week data');
       setSchedule([]);
+      setWeekDates([]);
     } finally {
       setLoading(false);
     }
@@ -254,28 +271,32 @@ const TimeManagement = () => {
     fetchClassesIfNeeded();
   }, [classes.length, selectedAcademicYear, localLoading, classId, section, effectiveClasses.length, localClasses.length]);
 
-  // Find schedule item for specific day and time
-  const findScheduleItem = (dayOfWeek, startTime, endTime) => {
+  // Find schedule item for specific day and time from calendar data
+  const findScheduleItem = (dayIndex, startTime, endTime) => {
+    if (!schedule.length || dayIndex >= schedule.length) return null;
+
+    const dayData = schedule[dayIndex]; // Use array index instead of day_of_week
+    if (!dayData) return null;
+
     // Normalize time comparison - handle different formats
     const normalizeTime = (time) => {
       if (!time) return '';
       if (typeof time === 'string') {
         // If it's an ISO string like "1970-01-01T09:00:00.000Z", extract time part
         if (time.includes('T')) {
-          return time.split('T')[1].substring(0, 8); // HH:MM:SS
+          return time.split('T')[1].substring(0, 5); // HH:MM
         }
         // If it's already HH:MM:SS format
-        if (time.length === 8) return time;
-        // If it's HH:MM format, add seconds
-        if (time.length === 5) return time + ':00';
+        if (time.length === 8) return time.substring(0, 5); // HH:MM
+        // If it's HH:MM format
+        if (time.length === 5) return time;
         return time;
       }
-      // If it's a Date object, format it to HH:MM:SS
+      // If it's a Date object, format it to HH:MM
       if (time instanceof Date) {
         const hours = time.getHours().toString().padStart(2, '0');
         const minutes = time.getMinutes().toString().padStart(2, '0');
-        const seconds = time.getSeconds().toString().padStart(2, '0');
-        return `${hours}:${minutes}:${seconds}`;
+        return `${hours}:${minutes}`;
       }
       return String(time);
     };
@@ -283,16 +304,61 @@ const TimeManagement = () => {
     const searchStartTime = normalizeTime(startTime);
     const searchEndTime = normalizeTime(endTime);
 
-    return schedule.find(item => {
-      // Check day of week match
-      if (item.dayOfWeek !== dayOfWeek) return false;
+    // Search in morning slots
+    if (dayData.morning_slots) {
+      for (const slot of dayData.morning_slots) {
+        // Parse slot data - format: "242508001_2_P1_0900_0940_rajeshmaths080910_8_MATH"
+        const parts = slot.split('_');
+        if (parts.length >= 7) {
+          const slotStart = parts[3]; // "0900"
+          const slotEnd = parts[4]; // "0940"
+          const subjectCode = parts[parts.length - 1]; // "MATH"
+          const teacherId = parts[5]; // "rajeshmaths080910"
+          
+          // Format times to HH:MM
+          const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+          const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+          
+          if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+            return {
+              subjectCode: subjectCode,
+              teacherId: teacherId,
+              startTime: formattedStart,
+              endTime: formattedEnd,
+              period: parts[2] // P1, P2, etc.
+            };
+          }
+        }
+      }
+    }
 
-      // Check time match
-      const itemStartTime = normalizeTime(item.startTime);
-      const itemEndTime = normalizeTime(item.endTime);
+    // Search in afternoon slots
+    if (dayData.afternoon_slots) {
+      for (const slot of dayData.afternoon_slots) {
+        const parts = slot.split('_');
+        if (parts.length >= 7) {
+          const slotStart = parts[3];
+          const slotEnd = parts[4];
+          const subjectCode = parts[parts.length - 1];
+          const teacherId = parts[5];
+          
+          const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+          const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+          
+          if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+            return {
+              subjectCode: subjectCode,
+              teacherId: teacherId,
+              startTime: formattedStart,
+              endTime: formattedEnd,
+              period: parts[2]
+            };
+          }
+        }
+      }
+    }
 
-      return itemStartTime === searchStartTime && itemEndTime === searchEndTime;
-    });
+    return null;
   };
 
   // Format time for display
@@ -423,50 +489,50 @@ const TimeManagement = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {dayNames.map((day, dayIndex) => {
-                        const dayOfWeek = dayIndex + 1; // 1 = Monday, 2 = Tuesday, etc.
+                      {weekDates.length > 0 ? weekDates.map((dateInfo, dayIndex) => (
+                        <tr key={dayIndex}>
+                          <td className="day-cell">
+                            <div className="day-name">{dateInfo.dayName}</div>
+                            <div className="day-date">({dateInfo.formatted}th)</div>
+                          </td>
+                          {timeSlots.map((slot, slotIndex) => {
+                            const scheduleItem = findScheduleItem(dayIndex, slot.start_time, slot.end_time);
 
-                        return (
-                          <tr key={day}>
-                            <td className="day-cell">{day}</td>
-                            {timeSlots.map((slot, slotIndex) => {
-                              const scheduleItem = findScheduleItem(dayOfWeek, slot.start_time, slot.end_time);
-
-                              // Debug logging for first few cells
-                              if (dayIndex === 0 && slotIndex < 3) {
-                                console.log(`Cell [${dayIndex},${slotIndex}] - Day ${dayOfWeek}, Time ${slot.start_time}-${slot.end_time}:`, scheduleItem ? 'HAS DATA' : 'EMPTY');
-                              }
-
-                              return (
-                                <td key={slotIndex} className="period-cell">
-                                  {scheduleItem ? (
-                                    <div className={`schedule-item ${getSubjectClass(scheduleItem.subjectCode)} ${
-                                      scheduleItem.subjectCode === 'STUDY' ? 'study-period' :
-                                      scheduleItem.subjectCode === 'LUNCH' ? 'lunch-break' : ''
-                                    }`}>
-                                      <div className="subject-name">
-                                        {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode || 'Unknown Subject'}
-                                      </div>
-                                      <div className="teacher-name">
-                                        {scheduleItem.teacherId && scheduleItem.teacherId.startsWith('LUNCH_')
-                                          ? 'Lunch Break'
-                                          : scheduleItem.teacherId
-                                            ? teacherNames[scheduleItem.teacherId] || scheduleItem.teacherId
-                                            : 'Study Period'
-                                        }
-                                      </div>
+                            return (
+                              <td key={slotIndex} className="period-cell">
+                                {scheduleItem ? (
+                                  <div className={`schedule-item ${getSubjectClass(scheduleItem.subjectCode)} ${
+                                    scheduleItem.subjectCode === 'STUDY' ? 'study-period' :
+                                    scheduleItem.subjectCode === 'LUNCH' ? 'lunch-break' : ''
+                                  }`}>
+                                    <div className="subject-name">
+                                      {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode || 'Unknown Subject'}
                                     </div>
-                                  ) : (
-                                    <div className="empty-slot">
-                                      <span>-</span>
+                                    <div className="teacher-name">
+                                      {scheduleItem.teacherId && scheduleItem.teacherId.includes('LUNCH')
+                                        ? 'Lunch Break'
+                                        : scheduleItem.teacherId || 'No Teacher'}
                                     </div>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
+                                  </div>
+                                ) : (
+                                  <div className="empty-slot">
+                                    <span>-</span>
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      )) : dayNames.map((day, dayIndex) => (
+                        <tr key={day}>
+                          <td className="day-cell">{day}</td>
+                          {timeSlots.map((slot, slotIndex) => (
+                            <td key={slotIndex} className="period-cell">
+                              <div className="empty-slot">Loading...</div>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

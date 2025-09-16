@@ -17,16 +17,131 @@ const TeacherManagement = () => {
     email: '',
     phoneNumber: '',
     qualification: '',
-    subjectsHandled: '',
-    classesAssigned: '',
+    qualifiedSubjects: [], // Array for multiple subjects
+    subjectsHandled: [], // Will be auto-generated based on qualifiedSubjects
+    classesAssigned: [], // Will be selected from available classes
     classTeacherOf: '',
     hireDate: '',
     salary: '',
     username: '',
-    password: '',
+    password: 'teacher123', // Default password
     firstName: '',
     lastName: ''
   });
+
+  // Subject mapping configuration
+  const subjectOptions = [
+    { value: 'English', code: 'ENG', grades: ['8_ENG', '9_ENG', '10_ENG'] },
+    { value: 'Telugu', code: 'TEL', grades: ['8_TEL', '9_TEL', '10_TEL'] },
+    { value: 'Science', code: 'SCI', grades: ['8_SCI', '9_SCI', '10_SCI'] },
+    { value: 'Mathematics', code: 'MATH', grades: ['8_MATH', '9_MATH', '10_MATH'] },
+    { value: 'Hindi', code: 'HIN', grades: ['8_HIN', '9_HIN', '10_HIN'] },
+    { value: 'Social Studies', code: 'SOC', grades: ['8_SOC', '9_SOC', '10_SOC'] }
+  ];
+
+  // Available classes from database
+  const availableClasses = [
+    { id: '242508001', name: '8 Grade A', grade: '8', section: 'A' },
+    { id: '242508002', name: '8 Grade B', grade: '8', section: 'B' },
+    { id: '242508003', name: '8 Grade C', grade: '8', section: 'C' },
+    { id: '242509001', name: '9 Grade A', grade: '9', section: 'A' },
+    { id: '242509002', name: '9 Grade B', grade: '9', section: 'B' },
+    { id: '242509003', name: '9 Grade C', grade: '9', section: 'C' },
+    { id: '242510001', name: '10 Grade A', grade: '10', section: 'A' },
+    { id: '242510002', name: '10 Grade B', grade: '10', section: 'B' },
+    { id: '242510003', name: '10 Grade C', grade: '10', section: 'C' }
+  ];
+
+  // Generate teacher ID based on name and primary subject
+  const generateTeacherId = (name, primarySubject) => {
+    if (!name || !primarySubject) return '';
+    
+    const firstName = name.split(' ')[0].toLowerCase();
+    const subjectCode = subjectOptions.find(s => s.value === primarySubject)?.code.toLowerCase() || '';
+    const dateCode = '080910'; // Fixed date pattern as per examples
+    
+    return `${firstName}${subjectCode}${dateCode}`;
+  };
+
+  // Handle qualified subjects change
+  const handleQualifiedSubjectsChange = (subject, isChecked) => {
+    let updatedSubjects = [...newTeacher.qualifiedSubjects];
+    
+    if (isChecked) {
+      updatedSubjects.push(subject);
+    } else {
+      updatedSubjects = updatedSubjects.filter(s => s !== subject);
+      // Also remove any subject codes for this subject
+      const subjectConfig = subjectOptions.find(s => s.value === subject);
+      if (subjectConfig) {
+        const updatedSubjectsHandled = newTeacher.subjectsHandled.filter(
+          code => !subjectConfig.grades.includes(code)
+        );
+        setNewTeacher(prev => ({
+          ...prev,
+          qualifiedSubjects: updatedSubjects,
+          subjectsHandled: updatedSubjectsHandled
+        }));
+        return;
+      }
+    }
+
+    // Generate teacher ID if name exists and this is the first subject
+    const teacherId = updatedSubjects.length > 0 && newTeacher.name ? 
+      generateTeacherId(newTeacher.name, updatedSubjects[0]) : '';
+
+    setNewTeacher({
+      ...newTeacher,
+      qualifiedSubjects: updatedSubjects,
+      username: teacherId
+    });
+  };
+
+  // Handle specific subject code selection
+  const handleSubjectCodeChange = (subjectCode, isChecked) => {
+    let updatedSubjectsHandled = [...newTeacher.subjectsHandled];
+    
+    if (isChecked) {
+      updatedSubjectsHandled.push(subjectCode);
+    } else {
+      updatedSubjectsHandled = updatedSubjectsHandled.filter(code => code !== subjectCode);
+    }
+    
+    setNewTeacher({
+      ...newTeacher,
+      subjectsHandled: updatedSubjectsHandled
+    });
+  };
+
+  // Handle name change and regenerate teacher ID
+  const handleNameChange = (name) => {
+    const teacherId = newTeacher.qualifiedSubjects.length > 0 ? 
+      generateTeacherId(name, newTeacher.qualifiedSubjects[0]) : '';
+    
+    setNewTeacher({
+      ...newTeacher,
+      name: name,
+      firstName: name.split(' ')[0],
+      lastName: name.split(' ').slice(1).join(' '),
+      username: teacherId
+    });
+  };
+
+  // Handle class assignment change
+  const handleClassAssignmentChange = (classId, isChecked) => {
+    let updatedClasses = [...newTeacher.classesAssigned];
+    
+    if (isChecked) {
+      updatedClasses.push(classId);
+    } else {
+      updatedClasses = updatedClasses.filter(c => c !== classId);
+    }
+    
+    setNewTeacher({
+      ...newTeacher,
+      classesAssigned: updatedClasses
+    });
+  };
 
   useEffect(() => {
     const fetchTeachers = async () => {
@@ -88,13 +203,14 @@ const TeacherManagement = () => {
       email: '',
       phoneNumber: '',
       qualification: '',
-      subjectsHandled: '',
-      classesAssigned: '',
+      qualifiedSubjects: [],
+      subjectsHandled: [],
+      classesAssigned: [],
       classTeacherOf: '',
       hireDate: '',
       salary: '',
       username: '',
-      password: '',
+      password: 'teacher123',
       firstName: '',
       lastName: ''
     });
@@ -102,28 +218,43 @@ const TeacherManagement = () => {
 
   const handleAddTeacher = async () => {
     try {
+      // Validate required fields
+      if (!newTeacher.name || !newTeacher.email || !newTeacher.qualifiedSubjects.length) {
+        alert('Please fill in all required fields: Name, Email, and at least one Qualified Subject');
+        return;
+      }
+
       const teacherData = {
-        ...newTeacher,
-        username: newTeacher.email.split('@')[0],
-        password: 'teacher123',
-        firstName: newTeacher.name.split(' ')[0],
-        lastName: newTeacher.name.split(' ').slice(1).join(' '),
-        subjectsHandled: newTeacher.subjectsHandled.split(',').map(s => s.trim()).filter(s => s),
-        classesAssigned: newTeacher.classesAssigned.split(',').map(s => s.trim()).filter(s => s),
-        salary: newTeacher.salary ? parseFloat(newTeacher.salary) : null
+        name: newTeacher.name,
+        email: newTeacher.email,
+        phoneNumber: newTeacher.phoneNumber,
+        qualification: newTeacher.qualification,
+        qualifiedSubjects: newTeacher.qualifiedSubjects,
+        subjectsHandled: newTeacher.subjectsHandled,
+        classesAssigned: newTeacher.classesAssigned,
+        classTeacherOf: newTeacher.classTeacherOf,
+        hireDate: newTeacher.hireDate,
+        salary: newTeacher.salary ? parseFloat(newTeacher.salary) : null,
+        username: newTeacher.username,
+        password: newTeacher.password,
+        firstName: newTeacher.firstName,
+        lastName: newTeacher.lastName,
+        teacherId: newTeacher.username // Use generated username as teacher ID
       };
+      
+      console.log('🎓 Adding teacher with data:', teacherData);
       
       const response = await apiService.createTeacher(teacherData);
       if (response.teacher || response.success) {
         setTeachers([...teachers, response.teacher || response.data]);
         handleCloseModal();
-        alert('Teacher added successfully');
+        alert('Teacher added successfully with ID: ' + teacherData.teacherId);
       } else {
         alert(response.message || 'Failed to add teacher');
       }
     } catch (error) {
       console.error('Error adding teacher:', error);
-      alert('Failed to add teacher');
+      alert('Failed to add teacher: ' + (error.message || 'Unknown error'));
     }
   };
 
@@ -358,7 +489,7 @@ const TeacherManagement = () => {
       {/* Add Teacher Modal */}
       {showAddModal && (
         <div className="modal-overlay" onClick={handleCloseModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
               <h3>Add New Teacher</h3>
               <button className="btn btn-light btn-sm" onClick={handleCloseModal}>
@@ -367,65 +498,226 @@ const TeacherManagement = () => {
             </div>
             <div className="modal-body">
               <div className="form-grid">
+                
+                {/* Basic Information */}
+                <div style={{ gridColumn: '1 / -1', marginBottom: '20px' }}>
+                  <h4 style={{ color: '#2c3e50', borderBottom: '2px solid #e8f4f8', paddingBottom: '8px' }}>
+                    📝 Basic Information
+                  </h4>
+                </div>
+
                 <div className="form-group">
-                  <label>Name *</label>
+                  <label>Name * <small style={{ color: '#7f8c8d' }}>(e.g., Amit Patel)</small></label>
                   <input
                     type="text"
                     value={newTeacher.name}
-                    onChange={(e) => setNewTeacher({...newTeacher, name: e.target.value})}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     required
+                    placeholder="Enter full name"
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Email *</label>
+                  <label>Email * <small style={{ color: '#7f8c8d' }}>(e.g., amit.patel@school.local)</small></label>
                   <input
                     type="email"
                     value={newTeacher.email}
                     onChange={(e) => setNewTeacher({...newTeacher, email: e.target.value})}
                     required
+                    placeholder="teacher@school.local"
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Phone</label>
+                  <label>Phone Number <small style={{ color: '#7f8c8d' }}>(e.g., +91-9876543210)</small></label>
                   <input
                     type="text"
                     value={newTeacher.phoneNumber}
                     onChange={(e) => setNewTeacher({...newTeacher, phoneNumber: e.target.value})}
+                    placeholder="+91-9876543210"
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Qualification</label>
+                  <label>Qualification <small style={{ color: '#7f8c8d' }}>(e.g., M.A. English, B.Ed.)</small></label>
                   <textarea
                     value={newTeacher.qualification}
                     onChange={(e) => setNewTeacher({...newTeacher, qualification: e.target.value})}
+                    placeholder="M.A. English, B.Ed."
+                    rows="2"
                   />
                 </div>
-                <div className="form-group">
-                  <label>Subjects Handled</label>
-                  <input
-                    type="text"
-                    value={newTeacher.subjectsHandled}
-                    onChange={(e) => setNewTeacher({...newTeacher, subjectsHandled: e.target.value})}
-                    placeholder="Math, Science, English"
-                  />
+
+                {/* Subject Information */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '20px', marginBottom: '20px' }}>
+                  <h4 style={{ color: '#2c3e50', borderBottom: '2px solid #e8f4f8', paddingBottom: '8px' }}>
+                    📚 Subject Qualifications
+                  </h4>
                 </div>
-                <div className="form-group">
-                  <label>Classes Assigned</label>
-                  <input
-                    type="text"
-                    value={newTeacher.classesAssigned}
-                    onChange={(e) => setNewTeacher({...newTeacher, classesAssigned: e.target.value})}
-                    placeholder="10A, 10B, 11A"
-                  />
+
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>Qualified Subjects * <small style={{ color: '#7f8c8d' }}>(Select subjects you can teach)</small></label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '10px' }}>
+                    {subjectOptions.map(subject => (
+                      <label key={subject.value} style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        backgroundColor: newTeacher.qualifiedSubjects.includes(subject.value) ? '#e8f4f8' : 'white'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={newTeacher.qualifiedSubjects.includes(subject.value)}
+                          onChange={(e) => handleQualifiedSubjectsChange(subject.value, e.target.checked)}
+                          style={{ marginRight: '8px' }}
+                        />
+                        {subject.value}
+                      </label>
+                    ))}
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Class Teacher Of</label>
-                  <input
-                    type="text"
+
+                {newTeacher.qualifiedSubjects.length > 0 && (
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label>Select Specific Subject Codes to Handle <small style={{ color: '#7f8c8d' }}>(Choose which grade levels you'll teach for each subject)</small></label>
+                    
+                    <div style={{ marginTop: '15px' }}>
+                      {newTeacher.qualifiedSubjects.map(subject => {
+                        const subjectConfig = subjectOptions.find(s => s.value === subject);
+                        if (!subjectConfig) return null;
+                        
+                        return (
+                          <div key={subject} style={{ 
+                            marginBottom: '20px', 
+                            padding: '15px', 
+                            border: '1px solid #e9ecef',
+                            borderRadius: '8px',
+                            backgroundColor: '#f8f9fa'
+                          }}>
+                            <h5 style={{ 
+                              color: '#2c3e50', 
+                              marginBottom: '10px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}>
+                              📚 {subject}
+                            </h5>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                              {subjectConfig.grades.map(gradeCode => (
+                                <label key={gradeCode} style={{ 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  padding: '6px 10px',
+                                  border: '1px solid #ddd',
+                                  borderRadius: '4px',
+                                  backgroundColor: newTeacher.subjectsHandled.includes(gradeCode) ? '#e8f4f8' : 'white',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  <input
+                                    type="checkbox"
+                                    style={{ marginRight: '6px' }}
+                                    checked={newTeacher.subjectsHandled.includes(gradeCode)}
+                                    onChange={(e) => handleSubjectCodeChange(gradeCode, e.target.checked)}
+                                  />
+                                  {gradeCode}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ 
+                      marginTop: '15px',
+                      padding: '10px', 
+                      backgroundColor: '#f8f9fa', 
+                      border: '1px solid #e9ecef',
+                      borderRadius: '4px'
+                    }}>
+                      <strong>Selected Codes:</strong>
+                      <div style={{ 
+                        marginTop: '5px',
+                        padding: '8px',
+                        backgroundColor: 'white',
+                        border: '1px solid #e9ecef',
+                        fontSize: '14px',
+                        fontFamily: 'monospace'
+                      }}>
+                        {newTeacher.subjectsHandled.length > 0 ? 
+                          `[${newTeacher.subjectsHandled.map(s => `"${s}"`).join(', ')}]` : 
+                          'No codes selected'
+                        }
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Class Assignments */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '20px', marginBottom: '20px' }}>
+                  <h4 style={{ color: '#2c3e50', borderBottom: '2px solid #e8f4f8', paddingBottom: '8px' }}>
+                    🏫 Class Assignments
+                  </h4>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>Classes to Assign <small style={{ color: '#7f8c8d' }}>(Select classes where you'll teach)</small></label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '10px' }}>
+                    {availableClasses.map(classItem => (
+                      <label key={classItem.id} style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        padding: '8px',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        backgroundColor: newTeacher.classesAssigned.includes(classItem.id) ? '#e8f4f8' : 'white',
+                        fontSize: '13px'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={newTeacher.classesAssigned.includes(classItem.id)}
+                          onChange={(e) => handleClassAssignmentChange(classItem.id, e.target.checked)}
+                          style={{ marginRight: '8px' }}
+                        />
+                        {classItem.name}
+                        <small style={{ color: '#6c757d', marginLeft: '4px' }}>({classItem.id})</small>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label>Class Teacher Of <small style={{ color: '#7f8c8d' }}>(Optional - Main class responsibility)</small></label>
+                  <select
                     value={newTeacher.classTeacherOf}
                     onChange={(e) => setNewTeacher({...newTeacher, classTeacherOf: e.target.value})}
-                  />
+                  >
+                    <option value="">Select a class (Optional)</option>
+                    {availableClasses
+                      .filter(c => newTeacher.classesAssigned.includes(c.id))
+                      .map(classItem => (
+                        <option key={classItem.id} value={classItem.name}>
+                          {classItem.name} (ID: {classItem.id})
+                        </option>
+                      ))
+                    }
+                  </select>
                 </div>
+
+                {/* Employment Details */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '20px', marginBottom: '20px' }}>
+                  <h4 style={{ color: '#2c3e50', borderBottom: '2px solid #e8f4f8', paddingBottom: '8px' }}>
+                    💼 Employment Details
+                  </h4>
+                </div>
+
                 <div className="form-group">
                   <label>Hire Date</label>
                   <input
@@ -434,14 +726,53 @@ const TeacherManagement = () => {
                     onChange={(e) => setNewTeacher({...newTeacher, hireDate: e.target.value})}
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Salary</label>
+                  <label>Salary <small style={{ color: '#7f8c8d' }}>(e.g., 45000)</small></label>
                   <input
                     type="number"
                     value={newTeacher.salary}
                     onChange={(e) => setNewTeacher({...newTeacher, salary: e.target.value})}
+                    placeholder="45000"
+                    min="0"
+                    step="1000"
                   />
                 </div>
+
+                {/* Generated Information */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '20px', marginBottom: '20px' }}>
+                  <h4 style={{ color: '#2c3e50', borderBottom: '2px solid #e8f4f8', paddingBottom: '8px' }}>
+                    🔐 Auto-Generated Login Details
+                  </h4>
+                </div>
+
+                <div className="form-group">
+                  <label>Teacher ID (Username)</label>
+                  <input
+                    type="text"
+                    value={newTeacher.username}
+                    readOnly
+                    style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
+                    placeholder="Will be auto-generated"
+                  />
+                  <small style={{ color: '#6c757d' }}>
+                    Format: firstname + subjectcode + 080910 (e.g., amiteng080910)
+                  </small>
+                </div>
+
+                <div className="form-group">
+                  <label>Default Password</label>
+                  <input
+                    type="text"
+                    value={newTeacher.password}
+                    readOnly
+                    style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
+                  />
+                  <small style={{ color: '#6c757d' }}>
+                    Teacher can change this after first login
+                  </small>
+                </div>
+
               </div>
             </div>
             <div className="modal-footer">
@@ -451,7 +782,7 @@ const TeacherManagement = () => {
               <button 
                 className="btn btn-primary" 
                 onClick={handleAddTeacher}
-                disabled={!newTeacher.name || !newTeacher.email}
+                disabled={!newTeacher.name || !newTeacher.email || !newTeacher.qualifiedSubjects.length}
               >
                 Add Teacher
               </button>

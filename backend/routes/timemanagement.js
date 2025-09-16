@@ -406,4 +406,93 @@ router.get('/class-schedule/:classId/:academicYear', authenticateToken, async (r
   }
 });
 
+// GET /api/timemanagement/calendar-week/:classId/:academicYear
+// Get current week's schedule from calendar grid with real dates
+router.get('/calendar-week/:classId/:academicYear', authenticateToken, async (req, res) => {
+  try {
+    const { classId, academicYear } = req.params;
+    
+    // Get current date (or you could pass a specific week date)
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Calculate the start of the current week (Monday)
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+    
+    // Calculate end of week (Friday for school week)
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 4); // Monday + 4 = Friday
+    
+    console.log('📅 Fetching calendar week from', startOfWeek.toISOString().split('T')[0], 'to', endOfWeek.toISOString().split('T')[0]);
+    
+    const calendarData = await prisma.calendarGrid.findMany({
+      where: {
+        classId: parseInt(classId),
+        academicYear,
+        calendarDate: {
+          gte: startOfWeek,
+          lte: endOfWeek
+        }
+      },
+      orderBy: {
+        calendarDate: 'asc'
+      }
+    });
+    
+    console.log('📊 Found', calendarData.length, 'calendar entries');
+    
+    // Process the calendar data to extract schedule information
+    const weeklySchedule = calendarData.map(day => {
+      const morningSlots = day.morningSlots ? JSON.parse(day.morningSlots) : [];
+      const afternoonSlots = day.afternoonSlots ? JSON.parse(day.afternoonSlots) : [];
+      const allSlots = [...morningSlots, ...afternoonSlots];
+      
+      // Parse each slot to extract schedule info
+      const periods = allSlots.map(slot => {
+        // Parse slot format: "242508001_1_P1_0900_0940_rajeshmaths080910_8_MATH"
+        const parts = slot.split('_');
+        if (parts.length >= 6) {
+          const timeStart = parts[3];
+          const timeEnd = parts[4]; 
+          const teacherId = parts[5];
+          const subjectCode = parts.length > 6 ? parts.slice(6).join('_') : '';
+          
+          return {
+            startTime: `${timeStart.substring(0,2)}:${timeStart.substring(2)}:00`,
+            endTime: `${timeEnd.substring(0,2)}:${timeEnd.substring(2)}:00`,
+            teacherId,
+            subjectCode,
+            rawSlot: slot
+          };
+        }
+        return null;
+      }).filter(Boolean);
+      
+      return {
+        calendar_date: day.calendarDate,
+        day_of_week: day.dayOfWeek,
+        day_type: day.dayType,
+        holiday_name: day.holidayName,
+        morning_slots: morningSlots,
+        afternoon_slots: afternoonSlots,
+        periods
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: weeklySchedule,
+      weekRange: {
+        start: startOfWeek.toISOString().split('T')[0],
+        end: endOfWeek.toISOString().split('T')[0]
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching calendar week:', error);
+    res.status(500).json({ error: 'Failed to fetch calendar week data' });
+  }
+});
+
 module.exports = router;
