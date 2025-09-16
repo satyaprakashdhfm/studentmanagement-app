@@ -128,6 +128,14 @@ const TimeManagement = () => {
     }
   };
 
+  // Clear data when navigation parameters change
+  useEffect(() => {
+    console.log('🎯 Navigation params changed - clearing schedule data');
+    setSchedule([]);
+    setError(null);
+    setWeekDates([]);
+  }, [classId, section, grade]);
+
   // Set selected class when component mounts or params change
   useEffect(() => {
     console.log('🔍 useEffect triggered - classId:', classId, 'section:', section, 'effectiveClasses length:', effectiveClasses.length);
@@ -168,19 +176,11 @@ const TimeManagement = () => {
     } else if (classId && effectiveClasses.length === 0 && !localLoading) {
       console.log('🔍 classId present but no classes loaded yet, will fetch locally...');
       // Don't set selectedClass to null - let local fetching handle it
-    } else {
-      console.log('❌ Missing classId or classes not loaded yet - resetting selectedClass');
+    } else if (!classId) {
+      console.log('❌ No classId - resetting selectedClass');
       setSelectedClass(null); // Reset selectedClass when no classId
     }
   }, [classId, section, effectiveClasses, selectedAcademicYear, classes.length, localLoading, localClasses.length]);
-
-  // Reset selectedClass when grade changes (navigating between grades)
-  useEffect(() => {
-    console.log('🎯 Grade changed to:', grade, '- resetting selectedClass');
-    setSelectedClass(null);
-    setSchedule([]); // Also reset schedule data
-    setError(null);
-  }, [grade]);
 
   // Fetch schedule when selected class changes
   useEffect(() => {
@@ -441,7 +441,7 @@ const TimeManagement = () => {
         )}
 
         {/* Show loading when class is being selected via URL params */}
-        {!selectedClass && classId && (
+        {!selectedClass && classId && effectiveClasses.length === 0 && (effectiveLoading || localLoading) && (
           <div className="loading-message">
             Loading class information...
           </div>
