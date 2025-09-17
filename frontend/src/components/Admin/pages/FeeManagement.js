@@ -46,12 +46,18 @@ const FeeManagement = () => {
           setFilteredClasses(classesForGrade);
         }
 
-        // Fetch fees
+        // Fetch all fees for the class (no pagination)
         const response = classId && !grade
-          ? await apiService.getFeesByClass(classId)
-          : await apiService.getFees();
+          ? await apiService.getFeesByClass(classId, 1, 50, true) // all = true
+          : await apiService.getFees(1, 50, {}, true); // all = true
             
         console.log('🏦 Fees response:', response);
+        console.log('🏦 Total fees received:', response.fees?.length);
+        console.log('🏦 Sample fee types:', response.fees?.slice(0, 10).map(f => ({ 
+          feeType: f.feeType, 
+          studentName: f.student?.name 
+        })));
+        
         if (response.fees) {
           setFees(response.fees);
         } else {
@@ -69,17 +75,39 @@ const FeeManagement = () => {
     if (classes.length > 0) {
       fetchData();
     }
-  }, [classId, grade, classes, selectedAcademicYear]);
+  }, [classId, grade, classes, selectedAcademicYear]); // Removed currentPage dependency
 
   // Group fees by student
   const groupFeesByStudent = () => {
     const grouped = {};
     console.log('Raw fees data:', fees.slice(0, 2)); // Debug: check first 2 fees
     
+    // Debug: Check for Aryan Mitra specifically
+    const aryanFees = fees.filter(fee => 
+      fee.student?.name?.toLowerCase().includes('aryan mitra') ||
+      fee.studentId === '242510001014'
+    );
+    console.log('Aryan Mitra fees found:', aryanFees.length, aryanFees.map(f => ({
+      feeId: f.feeId,
+      feeType: f.feeType,
+      studentName: f.student?.name,
+      studentId: f.studentId
+    })));
+    
     // Deduplicate fees first by feeId
     const uniqueFees = fees.filter((fee, index, self) => 
       index === self.findIndex(f => f.feeId === fee.feeId)
     );
+    
+    // Debug: Check Aryan after deduplication
+    const aryanUniqueFees = uniqueFees.filter(fee => 
+      fee.student?.name?.toLowerCase().includes('aryan mitra') ||
+      fee.studentId === '242510001014'
+    );
+    console.log('Aryan Mitra unique fees:', aryanUniqueFees.length, aryanUniqueFees.map(f => ({
+      feeId: f.feeId,
+      feeType: f.feeType
+    })));
     
     console.log(`Deduplication: ${fees.length} fees reduced to ${uniqueFees.length} unique fees`);
     
@@ -267,13 +295,19 @@ const FeeManagement = () => {
           {filteredClasses.map(cls => (
             <div 
               key={cls.classId} 
-              className="class-box"
+              className={`class-box ${!cls.active ? 'deactivated' : ''}`}
               onClick={() => handleClassClick(cls.classId)}
             >
-              <h4>{cls.className} {cls.section}</h4>
+              <h4>
+                {cls.className} {cls.section}
+                {!cls.active && <span className="deactivated-badge">DEACTIVATED</span>}
+              </h4>
               <div className="class-info">
                 <p>Academic Year: {cls.academicYear}</p>
                 <p>Max Students: {cls.maxStudents}</p>
+                {!cls.active && (
+                  <p className="inactive-notice">⚠️ This class is deactivated but fees are still viewable</p>
+                )}
               </div>
             </div>
           ))}
@@ -304,10 +338,36 @@ const FeeManagement = () => {
             transform: translateY(-5px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
           }
+          .class-box.deactivated {
+            background-color: #f8f9fa;
+            border: 2px dashed #dc3545;
+            opacity: 0.8;
+          }
+          .class-box.deactivated:hover {
+            transform: none;
+            box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+          }
           .class-box h4 {
             font-size: 1.2em;
             margin-bottom: 10px;
             color: #3498db;
+          }
+          .class-box.deactivated h4 {
+            color: #dc3545;
+          }
+          .deactivated-badge {
+            font-size: 0.7em;
+            background: #dc3545;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 8px;
+          }
+          .inactive-notice {
+            color: #dc3545;
+            font-size: 0.85em;
+            font-style: italic;
+            margin-top: 8px;
           }
           .class-info {
             font-size: 0.9em;

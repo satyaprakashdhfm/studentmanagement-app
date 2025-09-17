@@ -103,17 +103,11 @@ router.get('/', authenticateToken, async (req, res) => {
             section: true,
             academicYear: true
           }
-        },
-        updatedByUser: {
-          select: {
-            username: true,
-            firstName: true,
-            lastName: true
-          }
         }
       },
       orderBy: [
-        { createdAt: 'desc' }
+        { studentId: 'asc' },
+        { feeType: 'asc' }
       ],
       skip,
       take
@@ -227,7 +221,7 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
         }
       },
       orderBy: [
-        { createdAt: 'desc' }
+        { feeType: 'asc' }
       ],
       skip,
       take: limitNum
@@ -287,13 +281,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
             className: true,
             section: true,
             academicYear: true
-          }
-        },
-        updatedByUser: {
-          select: {
-            username: true,
-            firstName: true,
-            lastName: true
           }
         }
       }
@@ -478,13 +465,6 @@ router.post('/:id/payment', authenticateToken, async (req, res) => {
           select: {
             name: true,
             email: true
-          }
-        },
-        updatedByUser: {
-          select: {
-            username: true,
-            firstName: true,
-            lastName: true
           }
         }
       }

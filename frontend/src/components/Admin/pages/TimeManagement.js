@@ -458,11 +458,17 @@ const TimeManagement = () => {
                     return filteredClasses.map(cls => (
                       <div
                         key={`${cls.classId}-${cls.section}`}
-                        className="class-card"
+                        className={`class-card ${!cls.active ? 'deactivated' : ''}`}
                         onClick={() => navigate(`/admin/time-management/${cls.classId}/${cls.section}`)}
                       >
-                        <div className="class-name">{cls.className}</div>
+                        <div className="class-name">
+                          {cls.className}
+                          {!cls.active && <span className="deactivated-badge">DEACTIVATED</span>}
+                        </div>
                         <div className="class-section">Section {cls.section}</div>
+                        {!cls.active && (
+                          <div className="inactive-notice">⚠️ This class is deactivated</div>
+                        )}
                       </div>
                     ));
                   })()}
@@ -615,6 +621,35 @@ const TimeManagement = () => {
           </div>
         )}
       </div>
+      
+      <style jsx>{`
+        .class-card.deactivated {
+          background-color: #f8f9fa;
+          border: 2px dashed #dc3545;
+          opacity: 0.8;
+        }
+        .class-card.deactivated:hover {
+          transform: none;
+          box-shadow: 0 2px 4px rgba(220, 53, 69, 0.2);
+        }
+        .class-card.deactivated .class-name {
+          color: #dc3545;
+        }
+        .deactivated-badge {
+          font-size: 0.7em;
+          background: #dc3545;
+          color: white;
+          padding: 2px 6px;
+          border-radius: 3px;
+          margin-left: 8px;
+        }
+        .inactive-notice {
+          color: #dc3545;
+          font-size: 0.85em;
+          font-style: italic;
+          margin-top: 8px;
+        }
+      `}</style>
     </div>
   );
 };

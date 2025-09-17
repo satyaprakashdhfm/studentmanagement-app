@@ -10,8 +10,8 @@ const AdminLayout = ({ children }) => {
   const [showFeeDropdown, setShowFeeDropdown] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
-  const [showAttendanceDropdown, setShowAttendanceDropdown] = useState(false);
   const [showMarksDropdown, setShowMarksDropdown] = useState(false);
+  const [showAttendanceDropdown, setShowAttendanceDropdown] = useState(false);
   
   // Use the academic year context
   const { 
@@ -57,29 +57,33 @@ const AdminLayout = ({ children }) => {
     if (location.pathname.includes('/admin/fees')) {
       setShowFeeDropdown(true);
     }
-    if (location.pathname.includes('/admin/attendance')) {
-      setShowAttendanceDropdown(true);
-    }
     if (location.pathname.includes('/admin/marks')) {
       setShowMarksDropdown(true);
+    }
+    if (location.pathname.includes('/admin/attendance')) {
+      setShowAttendanceDropdown(true);
     }
   }, [location.pathname]);
 
   const handleStudentDropdownToggle = () => {
     setShowStudentDropdown(!showStudentDropdown);
-    // Close fee dropdown when student dropdown is opened
+    // Close other dropdowns when student dropdown is opened
     if (!showStudentDropdown) {
       setShowFeeDropdown(false);
       setShowTimeDropdown(false);
+      setShowAttendanceDropdown(false);
+      setShowMarksDropdown(false);
     }
   };
 
   const handleFeeDropdownToggle = () => {
     setShowFeeDropdown(!showFeeDropdown);
-    // Close student dropdown when fee dropdown is opened
+    // Close other dropdowns when fee dropdown is opened
     if (!showFeeDropdown) {
       setShowStudentDropdown(false);
       setShowTimeDropdown(false);
+      setShowAttendanceDropdown(false);
+      setShowMarksDropdown(false);
     }
   };
 
@@ -90,17 +94,6 @@ const AdminLayout = ({ children }) => {
       setShowStudentDropdown(false);
       setShowFeeDropdown(false);
       setShowAttendanceDropdown(false);
-      setShowMarksDropdown(false);
-    }
-  };
-
-  const handleAttendanceDropdownToggle = () => {
-    setShowAttendanceDropdown(!showAttendanceDropdown);
-    // Close other dropdowns when attendance dropdown is opened
-    if (!showAttendanceDropdown) {
-      setShowStudentDropdown(false);
-      setShowFeeDropdown(false);
-      setShowTimeDropdown(false);
       setShowMarksDropdown(false);
     }
   };
@@ -116,13 +109,24 @@ const AdminLayout = ({ children }) => {
     }
   };
 
+  const handleAttendanceDropdownToggle = () => {
+    setShowAttendanceDropdown(!showAttendanceDropdown);
+    // Close other dropdowns when attendance dropdown is opened
+    if (!showAttendanceDropdown) {
+      setShowStudentDropdown(false);
+      setShowFeeDropdown(false);
+      setShowTimeDropdown(false);
+      setShowMarksDropdown(false);
+    }
+  };
+
   // Close all dropdowns when clicking on Teacher Management or System Configuration
   const handleSingleNavClick = () => {
     setShowStudentDropdown(false);
     setShowFeeDropdown(false);
     setShowTimeDropdown(false);
-    setShowAttendanceDropdown(false);
     setShowMarksDropdown(false);
+    setShowAttendanceDropdown(false);
   };
 
   // Function to handle navigation without closing dropdown for Time Management
@@ -139,8 +143,8 @@ const AdminLayout = ({ children }) => {
     setShowFeeDropdown(false);
     setShowStudentDropdown(false);
     setShowTimeDropdown(false);
-    setShowAttendanceDropdown(false);
     setShowMarksDropdown(false);
+    setShowAttendanceDropdown(false);
   };
 
   const handleLogout = () => {
@@ -312,11 +316,6 @@ const AdminLayout = ({ children }) => {
               </div>
               {showAttendanceDropdown && (
                 <ul className="dropdown-menu">
-                  <li>
-                    <Link to="/admin/attendance" className={location.pathname === '/admin/attendance' ? 'active' : ''}>
-                      All Attendance
-                    </Link>
-                  </li>
                   {uniqueGrades.map(grade => (
                     <li key={grade}>
                       <Link 
@@ -343,11 +342,6 @@ const AdminLayout = ({ children }) => {
               </div>
               {showMarksDropdown && (
                 <ul className="dropdown-menu">
-                  <li>
-                    <Link to="/admin/marks" className={location.pathname === '/admin/marks' ? 'active' : ''}>
-                      All Marks
-                    </Link>
-                  </li>
                   {uniqueGrades.map(grade => (
                     <li key={grade}>
                       <Link 

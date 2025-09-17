@@ -13,6 +13,7 @@ import AttendanceManagement from './pages/AttendanceManagement';
 import AttendanceSummary from './pages/AttendanceSummary';
 import MarksManagement from './pages/MarksManagement';
 import MarksSummary from './pages/MarksSummary';
+import StudentClassMarks from './pages/StudentClassMarks';
 import { useEffect } from 'react';
 import apiService from '../../services/api';
 
@@ -56,7 +57,7 @@ const AdminDashboard = () => {
             <Route path="/fees/grade/:grade" element={<FeeManagement />} />
             {/* New admin routes */}
             <Route path="/classes" element={<ClassManagement />} />
-            <Route path="/attendance" element={<AttendanceSummary />} />
+            <Route path="/attendance" element={<AttendanceManagement />} />
             <Route path="/attendance/grade/:grade" element={<AttendanceManagement />} />
             <Route path="/attendance/class/:classId" element={<AttendanceManagement />} />
             <Route path="/marks" element={<MarksSummary />} />
@@ -70,6 +71,7 @@ const AdminDashboard = () => {
             <Route path="/students" element={<StudentSummary />} />
             <Route path="/students/:classId" element={<StudentManagement />} />
             <Route path="/students/grade/:grade" element={<StudentManagement />} />
+            <Route path="/students/grade/:grade/class/:classId/marks" element={<StudentClassMarks />} />
           </Routes>
         </Suspense>
       </AdminLayout>

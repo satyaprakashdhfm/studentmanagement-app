@@ -13,6 +13,7 @@ router.get('/', authenticateToken, async (req, res) => {
       status, 
       startDate, 
       endDate,
+      subjectCode, // Added subject filtering
       page = 1, 
       limit = 50 
     } = req.query;
@@ -82,6 +83,10 @@ router.get('/', authenticateToken, async (req, res) => {
 
     if (endDate) {
       whereConditions += ` AND a.date <= '${endDate.replace(/'/g, "''")}'`;
+    }
+
+    if (subjectCode) {
+      whereConditions += ` AND COALESCE(s.subject_code, a.subject_code) = '${subjectCode.replace(/'/g, "''")}'`;
     }
 
     // Add pagination

@@ -17,6 +17,10 @@ const AttendanceManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [expandedRecords, setExpandedRecords] = useState({});
+  
+  // Expansion state for students
+  const [expandedStudents, setExpandedStudents] = useState({});
+  
   const [newRecord, setNewRecord] = useState({
     studentId: '',
     classId: '',

@@ -10,7 +10,9 @@ class ApiService {
 
   // Helper method for making API calls with enhanced logging
   async request(endpoint, options = {}) {
-    const url = `${this.baseUrl}${endpoint}`;
+    // Ensure proper URL construction - handle both cases where endpoint starts with / or not
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${this.baseUrl}${cleanEndpoint}`;
     const method = options.method || 'GET';
     const startTime = Date.now();
     
@@ -359,8 +361,9 @@ class ApiService {
   }
 
   // Fees
-  async getFees(filters = {}) {
-    const queryParams = new URLSearchParams(filters).toString();
+  async getFees(page = 1, limit = 50, filters = {}, all = false) {
+    const params = all ? { all: 'true', ...filters } : { page, limit, ...filters };
+    const queryParams = new URLSearchParams(params).toString();
     return this.request(`/fees${queryParams ? `?${queryParams}` : ''}`);
   }
   
@@ -369,8 +372,10 @@ class ApiService {
     return this.request(`/fees/stats/overview${queryParams ? `?${queryParams}` : ''}`);
   }
   
-  async getFeesByClass(classId) {
-    return this.request(`/fees?classId=${classId}`);
+  async getFeesByClass(classId, page = 1, limit = 50, all = false) {
+    const params = all ? { classId, all: 'true' } : { classId, page, limit };
+    const queryParams = new URLSearchParams(params).toString();
+    return this.request(`/fees?${queryParams}`);
   }
 
   async addFee(feeData) {
