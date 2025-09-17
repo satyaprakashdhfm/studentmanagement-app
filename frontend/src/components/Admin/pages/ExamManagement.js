@@ -26,6 +26,7 @@ const ExamManagement = () => {
     try {
       setLoading(true);
       console.log('📚 Fetching upcoming exams for all classes');
+      console.log('📊 Available classes for filtering:', classes);
       
       const response = await apiService.get('/timemanagement/upcoming-exams/all');
       if (response && response.success) {
@@ -47,10 +48,32 @@ const ExamManagement = () => {
 
   // Filter exams based on selected class
   const filterExams = (exams, filterClassId) => {
+    console.log('🔍 Filtering exams with filterClassId:', filterClassId, 'type:', typeof filterClassId);
+    console.log('📊 Sample exam classIds:', exams.slice(0, 3).map(e => ({ 
+      classId: e.classId, 
+      type: typeof e.classId,
+      className: e.className 
+    })));
+    
     if (filterClassId === 'all') {
       setUpcomingExams(exams);
     } else {
-      const filtered = exams.filter(exam => exam.classId === filterClassId);
+      // Convert both values to the same type for comparison
+      const filterValue = parseInt(filterClassId);
+      const filtered = exams.filter(exam => {
+        // Handle cases where classId might be null, undefined, or different types
+        if (!exam.classId && exam.classId !== 0) return false;
+        
+        const examClassId = typeof exam.classId === 'string' ? parseInt(exam.classId) : exam.classId;
+        const matches = examClassId === filterValue;
+        
+        if (!matches && exams.length < 10) { // Only log for debugging when data is small
+          console.log('❌ No match:', { examClassId, filterValue, examClassName: exam.className });
+        }
+        
+        return matches;
+      });
+      console.log('✅ Filtered exams count:', filtered.length, 'from total:', exams.length);
       setUpcomingExams(filtered);
     }
   };
@@ -243,11 +266,13 @@ const ExamManagement = () => {
               className="filter-select"
             >
               <option value="all">🏫 All Classes</option>
-              {classes.map(cls => (
+              {classes && classes.length > 0 ? classes.map(cls => (
                 <option key={cls.classId} value={cls.classId}>
-                  Grade {cls.className} - Section {cls.section}
+                  Grade {cls.className} {cls.section ? `- Section ${cls.section}` : ''}
                 </option>
-              ))}
+              )) : (
+                <option disabled>Loading classes...</option>
+              )}
             </select>
           </div>
         </div>
@@ -322,11 +347,13 @@ const ExamManagement = () => {
                 onChange={(e) => setExamForm({...examForm, classId: e.target.value})}
               >
                 <option value="all">🏫 All Classes</option>
-                {classes.map(cls => (
+                {classes && classes.length > 0 ? classes.map(cls => (
                   <option key={cls.classId} value={cls.classId}>
-                    Grade {cls.className} - Section {cls.section}
+                    Grade {cls.className} {cls.section ? `- Section ${cls.section}` : ''}
                   </option>
-                ))}
+                )) : (
+                  <option disabled>Loading classes...</option>
+                )}
               </select>
             </div>
 

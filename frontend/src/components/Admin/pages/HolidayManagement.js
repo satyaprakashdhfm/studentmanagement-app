@@ -26,6 +26,7 @@ const HolidayManagement = () => {
     try {
       setLoading(true);
       console.log('🏖️ Fetching upcoming holidays for all classes');
+      console.log('📊 Available classes for filtering:', classes);
       
       const response = await apiService.get('/timemanagement/upcoming-holidays/all');
       if (response && response.success) {
@@ -47,10 +48,38 @@ const HolidayManagement = () => {
 
   // Filter holidays based on selected class
   const filterHolidays = (holidays, filterClassId) => {
+    console.log('🔍 Filtering holidays with filterClassId:', filterClassId, 'type:', typeof filterClassId);
+    console.log('🎉 Sample holiday classIds:', holidays.slice(0, 3).map(h => ({ 
+      classId: h.classId, 
+      type: typeof h.classId,
+      holidayName: h.holidayName,
+      className: h.className
+    })));
+    
     if (filterClassId === 'all') {
       setUpcomingHolidays(holidays);
     } else {
-      const filtered = holidays.filter(holiday => holiday.classId === filterClassId);
+      // Convert both values to the same type for comparison
+      const filterValue = parseInt(filterClassId);
+      const filtered = holidays.filter(holiday => {
+        // Handle cases where classId might be null, undefined, or different types
+        if (!holiday.classId && holiday.classId !== 0) {
+          // If holiday doesn't have a classId, it might be a global holiday
+          // Show it in all class filters
+          console.log('🌍 Global holiday found:', holiday.holidayName);
+          return true;
+        }
+        
+        const holidayClassId = typeof holiday.classId === 'string' ? parseInt(holiday.classId) : holiday.classId;
+        const matches = holidayClassId === filterValue;
+        
+        if (!matches && holidays.length < 10) { // Only log for debugging when data is small
+          console.log('❌ No match:', { holidayClassId, filterValue, holidayName: holiday.holidayName });
+        }
+        
+        return matches;
+      });
+      console.log('✅ Filtered holidays count:', filtered.length, 'from total:', holidays.length);
       setUpcomingHolidays(filtered);
     }
   };
@@ -214,11 +243,13 @@ const HolidayManagement = () => {
               className="filter-select"
             >
               <option value="all">🏫 All Classes</option>
-              {classes.map(cls => (
+              {classes && classes.length > 0 ? classes.map(cls => (
                 <option key={cls.classId} value={cls.classId}>
-                  Grade {cls.className} - Section {cls.section}
+                  Grade {cls.className} {cls.section ? `- Section ${cls.section}` : ''}
                 </option>
-              ))}
+              )) : (
+                <option disabled>Loading classes...</option>
+              )}
             </select>
           </div>
         </div>

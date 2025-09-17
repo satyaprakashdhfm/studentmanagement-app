@@ -371,24 +371,13 @@ router.get('/class-schedule/:classId/:academicYear', authenticateToken, async (r
   try {
     const { classId, academicYear } = req.params;
 
+    console.log('📅 Fetching class schedule for:', { classId, academicYear });
+
+    // Fetch schedule data without includes (since ScheduleData model doesn't have direct relations)
     const schedules = await prisma.scheduleData.findMany({
       where: {
         classId: parseInt(classId),
         academicYear
-      },
-      include: {
-        teacher: {
-          select: {
-            teacherId: true,
-            name: true
-          }
-        },
-        subject: {
-          select: {
-            subjectCode: true,
-            subjectName: true
-          }
-        }
       },
       orderBy: [
         { dayOfWeek: 'asc' },
@@ -396,9 +385,57 @@ router.get('/class-schedule/:classId/:academicYear', authenticateToken, async (r
       ]
     });
 
+    console.log('📅 Found schedules:', schedules.length);
+
+    // Get unique teacher IDs and subject codes for additional lookups
+    const teacherIds = [...new Set(schedules.map(s => s.teacherId).filter(Boolean))];
+    const subjectCodes = [...new Set(schedules.map(s => s.subjectCode).filter(Boolean))];
+
+    // Fetch teacher information separately
+    const teachers = await prisma.teacher.findMany({
+      where: {
+        teacherId: { in: teacherIds }
+      },
+      select: {
+        teacherId: true,
+        name: true
+      }
+    });
+
+    // Fetch subject information separately  
+    const subjects = await prisma.subject.findMany({
+      where: {
+        subjectCode: { in: subjectCodes }
+      },
+      select: {
+        subjectCode: true,
+        subjectName: true
+      }
+    });
+
+    // Create lookup maps for efficient data joining
+    const teacherMap = {};
+    teachers.forEach(teacher => {
+      teacherMap[teacher.teacherId] = teacher;
+    });
+
+    const subjectMap = {};
+    subjects.forEach(subject => {
+      subjectMap[subject.subjectCode] = subject;
+    });
+
+    // Enhance schedule data with teacher and subject information
+    const enhancedSchedules = schedules.map(schedule => ({
+      ...schedule,
+      teacher: schedule.teacherId ? teacherMap[schedule.teacherId] : null,
+      subject: schedule.subjectCode ? subjectMap[schedule.subjectCode] : null
+    }));
+
+    console.log('📅 Enhanced schedules ready:', enhancedSchedules.length);
+
     res.json({
       success: true,
-      data: schedules
+      data: enhancedSchedules
     });
   } catch (error) {
     console.error('Error fetching class schedule:', error);
@@ -508,6 +545,295 @@ router.get('/calendar-week/:classId/:academicYear/:weekOffset?', authenticateTok
   } catch (error) {
     console.error('Error fetching calendar week:', error);
     res.status(500).json({ error: 'Failed to fetch calendar week data' });
+  }
+});
+
+// GET /api/timemanagement/student-calendar-week/:studentId/:academicYear/:weekOffset?
+// Get student's weekly calendar based on their class assignment
+router.get('/student-calendar-week/:studentId/:academicYear/:weekOffset?', authenticateToken, async (req, res) => {
+  try {
+    const { studentId, academicYear, weekOffset } = req.params;
+    const offset = weekOffset ? parseInt(weekOffset) : 0;
+    
+    console.log('📚 Fetching student weekly calendar for:', { studentId, academicYear, weekOffset: offset });
+    
+    // First, get the student's class assignment
+    const student = await prisma.student.findUnique({
+      where: { studentId },
+      select: { classId: true, name: true, class: { select: { className: true } } }
+    });
+    
+    if (!student || !student.classId) {
+      return res.status(404).json({ error: 'Student not found or not assigned to a class' });
+    }
+    
+    console.log('👦 Student found:', student.name, 'in class:', student.class?.className);
+    
+    // Use the existing calendar-week logic but for the student's class
+    const classId = student.classId;
+    
+    // Get current date and apply week offset
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Calculate the start of the target week (Monday)
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+    
+    // Apply week offset
+    startOfWeek.setDate(startOfWeek.getDate() + (offset * 7));
+    
+    // Calculate end of week (Friday for school week)
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 4); // Monday + 4 = Friday
+    
+    console.log('📅 Student calendar week from', startOfWeek.toISOString().split('T')[0], 'to', endOfWeek.toISOString().split('T')[0]);
+    
+    const calendarData = await prisma.calendarGrid.findMany({
+      where: {
+        classId: parseInt(classId),
+        academicYear,
+        calendarDate: {
+          gte: startOfWeek,
+          lte: endOfWeek
+        }
+      },
+      orderBy: {
+        calendarDate: 'asc'
+      }
+    });
+    
+    console.log('📊 Found', calendarData.length, 'calendar entries for student');
+    
+    // Process the calendar data
+    const weeklySchedule = calendarData.map(day => {
+      const morningSlots = day.morningSlots ? JSON.parse(day.morningSlots) : [];
+      const afternoonSlots = day.afternoonSlots ? JSON.parse(day.afternoonSlots) : [];
+      const allSlots = [...morningSlots, ...afternoonSlots];
+      
+      // Parse each slot to extract schedule info
+      const periods = allSlots.map(slot => {
+        const parts = slot.split('_');
+        if (parts.length >= 6) {
+          const timeStart = parts[3];
+          const timeEnd = parts[4]; 
+          const teacherId = parts[5];
+          const subjectCode = parts.length > 6 ? parts.slice(6).join('_') : '';
+          
+          return {
+            startTime: `${timeStart.substring(0,2)}:${timeStart.substring(2)}:00`,
+            endTime: `${timeEnd.substring(0,2)}:${timeEnd.substring(2)}:00`,
+            teacherId,
+            subjectCode,
+            rawSlot: slot
+          };
+        }
+        return null;
+      }).filter(Boolean);
+      
+      return {
+        calendar_date: day.calendarDate,
+        day_of_week: day.dayOfWeek,
+        day_type: day.dayType,
+        holiday_name: day.holidayName,
+        morning_slots: morningSlots,
+        afternoon_slots: afternoonSlots,
+        periods
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: weeklySchedule,
+      studentInfo: {
+        studentId,
+        name: student.name,
+        classId: student.classId,
+        className: student.class?.className
+      },
+      weekInfo: {
+        offset: offset,
+        startDate: startOfWeek.toISOString().split('T')[0],
+        endDate: endOfWeek.toISOString().split('T')[0],
+        isCurrentWeek: offset === 0,
+        weekLabel: offset === 0 ? 'Current Week' : 
+                   offset === 1 ? 'Next Week' : 
+                   offset === -1 ? 'Previous Week' :
+                   offset > 1 ? `${offset} Weeks Ahead` :
+                   `${Math.abs(offset)} Weeks Ago`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching student calendar week:', error);
+    res.status(500).json({ error: 'Failed to fetch student calendar week data' });
+  }
+});
+
+// GET /api/timemanagement/teacher-calendar-week/:teacherId/:academicYear/:weekOffset?
+// Get teacher's weekly calendar aggregated from all their assigned classes
+router.get('/teacher-calendar-week/:teacherId/:academicYear/:weekOffset?', authenticateToken, async (req, res) => {
+  try {
+    const { teacherId, academicYear, weekOffset } = req.params;
+    const offset = weekOffset ? parseInt(weekOffset) : 0;
+    
+    console.log('👨‍🏫 Fetching teacher weekly calendar for:', { teacherId, academicYear, weekOffset: offset });
+    
+    // Get teacher information and their assigned classes
+    const teacher = await prisma.teacher.findUnique({
+      where: { teacherId },
+      select: { 
+        name: true, 
+        teacherId: true
+      }
+    });
+    
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher not found' });
+    }
+    
+    console.log('👨‍🏫 Teacher found:', teacher.name);
+    
+    // Get current date and apply week offset
+    const today = new Date();
+    const currentDay = today.getDay();
+    
+    // Calculate the start of the target week (Monday)
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+    
+    // Apply week offset
+    startOfWeek.setDate(startOfWeek.getDate() + (offset * 7));
+    
+    // Calculate end of week (Friday for school week)
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 4);
+    
+    console.log('📅 Teacher calendar week from', startOfWeek.toISOString().split('T')[0], 'to', endOfWeek.toISOString().split('T')[0]);
+    
+    // Get ALL calendar entries for the week across ALL classes
+    // We'll filter for teacher-specific slots afterward
+    const allCalendarData = await prisma.calendarGrid.findMany({
+      where: {
+        academicYear,
+        calendarDate: {
+          gte: startOfWeek,
+          lte: endOfWeek
+        }
+      },
+      orderBy: [
+        { calendarDate: 'asc' },
+        { classId: 'asc' }
+      ]
+    });
+    
+    console.log('📊 Found', allCalendarData.length, 'total calendar entries to filter');
+    
+    // Group calendar data by date and filter for teacher's slots
+    const teacherWeeklySchedule = [];
+    
+    // Create a map for each day of the week
+    const weekDays = {};
+    for (let i = 0; i < 5; i++) { // Monday to Friday
+      const currentDate = new Date(startOfWeek);
+      currentDate.setDate(startOfWeek.getDate() + i);
+      const dateKey = currentDate.toISOString().split('T')[0];
+      weekDays[dateKey] = {
+        calendar_date: currentDate,
+        day_of_week: currentDate.getDay(),
+        day_type: 'working',
+        holiday_name: null,
+        periods: [],
+        classes: []
+      };
+    }
+    
+    // Process each calendar entry
+    allCalendarData.forEach(dayData => {
+      const dateKey = dayData.calendarDate.toISOString().split('T')[0];
+      
+      if (!weekDays[dateKey]) return; // Skip if not in our target week
+      
+      const morningSlots = dayData.morningSlots ? JSON.parse(dayData.morningSlots) : [];
+      const afternoonSlots = dayData.afternoonSlots ? JSON.parse(dayData.afternoonSlots) : [];
+      const allSlots = [...morningSlots, ...afternoonSlots];
+      
+      // Filter slots for this specific teacher
+      const teacherSlots = allSlots.filter(slot => {
+        const parts = slot.split('_');
+        if (parts.length >= 6) {
+          const slotTeacherId = parts[5];
+          return slotTeacherId === teacherId;
+        }
+        return false;
+      });
+      
+      // Process teacher's slots for this class
+      teacherSlots.forEach(slot => {
+        const parts = slot.split('_');
+        if (parts.length >= 6) {
+          const timeStart = parts[3];
+          const timeEnd = parts[4];
+          const subjectCode = parts.length > 6 ? parts.slice(6).join('_') : '';
+          
+          weekDays[dateKey].periods.push({
+            startTime: `${timeStart.substring(0,2)}:${timeStart.substring(2)}:00`,
+            endTime: `${timeEnd.substring(0,2)}:${timeEnd.substring(2)}:00`,
+            teacherId,
+            subjectCode,
+            classId: dayData.classId,
+            rawSlot: slot
+          });
+          
+          // Track which classes the teacher teaches this day
+          if (!weekDays[dateKey].classes.includes(dayData.classId)) {
+            weekDays[dateKey].classes.push(dayData.classId);
+          }
+        }
+      });
+      
+      // Update day info if it's a holiday
+      if (dayData.dayType === 'holiday') {
+        weekDays[dateKey].day_type = 'holiday';
+        weekDays[dateKey].holiday_name = dayData.holidayName;
+      }
+    });
+    
+    // Convert weekDays object to array and sort periods by time
+    Object.values(weekDays).forEach(day => {
+      day.periods.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      teacherWeeklySchedule.push(day);
+    });
+    
+    const totalPeriods = teacherWeeklySchedule.reduce((sum, day) => sum + day.periods.length, 0);
+    console.log('👨‍🏫 Teacher has', totalPeriods, 'periods this week across', 
+      new Set(teacherWeeklySchedule.flatMap(day => day.classes)).size, 'classes');
+    
+    res.json({
+      success: true,
+      data: teacherWeeklySchedule,
+      teacherInfo: {
+        teacherId,
+        name: teacher.name,
+        totalPeriods,
+        classesThisWeek: new Set(teacherWeeklySchedule.flatMap(day => day.classes)).size
+      },
+      weekInfo: {
+        offset: offset,
+        startDate: startOfWeek.toISOString().split('T')[0],
+        endDate: endOfWeek.toISOString().split('T')[0],
+        isCurrentWeek: offset === 0,
+        weekLabel: offset === 0 ? 'Current Week' : 
+                   offset === 1 ? 'Next Week' : 
+                   offset === -1 ? 'Previous Week' :
+                   offset > 1 ? `${offset} Weeks Ahead` :
+                   `${Math.abs(offset)} Weeks Ago`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching teacher calendar week:', error);
+    res.status(500).json({ error: 'Failed to fetch teacher calendar week data' });
   }
 });
 
@@ -806,41 +1132,32 @@ router.get('/upcoming-exams/:classId', authenticateToken, async (req, res) => {
 
     // Process and format the exam data
     const formattedExams = upcomingExams.map(exam => {
-      let examDetails = [];
+      let morningSubjects = new Set();
+      let afternoonSubjects = new Set();
       
       // Parse morning and afternoon slots to extract exam subjects
       try {
         const morningSlots = exam.morningSlots ? JSON.parse(exam.morningSlots) : [];
         const afternoonSlots = exam.afternoonSlots ? JSON.parse(exam.afternoonSlots) : [];
         
-        // Extract exam subjects from morning slots
-        morningSlots.forEach((slot, index) => {
+        // Extract unique subjects from morning slots
+        morningSlots.forEach((slot) => {
           if (slot && slot.startsWith('EXAM_')) {
             const parts = slot.split('_');
             if (parts.length >= 2) {
               const subjectCode = parts[1];
-              examDetails.push({
-                timeSlot: `morning-${index + 1}`,
-                subject: subjectCode,
-                subjectName: getSubjectName(subjectCode),
-                session: 'morning'
-              });
+              morningSubjects.add(subjectCode);
             }
           }
         });
         
-        // Extract exam subjects from afternoon slots
-        afternoonSlots.forEach((slot, index) => {
+        // Extract unique subjects from afternoon slots
+        afternoonSlots.forEach((slot) => {
           if (slot && slot.startsWith('EXAM_')) {
             const parts = slot.split('_');
             if (parts.length >= 2) {
               const subjectCode = parts[1];
-              examDetails.push({
-                timeSlot: `afternoon-${index + 1}`,
-                subject: subjectCode,
-                subjectName: getSubjectName(subjectCode),
-                session: 'afternoon'
-              });
+              afternoonSubjects.add(subjectCode);
             }
           }
         });
@@ -848,12 +1165,33 @@ router.get('/upcoming-exams/:classId', authenticateToken, async (req, res) => {
         console.error('Error parsing exam slots:', parseError);
       }
 
+      // Create exam details with unique subjects per session
+      let examDetails = [];
+      
+      // Add morning subjects
+      morningSubjects.forEach(subjectCode => {
+        examDetails.push({
+          subject: subjectCode,
+          subjectName: getSubjectName(subjectCode),
+          session: 'morning'
+        });
+      });
+      
+      // Add afternoon subjects
+      afternoonSubjects.forEach(subjectCode => {
+        examDetails.push({
+          subject: subjectCode,
+          subjectName: getSubjectName(subjectCode),
+          session: 'afternoon'
+        });
+      });
+
       return {
         id: exam.gridId,
-        date: exam.calendarDate,
-        dayName: exam.dayName,
-        examType: exam.examType,
-        examSession: exam.examSession,
+        date: exam.calendarDate.toISOString().split('T')[0], // Format as YYYY-MM-DD string
+        dayName: exam.calendarDate.toLocaleDateString('en-US', { weekday: 'long' }),
+        examType: exam.examType || 'General',
+        examSession: exam.examSession || 'full_day',
         examDetails,
         totalSubjects: examDetails.length
       };
