@@ -123,6 +123,8 @@ model CalendarGrid {
   updatedAt               DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
   morning_subject_codes   String?
   afternoon_subject_codes String?
+  examType                String?   @map("exam_type") @db.VarChar(20)
+  examSession             String?   @map("exam_session") @db.VarChar(20)
 
   @@map("calendar_grid")
 }

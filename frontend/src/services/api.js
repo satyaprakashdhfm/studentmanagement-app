@@ -494,6 +494,13 @@ class ApiService {
     });
   }
 
+  async saveExamSchedule(examData) {
+    return this.request('/timemanagement/exams', {
+      method: 'POST',
+      body: JSON.stringify(examData),
+    });
+  }
+
   // Legacy methods for backward compatibility (deprecated)
   async getTimeSlots() {
     console.warn('getTimeSlots() is deprecated. Use getCalendarGrid() instead.');

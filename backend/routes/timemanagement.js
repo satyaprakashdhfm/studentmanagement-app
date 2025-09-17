@@ -511,4 +511,404 @@ router.get('/calendar-week/:classId/:academicYear/:weekOffset?', authenticateTok
   }
 });
 
+// POST /api/timemanagement/exams - Save exam schedule
+router.post('/exams', authenticateToken, async (req, res) => {
+  try {
+    const { examType, examSessions, academicYear } = req.body;
+
+    if (!examSessions || !Array.isArray(examSessions) || examSessions.length === 0) {
+      return res.status(400).json({ error: 'Exam sessions are required' });
+    }
+
+    console.log('💾 Saving exam schedule:', { examType, examSessions: examSessions.length, academicYear });
+
+    const savedSessions = [];
+
+    // Process each exam session
+    for (const session of examSessions) {
+      const { date, session: sessionType, subjectCode, classId } = session;
+
+      if (!date || !sessionType || !subjectCode || !classId) {
+        console.warn('⚠️ Skipping incomplete session:', session);
+        continue;
+      }
+
+      const calendarDate = new Date(date);
+      const dayOfWeek = calendarDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const gridId = `${classId}_${date}`;
+
+      // Create exam slot entry
+      const examSlot = `EXAM_${subjectCode}_${sessionType}`;
+
+      try {
+        // Check if calendar grid entry exists for this date and class
+        let calendarGrid = await prisma.calendarGrid.findUnique({
+          where: { gridId }
+        });
+
+        if (calendarGrid) {
+          // Update existing calendar grid entry with exam data
+          let updatedMorningSlots = calendarGrid.morningSlots ? JSON.parse(calendarGrid.morningSlots) : [];
+          let updatedAfternoonSlots = calendarGrid.afternoonSlots ? JSON.parse(calendarGrid.afternoonSlots) : [];
+
+          if (sessionType === 'morning' || sessionType === 'full_day') {
+            // Replace morning slots with exam, but preserve lunch breaks
+            updatedMorningSlots = updatedMorningSlots.map(slot => {
+              // Keep lunch breaks and replace others with exam
+              if (slot && slot.includes('LUNCH_')) {
+                return slot; // Preserve lunch break
+              }
+              return examSlot; // Replace with exam
+            });
+            
+            // If morning slots array is empty or too short, create it properly
+            if (updatedMorningSlots.length < 5) {
+              updatedMorningSlots = [examSlot, examSlot, examSlot, examSlot, examSlot];
+              // Find and preserve lunch in the 5th position (11:40-12:20)
+              if (calendarGrid.morningSlots) {
+                const originalSlots = JSON.parse(calendarGrid.morningSlots);
+                originalSlots.forEach((slot, index) => {
+                  if (slot && slot.includes('LUNCH_')) {
+                    updatedMorningSlots[index] = slot;
+                  }
+                });
+              }
+            }
+          }
+          
+          if (sessionType === 'afternoon' || sessionType === 'full_day') {
+            // Replace afternoon slots with exam
+            updatedAfternoonSlots = updatedAfternoonSlots.map(slot => {
+              // No lunch breaks in afternoon, so replace all with exam
+              return examSlot;
+            });
+            
+            // If afternoon slots array is empty or too short
+            if (updatedAfternoonSlots.length < 5) {
+              updatedAfternoonSlots = [examSlot, examSlot, examSlot, examSlot, examSlot];
+            }
+          }
+
+          calendarGrid = await prisma.calendarGrid.update({
+            where: { gridId },
+            data: {
+              morningSlots: JSON.stringify(updatedMorningSlots),
+              afternoonSlots: JSON.stringify(updatedAfternoonSlots),
+              examType,
+              examSession: sessionType,
+              dayType: 'exam',
+              updatedAt: new Date()
+            }
+          });
+        } else {
+          // Create new calendar grid entry for exam
+          let morningSlots = [];
+          if (sessionType === 'morning' || sessionType === 'full_day') {
+            // Create morning slots with exam, but include lunch in 5th position
+            const lunchSlot = `LUNCH_${classId}_LUNCH`;
+            morningSlots = [examSlot, examSlot, examSlot, examSlot, lunchSlot];
+          }
+          
+          const afternoonSlots = (sessionType === 'afternoon' || sessionType === 'full_day') 
+            ? [examSlot, examSlot, examSlot, examSlot, examSlot] 
+            : [];
+
+          calendarGrid = await prisma.calendarGrid.create({
+            data: {
+              gridId,
+              classId: parseInt(classId),
+              calendarDate,
+              dayOfWeek,
+              academicYear: academicYear || '2024-2025',
+              dayType: 'exam',
+              morningSlots: JSON.stringify(morningSlots),
+              afternoonSlots: JSON.stringify(afternoonSlots),
+              examType,
+              examSession: sessionType
+            }
+          });
+        }
+
+        savedSessions.push({
+          gridId,
+          date,
+          sessionType,
+          subjectCode,
+          classId: parseInt(classId)
+        });
+
+        console.log('✅ Saved exam session:', { gridId, date, sessionType, subjectCode });
+
+      } catch (sessionError) {
+        console.error('❌ Error saving session:', sessionError);
+        // Continue with other sessions even if one fails
+      }
+    }
+
+    res.json({
+      message: 'Exam schedule saved successfully',
+      savedSessions,
+      examType,
+      totalSessions: savedSessions.length
+    });
+
+  } catch (error) {
+    console.error('❌ Error saving exam schedule:', error);
+    res.status(500).json({ error: 'Failed to save exam schedule' });
+  }
+});
+
+// GET /api/timemanagement/upcoming-exams/all
+// Get upcoming exams for all classes
+router.get('/upcoming-exams/all', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day
+
+    console.log('📚 Fetching upcoming exams for all classes from date:', today);
+
+    // Fetch upcoming exam entries from calendar grid for all classes
+    const upcomingExams = await prisma.calendarGrid.findMany({
+      where: {
+        calendarDate: {
+          gte: today
+        },
+        OR: [
+          { examType: { not: null } },
+          { dayType: 'exam' }
+        ]
+      },
+      orderBy: [
+        { calendarDate: 'asc' },
+        { classId: 'asc' },
+        { examSession: 'asc' }
+      ]
+    });
+
+    console.log('📚 Found upcoming exams for all classes:', upcomingExams.length);
+
+    // Get class information for better display
+    const classIds = [...new Set(upcomingExams.map(exam => exam.classId))];
+    const classes = await prisma.class.findMany({
+      where: {
+        classId: { in: classIds }
+      }
+    });
+
+    const classMap = {};
+    classes.forEach(cls => {
+      classMap[cls.classId] = cls;
+    });
+
+    // Process and format the exam data
+    const formattedExams = upcomingExams.map(exam => {
+      let examDetails = [];
+      
+      // Parse morning and afternoon slots to extract exam subjects
+      try {
+        const morningSlots = exam.morningSlots ? JSON.parse(exam.morningSlots) : {};
+        const afternoonSlots = exam.afternoonSlots ? JSON.parse(exam.afternoonSlots) : {};
+        
+        // Extract exam subjects from slots
+        Object.entries({ ...morningSlots, ...afternoonSlots }).forEach(([timeSlot, data]) => {
+          if (data && data !== 'LUNCH' && data !== 'STUDY') {
+            examDetails.push({
+              timeSlot,
+              subject: data,
+              subjectName: getSubjectName(data)
+            });
+          }
+        });
+      } catch (parseError) {
+        console.error('Error parsing exam slots:', parseError);
+      }
+
+      const classInfo = classMap[exam.classId];
+
+      return {
+        id: exam.gridId,
+        classId: exam.classId,
+        className: classInfo ? `${classInfo.grade} ${classInfo.section}` : `Class ${exam.classId}`,
+        grade: classInfo?.grade,
+        section: classInfo?.section,
+        date: exam.calendarDate,
+        dayName: exam.dayName,
+        examType: exam.examType,
+        examSession: exam.examSession,
+        examDetails,
+        totalSubjects: examDetails.length
+      };
+    }).filter(exam => exam.examDetails.length > 0); // Only include exams with actual subjects
+
+    console.log('📚 Formatted upcoming exams for all classes:', formattedExams.length);
+
+    res.json({
+      success: true,
+      data: formattedExams
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching upcoming exams for all classes:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming exams for all classes' });
+  }
+});
+
+// GET /api/timemanagement/upcoming-exams/:classId
+// Get upcoming exams for a specific class
+router.get('/upcoming-exams/:classId', authenticateToken, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day
+
+    console.log('📚 Fetching upcoming exams for class:', classId, 'from date:', today);
+
+    // Fetch upcoming exam entries from calendar grid
+    const upcomingExams = await prisma.calendarGrid.findMany({
+      where: {
+        classId: parseInt(classId),
+        calendarDate: {
+          gte: today
+        },
+        OR: [
+          { examType: { not: null } },
+          { dayType: 'exam' }
+        ]
+      },
+      orderBy: [
+        { calendarDate: 'asc' },
+        { examSession: 'asc' }
+      ]
+    });
+
+    console.log('📚 Found upcoming exams:', upcomingExams.length);
+
+    // Process and format the exam data
+    const formattedExams = upcomingExams.map(exam => {
+      let examDetails = [];
+      
+      // Parse morning and afternoon slots to extract exam subjects
+      try {
+        const morningSlots = exam.morningSlots ? JSON.parse(exam.morningSlots) : {};
+        const afternoonSlots = exam.afternoonSlots ? JSON.parse(exam.afternoonSlots) : {};
+        
+        // Extract exam subjects from slots
+        Object.entries({ ...morningSlots, ...afternoonSlots }).forEach(([timeSlot, data]) => {
+          if (data && data !== 'LUNCH' && data !== 'STUDY') {
+            examDetails.push({
+              timeSlot,
+              subject: data,
+              subjectName: getSubjectName(data)
+            });
+          }
+        });
+      } catch (parseError) {
+        console.error('Error parsing exam slots:', parseError);
+      }
+
+      return {
+        id: exam.gridId,
+        date: exam.calendarDate,
+        dayName: exam.dayName,
+        examType: exam.examType,
+        examSession: exam.examSession,
+        examDetails,
+        totalSubjects: examDetails.length
+      };
+    }).filter(exam => exam.examDetails.length > 0); // Only include exams with actual subjects
+
+    console.log('📚 Formatted upcoming exams:', formattedExams.length);
+
+    res.json({
+      success: true,
+      data: formattedExams
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching upcoming exams:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming exams' });
+  }
+});
+
+// Helper function to convert subject codes to readable names
+const getSubjectName = (subjectCode) => {
+  const subjectNames = {
+    '8_MATH': 'Mathematics',
+    '8_SCI': 'Science',
+    '8_ENG': 'English',
+    '8_SOC': 'Social Studies',
+    '8_HIN': 'Hindi',
+    '8_TEL': 'Telugu',
+    'STUDY': 'Study Period',
+    'LUNCH': 'Lunch Break'
+  };
+  return subjectNames[subjectCode] || subjectCode;
+};
+
+// PUT /api/timemanagement/exam/:examId
+// Update an existing exam schedule
+router.put('/exam/:examId', authenticateToken, async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const { examDetails, academicYear } = req.body;
+
+    console.log('📝 Updating exam:', examId, 'with details:', examDetails);
+
+    // Find the existing exam entry
+    const existingExam = await prisma.calendarGrid.findUnique({
+      where: { gridId: parseInt(examId) }
+    });
+
+    if (!existingExam) {
+      return res.status(404).json({ error: 'Exam not found' });
+    }
+
+    // Parse current slots
+    const currentMorningSlots = existingExam.morningSlots ? JSON.parse(existingExam.morningSlots) : {};
+    const currentAfternoonSlots = existingExam.afternoonSlots ? JSON.parse(existingExam.afternoonSlots) : {};
+
+    // Update slots with new subjects
+    examDetails.forEach(detail => {
+      const timeSlot = detail.timeSlot;
+      const subject = detail.subject;
+      
+      // Determine if it's morning or afternoon slot based on time
+      if (timeSlot.includes('09:') || timeSlot.includes('10:') || timeSlot.includes('11:')) {
+        currentMorningSlots[timeSlot] = subject;
+      } else if (timeSlot.includes('12:') || timeSlot.includes('13:') || timeSlot.includes('14:') || timeSlot.includes('15:')) {
+        currentAfternoonSlots[timeSlot] = subject;
+      }
+    });
+
+    // Preserve LUNCH slots
+    if (currentMorningSlots['11:40:00-12:20:00']) {
+      currentMorningSlots['11:40:00-12:20:00'] = 'LUNCH';
+    }
+    if (currentAfternoonSlots['11:40:00-12:20:00']) {
+      currentAfternoonSlots['11:40:00-12:20:00'] = 'LUNCH';
+    }
+
+    // Update the calendar grid entry
+    const updatedExam = await prisma.calendarGrid.update({
+      where: { gridId: parseInt(examId) },
+      data: {
+        morningSlots: JSON.stringify(currentMorningSlots),
+        afternoonSlots: JSON.stringify(currentAfternoonSlots)
+      }
+    });
+
+    console.log('✅ Exam updated successfully:', updatedExam.gridId);
+
+    res.json({
+      success: true,
+      message: 'Exam schedule updated successfully',
+      examId: updatedExam.gridId
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating exam:', error);
+    res.status(500).json({ error: 'Failed to update exam schedule' });
+  }
+});
+
 module.exports = router;

@@ -2383,3 +2383,42 @@
 [data-theme="dark"] .holidays-content ul {
   color: var(--text-color, #ced4da);
 }
+
+/* Exam Schedule Styles */
+.schedule-item.exam-slot {
+  background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+  color: white !important;
+  border: 2px solid #4338ca !important;
+  border-radius: 6px !important;
+  padding: 6px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  box-shadow: 0 2px 6px rgba(67, 56, 202, 0.3) !important;
+  min-height: 45px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+}
+
+.schedule-item.exam-slot .exam-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 700;
+}
+
+.schedule-item.exam-slot .exam-subject {
+  font-size: 13px;
+  font-weight: 700;
+  display: block;
+  line-height: 1.2;
+}
+
+[data-theme="dark"] .schedule-item.exam-slot {
+  background: linear-gradient(135deg, #5b21b6, #4c1d95) !important;
+  border-color: #3730a3 !important;
+  box-shadow: 0 2px 6px rgba(91, 33, 182, 0.4) !important;
+}

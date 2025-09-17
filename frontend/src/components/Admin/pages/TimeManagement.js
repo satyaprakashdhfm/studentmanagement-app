@@ -23,6 +23,20 @@ const TimeManagement = () => {
   
   // Tab management state
   const [activeTab, setActiveTab] = useState('schedule'); // 'schedule', 'exams', 'holidays'
+  
+  // Exam scheduling state
+  const [showExamModal, setShowExamModal] = useState(false);
+  const [examType, setExamType] = useState(null); // '2_per_day' or '1_per_day'
+  const [examForm, setExamForm] = useState({
+    numberOfDays: '',
+    startDate: '',
+    classId: ''
+  });
+  const [examSessions, setExamSessions] = useState([]);
+  const [showSessionsGrid, setShowSessionsGrid] = useState(false);
+  const [upcomingExams, setUpcomingExams] = useState([]);
+  const [examViewMode, setExamViewMode] = useState('current'); // 'current' or 'all'
+  const [editingExam, setEditingExam] = useState(null);
 
   // Use local classes if available, otherwise use context classes
   const effectiveClasses = localClasses.length > 0 ? localClasses : classes;
@@ -109,10 +123,14 @@ const TimeManagement = () => {
         // Extract week dates for headers
         const dates = response.data.map(dayData => {
           const date = new Date(dayData.calendar_date);
+          // Format as DD/MM/YY
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = String(date.getFullYear()).slice(-2);
           return {
             dayName: dayData.day_name || dayNames[dayData.day_of_week - 1],
             date: date,
-            formatted: date.getDate()
+            formatted: `${day}/${month}/${year}`
           };
         });
         setWeekDates(dates);
@@ -130,6 +148,33 @@ const TimeManagement = () => {
       setWeekDates([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch upcoming exams for the selected class
+  const fetchUpcomingExams = async () => {
+    try {
+      console.log('📚 Fetching upcoming exams, mode:', examViewMode, 'class:', selectedClass?.classId);
+      
+      let response;
+      if (examViewMode === 'all') {
+        response = await apiService.get(`/timemanagement/upcoming-exams/all`);
+      } else if (selectedClass) {
+        response = await apiService.get(`/timemanagement/upcoming-exams/${selectedClass.classId}`);
+      } else {
+        setUpcomingExams([]);
+        return;
+      }
+      
+      if (response && response.data) {
+        console.log('📚 Upcoming exams received:', response.data);
+        setUpcomingExams(response.data);
+      } else {
+        setUpcomingExams([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching upcoming exams:', error);
+      setUpcomingExams([]);
     }
   };
 
@@ -192,8 +237,14 @@ const TimeManagement = () => {
   useEffect(() => {
     if (selectedClass) {
       fetchSchedule();
+      fetchUpcomingExams();
     }
   }, [selectedClass]);
+
+  // Fetch upcoming exams when view mode changes
+  useEffect(() => {
+    fetchUpcomingExams();
+  }, [examViewMode]);
 
   // Fetch schedule when week offset changes
   useEffect(() => {
@@ -313,6 +364,8 @@ const TimeManagement = () => {
     const dayData = schedule[dayIndex]; // Use array index instead of day_of_week
     if (!dayData) return null;
 
+
+
     // Normalize time comparison - handle different formats
     const normalizeTime = (time) => {
       if (!time) return '';
@@ -342,26 +395,77 @@ const TimeManagement = () => {
     // Search in morning slots
     if (dayData.morning_slots) {
       for (const slot of dayData.morning_slots) {
-        // Parse slot data - format: "242508001_2_P1_0900_0940_rajeshmaths080910_8_MATH"
-        const parts = slot.split('_');
-        if (parts.length >= 7) {
-          const slotStart = parts[3]; // "0900"
-          const slotEnd = parts[4]; // "0940"
-          const subjectCode = parts[parts.length - 1]; // "MATH"
-          const teacherId = parts[5]; // "rajeshmaths080910"
-          
-          // Format times to HH:MM
-          const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
-          const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
-          
-          if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+        // First check for lunch breaks (highest priority)
+        if (slot.includes('LUNCH_')) {
+          // Handle complex format: "242508001_1_P1_1140_1220_LUNCH_242508001_LUNCH"
+          if (slot.includes('_P1_') && slot.includes('1140_1220')) {
+            const parts = slot.split('_');
+            const slotStart = parts[3]; // "1140"
+            const slotEnd = parts[4]; // "1220"
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              return {
+                subjectCode: 'LUNCH',
+                teacherId: 'LUNCH',
+                startTime: searchStartTime,
+                endTime: searchEndTime,
+                period: 'LUNCH'
+              };
+            }
+          }
+          // Handle simple format: "LUNCH_242510001_LUNCH" (only for lunch time)
+          else if (searchStartTime === '11:40' && searchEndTime === '12:20') {
+            return {
+              subjectCode: 'LUNCH',
+              teacherId: 'LUNCH',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'LUNCH'
+            };
+          }
+        }
+        // Then check for exam slots (but NOT during lunch time)
+        else if (slot.startsWith('EXAM_') && !(searchStartTime === '11:40' && searchEndTime === '12:20')) {
+          const parts = slot.split('_');
+          if (parts.length >= 3) {
+            const subjectCode = parts[1]; // "MATH"
+            const sessionType = parts[2]; // "morning", "afternoon", "full_day"
+            
+            // Only return exam slot if it's not during lunch period
             return {
               subjectCode: subjectCode,
-              teacherId: teacherId,
-              startTime: formattedStart,
-              endTime: formattedEnd,
-              period: parts[2] // P1, P2, etc.
+              teacherId: 'EXAM',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'EXAM',
+              isExam: true,
+              sessionType: sessionType
             };
+          }
+        } else {
+          // Parse regular slot data - format: "242508001_2_P1_0900_0940_rajeshmaths080910_8_MATH"
+          const parts = slot.split('_');
+          if (parts.length >= 7) {
+            const slotStart = parts[3]; // "0900"
+            const slotEnd = parts[4]; // "0940"
+            const subjectCode = parts[parts.length - 1]; // "MATH"
+            const teacherId = parts[5]; // "rajeshmaths080910"
+            
+            // Format times to HH:MM
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              return {
+                subjectCode: subjectCode,
+                teacherId: teacherId,
+                startTime: formattedStart,
+                endTime: formattedEnd,
+                period: parts[2] // P1, P2, etc.
+              };
+            }
           }
         }
       }
@@ -370,24 +474,78 @@ const TimeManagement = () => {
     // Search in afternoon slots
     if (dayData.afternoon_slots) {
       for (const slot of dayData.afternoon_slots) {
-        const parts = slot.split('_');
-        if (parts.length >= 7) {
-          const slotStart = parts[3];
-          const slotEnd = parts[4];
-          const subjectCode = parts[parts.length - 1];
-          const teacherId = parts[5];
-          
-          const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
-          const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
-          
-          if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+        // Check if this is a lunch break (both formats)
+        if (slot.includes('LUNCH_')) {
+          // Handle complex format: "242508001_1_P1_1140_1220_LUNCH_242508001_LUNCH"
+          if (slot.includes('_P1_') && slot.includes('1140_1220')) {
+            const parts = slot.split('_');
+            const slotStart = parts[3]; // "1140"
+            const slotEnd = parts[4]; // "1220"
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              console.log('🍽️ Found complex lunch break in afternoon:', slot, 'at time:', searchStartTime, '-', searchEndTime);
+              return {
+                subjectCode: 'LUNCH',
+                teacherId: 'LUNCH',
+                startTime: searchStartTime,
+                endTime: searchEndTime,
+                period: 'LUNCH'
+              };
+            }
+          }
+          // Handle simple format: "LUNCH_242510001_LUNCH" (only for lunch time)
+          else if (searchStartTime === '11:40' && searchEndTime === '12:20') {
+            console.log('🍽️ Found simple lunch break in afternoon:', slot, 'at time:', searchStartTime, '-', searchEndTime);
+            return {
+              subjectCode: 'LUNCH',
+              teacherId: 'LUNCH',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'LUNCH'
+            };
+          }
+        }
+        // Check if this is an exam slot (format: "EXAM_MATH_afternoon")
+        else if (slot.startsWith('EXAM_')) {
+          const parts = slot.split('_');
+          if (parts.length >= 3) {
+            const subjectCode = parts[1]; // "MATH"
+            const sessionType = parts[2]; // "morning", "afternoon", "full_day"
+            
+            // Return exam slot data for any afternoon time slot
             return {
               subjectCode: subjectCode,
-              teacherId: teacherId,
-              startTime: formattedStart,
-              endTime: formattedEnd,
-              period: parts[2]
+              teacherId: 'EXAM',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'EXAM',
+              isExam: true,
+              sessionType: sessionType
             };
+          }
+        } else {
+          // Parse regular slot data
+          const parts = slot.split('_');
+          if (parts.length >= 7) {
+            const slotStart = parts[3];
+            const slotEnd = parts[4];
+            const subjectCode = parts[parts.length - 1];
+            const teacherId = parts[5];
+            
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              return {
+                subjectCode: subjectCode,
+                teacherId: teacherId,
+                startTime: formattedStart,
+                endTime: formattedEnd,
+                period: parts[2]
+              };
+            }
           }
         }
       }
@@ -400,6 +558,126 @@ const TimeManagement = () => {
   const formatTime = (timeString) => {
     if (!timeString) return '';
     return timeString.substring(0, 5); // HH:MM format
+  };
+
+  // Exam scheduling functions
+  const handleExamTypeClick = (type) => {
+    setExamType(type);
+    setShowExamModal(true);
+    setExamForm({
+      numberOfDays: '',
+      startDate: '',
+      classId: selectedClass ? selectedClass.classId : ''
+    });
+  };
+
+  const handleExamFormSubmit = () => {
+    const effectiveClassId = selectedClass ? selectedClass.classId : examForm.classId;
+    
+    if (!examForm.numberOfDays || !examForm.startDate || !effectiveClassId) {
+      alert('Please fill in all fields');
+      return;
+    }
+    
+    // Update examForm with effective class ID
+    if (selectedClass && !examForm.classId) {
+      setExamForm(prev => ({...prev, classId: selectedClass.classId}));
+    }
+    
+    // Generate exam sessions based on form data
+    generateExamSessions();
+    setShowExamModal(false);
+    setShowSessionsGrid(true);
+  };
+
+  const generateExamSessions = () => {
+    const sessions = [];
+    const startDate = new Date(examForm.startDate);
+    const numberOfDays = parseInt(examForm.numberOfDays);
+    const effectiveClassId = selectedClass ? selectedClass.classId : examForm.classId;
+    
+    for (let i = 0; i < numberOfDays; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + i);
+      
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      if (examType === '2_per_day') {
+        sessions.push({
+          id: `${effectiveClassId}_${dateStr}_morning`,
+          date: dateStr,
+          session: 'morning',
+          subjectCode: '',
+          classId: effectiveClassId
+        });
+        sessions.push({
+          id: `${effectiveClassId}_${dateStr}_afternoon`,
+          date: dateStr,
+          session: 'afternoon',
+          subjectCode: '',
+          classId: effectiveClassId
+        });
+      } else {
+        sessions.push({
+          id: `${effectiveClassId}_${dateStr}_full_day`,
+          date: dateStr,
+          session: 'full_day',
+          subjectCode: '',
+          classId: effectiveClassId
+        });
+      }
+    }
+    
+    setExamSessions(sessions);
+  };
+
+  const handleSessionSubjectChange = (sessionId, subjectCode) => {
+    setExamSessions(prev => prev.map(session => 
+      session.id === sessionId ? {...session, subjectCode} : session
+    ));
+  };
+
+  const saveExamSchedule = async () => {
+    try {
+      // Validate all sessions have subjects
+      const incompleteSessions = examSessions.filter(session => !session.subjectCode);
+      if (incompleteSessions.length > 0) {
+        alert('Please select subjects for all exam sessions');
+        return;
+      }
+
+      setLoading(true);
+      console.log('💾 Saving exam schedule to database:', examSessions);
+
+      // Prepare exam data for API
+      const examData = {
+        examType,
+        examSessions,
+        academicYear: selectedAcademicYear
+      };
+
+      // Call API to save exam schedule
+      const response = await apiService.saveExamSchedule(examData);
+      
+      console.log('✅ Exam schedule saved successfully:', response);
+      alert(`Exam schedule saved successfully! ${response.totalSessions} sessions created.`);
+      
+      // Reset form and refresh schedule if class is selected
+      setShowSessionsGrid(false);
+      setExamSessions([]);
+      
+      // Refresh the schedule to show exams in calendar and update upcoming exams table
+      if (selectedClass) {
+        await fetchSchedule();
+      }
+      await fetchUpcomingExams();
+      
+    } catch (error) {
+      console.error('❌ Error saving exam schedule:', error);
+      alert('Error saving exam schedule: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -595,7 +873,7 @@ const TimeManagement = () => {
                         <tr key={dayIndex}>
                           <td className="day-cell">
                             <div className="day-name">{dateInfo.dayName}</div>
-                            <div className="day-date">({dateInfo.formatted}th)</div>
+                            <div className="day-date">({dateInfo.formatted})</div>
                           </td>
                           {timeSlots.map((slot, slotIndex) => {
                             const scheduleItem = findScheduleItem(dayIndex, slot.start_time, slot.end_time);
@@ -603,19 +881,50 @@ const TimeManagement = () => {
                             return (
                               <td key={slotIndex} className="period-cell">
                                 {scheduleItem ? (
-                                  <div className={`schedule-item ${getSubjectClass(scheduleItem.subjectCode)} ${
-                                    scheduleItem.subjectCode === 'STUDY' ? 'study-period' :
-                                    scheduleItem.subjectCode === 'LUNCH' ? 'lunch-break' : ''
-                                  }`}>
-                                    <div className="subject-name">
-                                      {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode || 'Unknown Subject'}
-                                    </div>
-                                    <div className="teacher-name">
-                                      {scheduleItem.teacherId && scheduleItem.teacherId.includes('LUNCH')
-                                        ? 'Lunch Break'
-                                        : scheduleItem.teacherId || 'No Teacher'}
-                                    </div>
-                                  </div>
+                                  (() => {
+                                    // Check if this is a lunch break first
+                                    if (scheduleItem.subjectCode === 'LUNCH' || scheduleItem.teacherId === 'LUNCH') {
+                                      return (
+                                        <div className="schedule-item lunch-break">
+                                          <div className="subject-name">Lunch Break</div>
+                                          <div className="teacher-name">Break Time</div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Check if this is an exam slot
+                                    const isExamSlot = scheduleItem.isExam || (scheduleItem.teacherId === 'EXAM');
+                                    
+                                    if (isExamSlot) {
+                                      // Get exam details
+                                      const examSubject = scheduleItem.subjectCode || 'Unknown';
+                                      const examSession = scheduleItem.sessionType || 'exam';
+                                      
+                                      return (
+                                        <div className="schedule-item exam-slot">
+                                          <div className="exam-label">EXAM</div>
+                                          <div className="exam-subject">{subjectNames[examSubject] || examSubject}</div>
+                                        </div>
+                                      );
+                                    }
+                                    
+                                    // Regular class schedule item
+                                    return (
+                                      <div className={`schedule-item ${getSubjectClass(scheduleItem.subjectCode)} ${
+                                        scheduleItem.subjectCode === 'STUDY' ? 'study-period' :
+                                        scheduleItem.subjectCode === 'LUNCH' ? 'lunch-break' : ''
+                                      }`}>
+                                        <div className="subject-name">
+                                          {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode || 'Unknown Subject'}
+                                        </div>
+                                        <div className="teacher-name">
+                                          {scheduleItem.teacherId && scheduleItem.teacherId.includes('LUNCH')
+                                            ? 'Lunch Break'
+                                            : scheduleItem.teacherId || 'No Teacher'}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()
                                 ) : (
                                   <div className="empty-slot">
                                     <span>-</span>
@@ -654,19 +963,319 @@ const TimeManagement = () => {
         {/* Exams Tab Content */}
         {activeTab === 'exams' && (
           <div className="exams-content">
-            <div style={{ padding: '20px', textAlign: 'center', color: '#6c757d' }}>
-              <h3>Exam Schedule Management</h3>
-              <p>Exam scheduling features will be implemented here.</p>
-              <div style={{ marginTop: '20px' }}>
-                <p>Coming soon:</p>
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  <li>• Create exam schedules</li>
-                  <li>• Manage exam dates and times</li>
-                  <li>• Set exam subjects and classes</li>
-                  <li>• Exam notifications</li>
-                </ul>
+            {/* Upcoming Exams Table */}
+            <div className="upcoming-exams-section" style={{ marginBottom: '40px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                <h3 style={{ margin: 0, color: '#495057' }}>
+                  📚 Upcoming Exams {examViewMode === 'current' && selectedClass ? `- ${selectedClass.grade} ${selectedClass.section}` : examViewMode === 'all' ? '- All Classes' : ''}
+                </h3>
+                
+                <div className="exam-view-toggle" style={{ display: 'flex', backgroundColor: 'white', borderRadius: '8px', border: '2px solid #dee2e6', overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setExamViewMode('current')}
+                    style={{
+                      padding: '8px 16px',
+                      border: 'none',
+                      backgroundColor: examViewMode === 'current' ? '#667eea' : 'transparent',
+                      color: examViewMode === 'current' ? 'white' : '#6c757d',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Current Class
+                  </button>
+                  <button
+                    onClick={() => setExamViewMode('all')}
+                    style={{
+                      padding: '8px 16px',
+                      border: 'none',
+                      backgroundColor: examViewMode === 'all' ? '#667eea' : 'transparent',
+                      color: examViewMode === 'all' ? 'white' : '#6c757d',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: '500'
+                    }}
+                  >
+                    All Classes
+                  </button>
+                </div>
               </div>
-            </div>
+                
+                {upcomingExams.length > 0 ? (
+                  <div className="upcoming-exams-table" style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#667eea', color: 'white' }}>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Date</th>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Day</th>
+                          {examViewMode === 'all' && (
+                            <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Class</th>
+                          )}
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Session Type</th>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Subjects</th>
+                          <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Total</th>
+                          <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {upcomingExams.map((exam, index) => (
+                          <tr key={exam.id} style={{ borderBottom: '1px solid #dee2e6', backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'white' }}>
+                            <td style={{ padding: '15px', fontWeight: '500' }}>
+                              {new Date(exam.date).toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                              })}
+                            </td>
+                            <td style={{ padding: '15px' }}>{exam.dayName}</td>
+                            {examViewMode === 'all' && (
+                              <td style={{ padding: '15px', fontWeight: '500' }}>
+                                <span style={{ 
+                                  padding: '4px 8px', 
+                                  borderRadius: '8px', 
+                                  fontSize: '0.8rem', 
+                                  backgroundColor: '#fff3cd',
+                                  color: '#856404',
+                                  fontWeight: '600'
+                                }}>
+                                  {exam.className || `${exam.grade} ${exam.section}`}
+                                </span>
+                              </td>
+                            )}
+                            <td style={{ padding: '15px' }}>
+                              <span style={{ 
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '0.8rem', 
+                                fontWeight: '500',
+                                backgroundColor: exam.examType === '2_per_day' ? '#e3f2fd' : '#f3e5f5',
+                                color: exam.examType === '2_per_day' ? '#1565c0' : '#7b1fa2'
+                              }}>
+                                {exam.examType === '2_per_day' ? '2 Per Day' : '1 Per Day'}
+                                {exam.examSession && ` - ${exam.examSession}`}
+                              </span>
+                            </td>
+                            <td style={{ padding: '15px' }}>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                {exam.examDetails.map((detail, idx) => (
+                                  <span key={idx} style={{
+                                    padding: '2px 6px',
+                                    backgroundColor: '#e9ecef',
+                                    borderRadius: '8px',
+                                    fontSize: '0.8rem',
+                                    color: '#495057'
+                                  }}>
+                                    {detail.subjectName}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td style={{ padding: '15px', textAlign: 'center', fontWeight: '600', color: '#667eea' }}>
+                              {exam.totalSubjects}
+                            </td>
+                            <td style={{ padding: '15px', textAlign: 'center' }}>
+                              <button
+                                onClick={() => setEditingExam(exam)}
+                                style={{
+                                  padding: '6px 12px',
+                                  backgroundColor: '#28a745',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '6px',
+                                  fontSize: '0.8rem',
+                                  cursor: 'pointer',
+                                  fontWeight: '500',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                onMouseOver={(e) => e.target.style.backgroundColor = '#218838'}
+                                onMouseOut={(e) => e.target.style.backgroundColor = '#28a745'}
+                              >
+                                ✏️ Edit
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '15px' }}>📅</div>
+                    <h4 style={{ marginBottom: '10px', color: '#495057' }}>No Upcoming Exams</h4>
+                    <p>No exam schedules found for this class. Create an exam schedule below.</p>
+                  </div>
+                )}
+              </div>
+            
+            {!showSessionsGrid ? (
+              selectedClass ? (
+                <div style={{ padding: '40px', textAlign: 'center' }}>
+                  <h3>Exam Schedule Management</h3>
+                  <div style={{ 
+                    marginBottom: '20px', 
+                    padding: '10px 20px', 
+                    backgroundColor: '#e8f4fd', 
+                    borderRadius: '8px', 
+                    border: '2px solid #667eea',
+                    display: 'inline-block'
+                  }}>
+                    <span style={{ color: '#495057', fontSize: '0.9rem' }}>Creating exam schedule for: </span>
+                    <strong style={{ color: '#667eea', fontSize: '1.1rem' }}>
+                      {selectedClass.grade} {selectedClass.section}
+                    </strong>
+                  </div>
+                  <p style={{ marginBottom: '40px', color: '#6c757d' }}>
+                    Choose the type of exam schedule you want to create
+                  </p>
+                
+                  <div className="exam-type-buttons" style={{ display: 'flex', gap: '30px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button 
+                    className="exam-type-btn"
+                    onClick={() => handleExamTypeClick('2_per_day')}
+                    style={{
+                      padding: '20px 30px',
+                      backgroundColor: '#667eea',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontSize: '1.1rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      minWidth: '250px',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                    onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                  >
+                    📅 Schedule 2 Exams Per Day
+                    <div style={{ fontSize: '0.9rem', fontWeight: '400', marginTop: '8px', opacity: '0.9' }}>
+                      Morning & Afternoon Sessions
+                    </div>
+                  </button>
+                  
+                  <button 
+                    className="exam-type-btn"
+                    onClick={() => handleExamTypeClick('1_per_day')}
+                    style={{
+                      padding: '20px 30px',
+                      backgroundColor: '#764ba2',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontSize: '1.1rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      minWidth: '250px',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                    onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                  >
+                    📖 Schedule 1 Exam Per Day
+                    <div style={{ fontSize: '0.9rem', fontWeight: '400', marginTop: '8px', opacity: '0.9' }}>
+                      Full Day Sessions
+                    </div>
+                  </button>
+                </div>
+              </div>
+              ) : (
+                <div style={{ padding: '40px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '20px' }}>🏫</div>
+                  <h3 style={{ color: '#6c757d', marginBottom: '15px' }}>Select a Class First</h3>
+                  <p style={{ color: '#6c757d' }}>
+                    Please select a class from the sidebar to create exam schedules.
+                  </p>
+                </div>
+              )
+            ) : (
+              <div className="exam-sessions-grid" style={{ padding: '20px' }}>
+                <h3>Configure Exam Sessions</h3>
+                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                  <strong>Exam Type:</strong> {examType === '2_per_day' ? '2 Exams Per Day' : '1 Exam Per Day'} | 
+                  <strong> Days:</strong> {examForm.numberOfDays} | 
+                  <strong> Start Date:</strong> {examForm.startDate}
+                </div>
+                
+                <div className="sessions-grid" style={{ display: 'grid', gap: '15px' }}>
+                  {examSessions.map((session, index) => (
+                    <div key={session.id} className="session-row" style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 2fr',
+                      gap: '15px',
+                      padding: '15px',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '8px',
+                      alignItems: 'center'
+                    }}>
+                      <div><strong>{new Date(session.date).toLocaleDateString()}</strong></div>
+                      <div style={{
+                        padding: '5px 10px',
+                        borderRadius: '15px',
+                        backgroundColor: session.session === 'morning' ? '#e3f2fd' : session.session === 'afternoon' ? '#fff3e0' : '#f3e5f5',
+                        color: session.session === 'morning' ? '#1976d2' : session.session === 'afternoon' ? '#f57c00' : '#7b1fa2',
+                        textAlign: 'center',
+                        fontSize: '0.9rem',
+                        fontWeight: '600'
+                      }}>
+                        {session.session === 'morning' ? '🌅 Morning' : session.session === 'afternoon' ? '🌆 Afternoon' : '📚 Full Day'}
+                      </div>
+                      <select
+                        value={session.subjectCode}
+                        onChange={(e) => handleSessionSubjectChange(session.id, e.target.value)}
+                        style={{
+                          padding: '8px 12px',
+                          border: '1px solid #ced4da',
+                          borderRadius: '6px',
+                          fontSize: '1rem'
+                        }}
+                      >
+                        <option value="">Select Subject</option>
+                        {/* TODO: Add subject options based on selected class */}
+                        <option value="MATH">Mathematics</option>
+                        <option value="SCI">Science</option>
+                        <option value="ENG">English</option>
+                        <option value="SOC">Social Studies</option>
+                        <option value="HIN">Hindi</option>
+                        <option value="TEL">Telugu</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                
+                <div style={{ marginTop: '30px', display: 'flex', gap: '15px', justifyContent: 'center' }}>
+                  <button
+                    onClick={() => {setShowSessionsGrid(false); setExamSessions([]);}}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#6c757d',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveExamSchedule}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#28a745',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Save Exam Schedule
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         
@@ -689,6 +1298,309 @@ const TimeManagement = () => {
           </div>
         )}
       </div>
+
+      {/* Exam Form Modal */}
+      {showExamModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '30px',
+            minWidth: '500px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ marginBottom: '20px' }}>
+              {examType === '2_per_day' ? 'Schedule 2 Exams Per Day' : 'Schedule 1 Exam Per Day'}
+            </h3>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Number of Days:
+              </label>
+              <input
+                type="number"
+                value={examForm.numberOfDays}
+                onChange={(e) => setExamForm({...examForm, numberOfDays: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+                placeholder="Enter number of exam days"
+                min="1"
+                max="30"
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Start Date:
+              </label>
+              <input
+                type="date"
+                value={examForm.startDate}
+                onChange={(e) => setExamForm({...examForm, startDate: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '30px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Class:
+              </label>
+              {selectedClass ? (
+                <div style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  backgroundColor: '#e9ecef',
+                  border: '2px solid #667eea',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  color: '#495057',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <span style={{ 
+                    backgroundColor: '#667eea', 
+                    color: 'white', 
+                    padding: '4px 8px', 
+                    borderRadius: '12px',
+                    fontSize: '0.8rem'
+                  }}>
+                    Selected
+                  </span>
+                  {selectedClass.grade} {selectedClass.section}
+                </div>
+              ) : (
+                <select
+                  value={examForm.classId}
+                  onChange={(e) => setExamForm({...examForm, classId: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    border: '1px solid #ced4da',
+                    borderRadius: '6px',
+                    fontSize: '1rem'
+                  }}
+                >
+                  <option value="">Select Class</option>
+                  {effectiveClasses.filter(cls => cls.academicYear === selectedAcademicYear).map(cls => (
+                    <option key={cls.classId} value={cls.classId}>
+                      {cls.className} - Section {cls.section}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowExamModal(false)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExamFormSubmit}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Generate Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Exam Modal */}
+      {editingExam && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '30px',
+            minWidth: '500px',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ marginBottom: '25px', textAlign: 'center', color: '#495057' }}>
+              ✏️ Edit Exam Schedule
+            </h3>
+            
+            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <strong>Date:</strong>
+                <span>{new Date(editingExam.date).toLocaleDateString('en-GB')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <strong>Day:</strong>
+                <span>{editingExam.dayName}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <strong>Class:</strong>
+                <span>{editingExam.className}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <strong>Session Type:</strong>
+                <span>{editingExam.examType === '2_per_day' ? '2 Per Day' : '1 Per Day'}</span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <h4 style={{ marginBottom: '15px', color: '#495057' }}>📚 Exam Subjects</h4>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {editingExam.examDetails.map((detail, index) => (
+                  <div key={index} style={{
+                    padding: '12px',
+                    backgroundColor: '#fff',
+                    border: '2px solid #e9ecef',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <div>
+                      <strong>{detail.timeSlot}:</strong>
+                      <span style={{ marginLeft: '10px', color: '#6c757d' }}>
+                        {detail.subjectName}
+                      </span>
+                    </div>
+                    <select
+                      value={detail.subject}
+                      onChange={(e) => {
+                        const newDetails = [...editingExam.examDetails];
+                        newDetails[index] = {
+                          ...detail,
+                          subject: e.target.value,
+                          subjectName: subjectNames[e.target.value] || e.target.value
+                        };
+                        setEditingExam({
+                          ...editingExam,
+                          examDetails: newDetails
+                        });
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        border: '2px solid #dee2e6',
+                        borderRadius: '6px',
+                        backgroundColor: '#fff',
+                        color: '#495057',
+                        fontSize: '0.9rem'
+                      }}
+                    >
+                      <option value="">Select Subject</option>
+                      <option value="8_MATH">Mathematics</option>
+                      <option value="8_SCI">Science</option>
+                      <option value="8_ENG">English</option>
+                      <option value="8_SOC">Social Studies</option>
+                      <option value="8_HIN">Hindi</option>
+                      <option value="8_TEL">Telugu</option>
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setEditingExam(null)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    console.log('💾 Updating exam:', editingExam);
+                    
+                    const response = await apiService.put(`/timemanagement/exam/${editingExam.id}`, {
+                      examDetails: editingExam.examDetails,
+                      academicYear: selectedAcademicYear
+                    });
+                    
+                    console.log('✅ Exam updated successfully:', response);
+                    alert('Exam schedule updated successfully!');
+                    
+                    setEditingExam(null);
+                    await fetchUpcomingExams();
+                    await fetchSchedule();
+                    
+                  } catch (error) {
+                    console.error('❌ Error updating exam:', error);
+                    alert('Error updating exam: ' + (error.message || 'Unknown error'));
+                  }
+                }}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Update Exam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <style jsx>{`
         .class-card.deactivated {
