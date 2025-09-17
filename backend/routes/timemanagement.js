@@ -611,6 +611,9 @@ router.get('/student-calendar-week/:studentId/:academicYear/:weekOffset?', authe
       const afternoonSlots = day.afternoonSlots ? JSON.parse(day.afternoonSlots) : [];
       const allSlots = [...morningSlots, ...afternoonSlots];
       
+      // Check if this day has exams
+      const hasExams = day.examType || day.dayType === 'exam';
+      
       // Parse each slot to extract schedule info
       const periods = allSlots.map(slot => {
         const parts = slot.split('_');
@@ -618,14 +621,38 @@ router.get('/student-calendar-week/:studentId/:academicYear/:weekOffset?', authe
           const timeStart = parts[3];
           const timeEnd = parts[4]; 
           const teacherId = parts[5];
-          const subjectCode = parts.length > 6 ? parts.slice(6).join('_') : '';
+          let subjectCode = parts.length > 6 ? parts.slice(6).join('_') : '';
+          let isExam = false;
+          
+          // Check if this slot is an exam slot
+          if (slot.startsWith('EXAM_')) {
+            isExam = true;
+            subjectCode = parts[1]; // For EXAM_SUBJECT_... format
+          } else if (hasExams && allSlots.some(s => s.startsWith('EXAM_') && s.includes(`_${day.classId}_`))) {
+            // If there are exams for this class on this day, check if this period has an exam
+            const examSlots = allSlots.filter(s => s.startsWith('EXAM_'));
+            const examForThisPeriod = examSlots.find(examSlot => {
+              const examParts = examSlot.split('_');
+              if (examParts.length >= 5) {
+                const examTimeStart = examParts[3];
+                return examTimeStart === timeStart && examSlot.includes(`_${day.classId}_`);
+              }
+              return false;
+            });
+            if (examForThisPeriod) {
+              isExam = true;
+              const examParts = examForThisPeriod.split('_');
+              subjectCode = examParts[1]; // Subject from exam slot
+            }
+          }
           
           return {
             startTime: `${timeStart.substring(0,2)}:${timeStart.substring(2)}:00`,
             endTime: `${timeEnd.substring(0,2)}:${timeEnd.substring(2)}:00`,
             teacherId,
             subjectCode,
-            rawSlot: slot
+            rawSlot: slot,
+            isExam: isExam
           };
         }
         return null;
@@ -758,8 +785,19 @@ router.get('/teacher-calendar-week/:teacherId/:academicYear/:weekOffset?', authe
       const afternoonSlots = dayData.afternoonSlots ? JSON.parse(dayData.afternoonSlots) : [];
       const allSlots = [...morningSlots, ...afternoonSlots];
       
-      // Filter slots for this specific teacher
+      // Check if this day has exams
+      const hasExams = dayData.examType || dayData.dayType === 'exam';
+      
+      // Filter slots for this specific teacher OR exam slots for classes they teach
       const teacherSlots = allSlots.filter(slot => {
+        // Check if it's an exam slot first
+        if (slot.startsWith('EXAM_')) {
+          // For exam slots, we need to check if this teacher teaches any subject in this class
+          // Since exams are class-wide, if teacher has any period in this class, they should see the exams
+          return true; // We'll handle teacher filtering at the period level later
+        }
+        
+        // For regular slots, check teacher ID
         const parts = slot.split('_');
         if (parts.length >= 6) {
           const slotTeacherId = parts[5];
@@ -771,18 +809,64 @@ router.get('/teacher-calendar-week/:teacherId/:academicYear/:weekOffset?', authe
       // Process teacher's slots for this class
       teacherSlots.forEach(slot => {
         const parts = slot.split('_');
-        if (parts.length >= 6) {
-          const timeStart = parts[3];
-          const timeEnd = parts[4];
-          const subjectCode = parts.length > 6 ? parts.slice(6).join('_') : '';
-          
+        let isTeacherSlot = false;
+        let isExam = false;
+        let subjectCode = '';
+        let timeStart = '';
+        let timeEnd = '';
+        
+        // Check if this is an exam slot
+        if (slot.startsWith('EXAM_')) {
+          // EXAM slots format: EXAM_SUBJECT_SESSION_TIME_TIME_...
+          if (parts.length >= 5) {
+            isExam = true;
+            subjectCode = parts[1]; // Subject code
+            timeStart = parts[3]; // Start time
+            timeEnd = parts[4]; // End time
+            
+            // Check if this teacher teaches this subject in this class during this time
+            // We need to see if teacher has any regular class at this time in this class
+            const regularSlots = allSlots.filter(s => !s.startsWith('EXAM_'));
+            const teacherHasClassAtThisTime = regularSlots.some(regularSlot => {
+              const regularParts = regularSlot.split('_');
+              if (regularParts.length >= 6) {
+                const regularTeacherId = regularParts[5];
+                const regularTimeStart = regularParts[3];
+                const regularSubject = regularParts.length > 6 ? regularParts.slice(6).join('_') : '';
+                
+                return regularTeacherId === teacherId && 
+                       regularTimeStart === timeStart && 
+                       (regularSubject === subjectCode || regularSubject.includes(subjectCode));
+              }
+              return false;
+            });
+            
+            // Only include this exam if teacher teaches this subject/time in this class
+            isTeacherSlot = teacherHasClassAtThisTime;
+          }
+        } else {
+          // Regular slot format: CLASSID_PERIOD_SLOT_TIME_TIME_TEACHERID_SUBJECT
+          if (parts.length >= 6) {
+            const slotTeacherId = parts[5];
+            if (slotTeacherId === teacherId) {
+              isTeacherSlot = true;
+              timeStart = parts[3];
+              timeEnd = parts[4];
+              subjectCode = parts.length > 6 ? parts.slice(6).join('_') : '';
+            }
+          }
+        }
+        
+        // Only process slots that belong to this teacher
+        if (isTeacherSlot && timeStart && timeEnd) {
           weekDays[dateKey].periods.push({
             startTime: `${timeStart.substring(0,2)}:${timeStart.substring(2)}:00`,
             endTime: `${timeEnd.substring(0,2)}:${timeEnd.substring(2)}:00`,
             teacherId,
             subjectCode,
             classId: dayData.classId,
-            rawSlot: slot
+            rawSlot: slot,
+            isExam: isExam
           });
           
           // Track which classes the teacher teaches this day

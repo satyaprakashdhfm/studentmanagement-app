@@ -66,10 +66,180 @@ const StudentTimetable = () => {
     return String(time);
   };
 
-  const findScheduleItem = (dayOfWeek, startTime, endTime) => {
-    const sStart = normalizeTime(startTime);
-    const sEnd = normalizeTime(endTime);
-    return schedule.find(item => item.dayOfWeek === dayOfWeek && normalizeTime(item.startTime) === sStart && normalizeTime(item.endTime) === sEnd);
+  // Function to find schedule item for a specific time slot (similar to admin logic)
+  const findScheduleItem = (dayData, startTime, endTime) => {
+    if (!dayData) return null;
+
+    // Normalize time comparison
+    const normalizeTime = (time) => {
+      if (!time) return '';
+      if (typeof time === 'string') {
+        if (time.includes('T')) {
+          return time.split('T')[1].substring(0, 5); // HH:MM
+        }
+        if (time.length === 8) return time.substring(0, 5); // HH:MM
+        if (time.length === 5) return time;
+        return time;
+      }
+      if (time instanceof Date) {
+        const hours = time.getHours().toString().padStart(2, '0');
+        const minutes = time.getMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      }
+      return String(time);
+    };
+
+    const searchStartTime = normalizeTime(startTime);
+    const searchEndTime = normalizeTime(endTime);
+
+    // Search in morning slots
+    if (dayData.morning_slots) {
+      for (const slot of dayData.morning_slots) {
+        // Check for lunch breaks first
+        if (slot.includes('LUNCH_')) {
+          if (slot.includes('_P1_') && slot.includes('1140_1220')) {
+            const parts = slot.split('_');
+            const slotStart = parts[3];
+            const slotEnd = parts[4];
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              return {
+                subjectCode: 'LUNCH',
+                teacherId: 'LUNCH',
+                startTime: searchStartTime,
+                endTime: searchEndTime,
+                period: 'LUNCH'
+              };
+            }
+          }
+          else if (searchStartTime === '11:40' && searchEndTime === '12:20') {
+            return {
+              subjectCode: 'LUNCH',
+              teacherId: 'LUNCH',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'LUNCH'
+            };
+          }
+        }
+        // Check for exam slots
+        else if (slot.startsWith('EXAM_') && !(searchStartTime === '11:40' && searchEndTime === '12:20')) {
+          const parts = slot.split('_');
+          if (parts.length >= 3) {
+            const subjectCode = parts[1];
+            const sessionType = parts[2];
+            
+            return {
+              subjectCode: subjectCode,
+              teacherId: 'EXAM',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'EXAM',
+              isExam: true,
+              sessionType: sessionType
+            };
+          }
+        } else {
+          // Parse regular slot data
+          const parts = slot.split('_');
+          if (parts.length >= 7) {
+            const slotStart = parts[3];
+            const slotEnd = parts[4];
+            const subjectCode = parts[parts.length - 1];
+            const teacherId = parts[5];
+            
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              return {
+                subjectCode: subjectCode,
+                teacherId: teacherId,
+                startTime: formattedStart,
+                endTime: formattedEnd,
+                period: parts[2]
+              };
+            }
+          }
+        }
+      }
+    }
+
+    // Search in afternoon slots
+    if (dayData.afternoon_slots) {
+      for (const slot of dayData.afternoon_slots) {
+        if (slot.includes('LUNCH_')) {
+          if (slot.includes('_P1_') && slot.includes('1140_1220')) {
+            const parts = slot.split('_');
+            const slotStart = parts[3];
+            const slotEnd = parts[4];
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              return {
+                subjectCode: 'LUNCH',
+                teacherId: 'LUNCH',
+                startTime: searchStartTime,
+                endTime: searchEndTime,
+                period: 'LUNCH'
+              };
+            }
+          }
+          else if (searchStartTime === '11:40' && searchEndTime === '12:20') {
+            return {
+              subjectCode: 'LUNCH',
+              teacherId: 'LUNCH',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'LUNCH'
+            };
+          }
+        }
+        else if (slot.startsWith('EXAM_') && !(searchStartTime === '11:40' && searchEndTime === '12:20')) {
+          const parts = slot.split('_');
+          if (parts.length >= 3) {
+            const subjectCode = parts[1];
+            const sessionType = parts[2];
+            
+            return {
+              subjectCode: subjectCode,
+              teacherId: 'EXAM',
+              startTime: searchStartTime,
+              endTime: searchEndTime,
+              period: 'EXAM',
+              isExam: true,
+              sessionType: sessionType
+            };
+          }
+        } else {
+          const parts = slot.split('_');
+          if (parts.length >= 7) {
+            const slotStart = parts[3];
+            const slotEnd = parts[4];
+            const subjectCode = parts[parts.length - 1];
+            const teacherId = parts[5];
+            
+            const formattedStart = slotStart.substring(0, 2) + ':' + slotStart.substring(2);
+            const formattedEnd = slotEnd.substring(0, 2) + ':' + slotEnd.substring(2);
+            
+            if (formattedStart === searchStartTime && formattedEnd === searchEndTime) {
+              return {
+                subjectCode: subjectCode,
+                teacherId: teacherId,
+                startTime: formattedStart,
+                endTime: formattedEnd,
+                period: parts[2]
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return null;
   };
 
   const loadStudentData = async () => {
@@ -249,22 +419,70 @@ const StudentTimetable = () => {
                       </div>
                     </td>
                     {timeSlots.map((slot, slotIndex) => {
-                      const matchingPeriod = dateInfo.dayData.periods?.find(period => {
-                        const periodStart = period.startTime.substring(0, 5);
-                        const slotStart = slot.start_time.substring(0, 5);
-                        return periodStart === slotStart;
-                      });
+                      const scheduleItem = findScheduleItem(dateInfo.dayData, slot.start_time, slot.end_time);
+                      const dayData = dateInfo.dayData;
+                      const isHoliday = dayData && dayData.holiday_name;
+                      const isHalfHoliday = dayData && dayData.day_type === 'half_holiday';
+
                       return (
                         <td key={slotIndex} className="schedule-cell">
-                          {matchingPeriod ? (
-                            <div className="schedule-item">
-                              <div className="subject-name">
-                                {subjectNames[matchingPeriod.subjectCode] || matchingPeriod.subjectCode}
+                          {/* Check if this entire day is a holiday first */}
+                          {isHoliday ? (
+                            <div className={`schedule-item ${isHalfHoliday ? 'half-holiday-cell' : 'holiday-cell'}`}>
+                              <div className="holiday-text">
+                                {isHalfHoliday ? 'HALF HOLIDAY' : 'Holiday'}
                               </div>
-                              <div className="teacher-id">{matchingPeriod.teacherId}</div>
+                              <div className="holiday-name">{dayData.holiday_name}</div>
                             </div>
+                          ) : scheduleItem ? (
+                            (() => {
+                              // Check if this is a lunch break first
+                              if (scheduleItem.subjectCode === 'LUNCH' || scheduleItem.teacherId === 'LUNCH') {
+                                return (
+                                  <div className="schedule-item lunch-break">
+                                    <div className="subject-name">Lunch Break</div>
+                                    <div className="teacher-name">Break Time</div>
+                                  </div>
+                                );
+                              }
+                              
+                              // Check if this is an exam slot
+                              const isExamSlot = scheduleItem.isExam || (scheduleItem.teacherId === 'EXAM');
+                              
+                              if (isExamSlot) {
+                                // Get exam details
+                                const examSubject = scheduleItem.subjectCode || 'Unknown';
+                                const examSession = scheduleItem.sessionType || 'exam';
+                                
+                                return (
+                                  <div className="schedule-item exam-cell">
+                                    <div className="exam-text">EXAM</div>
+                                    <div className="exam-subject">{subjectNames[examSubject] || examSubject}</div>
+                                  </div>
+                                );
+                              }
+                              
+                              // Regular class schedule item
+                              return (
+                                <div className={`schedule-item ${
+                                  scheduleItem.subjectCode === 'STUDY' ? 'study-period' :
+                                  scheduleItem.subjectCode === 'LUNCH' ? 'lunch-break' : ''
+                                }`}>
+                                  <div className="subject-name">
+                                    {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode || 'Unknown Subject'}
+                                  </div>
+                                  <div className="teacher-id">
+                                    {scheduleItem.teacherId && scheduleItem.teacherId.includes('LUNCH')
+                                      ? 'Lunch Break'
+                                      : scheduleItem.teacherId || 'No Teacher'}
+                                  </div>
+                                </div>
+                              );
+                            })()
                           ) : (
-                            <span className="no-class">-</span>
+                            <div className="empty-slot">
+                              <span>-</span>
+                            </div>
                           )}
                         </td>
                       );

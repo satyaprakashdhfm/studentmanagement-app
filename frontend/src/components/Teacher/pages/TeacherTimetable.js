@@ -72,6 +72,42 @@ const TeacherTimetable = () => {
     return schedule.find(item => item.dayOfWeek === dayOfWeek && normalizeTime(item.startTime) === sStart && normalizeTime(item.endTime) === sEnd);
   };
 
+  // Function to find schedule item for teacher at specific time slot
+  const findTeacherScheduleItem = (dayData, startTime, endTime) => {
+    if (!dayData || !dayData.periods) return null;
+
+    // Normalize time comparison
+    const normalizeTime = (time) => {
+      if (!time) return '';
+      if (typeof time === 'string') {
+        if (time.includes('T')) {
+          return time.split('T')[1].substring(0, 5); // HH:MM
+        }
+        if (time.length === 8) return time.substring(0, 5); // HH:MM
+        if (time.length === 5) return time;
+        return time;
+      }
+      if (time instanceof Date) {
+        const hours = time.getHours().toString().padStart(2, '0');
+        const minutes = time.getMinutes().toString().padStart(2, '0');
+        return `${hours}:${minutes}`;
+      }
+      return String(time);
+    };
+
+    const searchStartTime = normalizeTime(startTime);
+    const searchEndTime = normalizeTime(endTime);
+
+    // Find matching period for this time slot
+    const matchingPeriod = dayData.periods.find(period => {
+      const periodStart = normalizeTime(period.startTime);
+      const periodEnd = normalizeTime(period.endTime);
+      return periodStart === searchStartTime && periodEnd === searchEndTime;
+    });
+
+    return matchingPeriod;
+  };
+
   const loadTeacherData = async () => {
     try {
       setLoading(true);
@@ -249,22 +285,69 @@ const TeacherTimetable = () => {
                       </div>
                     </td>
                     {timeSlots.map((slot, slotIndex) => {
-                      const matchingPeriod = dateInfo.dayData.periods?.find(period => {
-                        const periodStart = period.startTime.substring(0, 5);
-                        const slotStart = slot.start_time.substring(0, 5);
-                        return periodStart === slotStart;
-                      });
+                      const scheduleItem = findTeacherScheduleItem(dateInfo.dayData, slot.start_time, slot.end_time);
+                      const dayData = dateInfo.dayData;
+                      const isHoliday = dayData && dayData.holiday_name;
+                      const isHalfHoliday = dayData && dayData.day_type === 'half_holiday';
+
                       return (
                         <td key={slotIndex} className="schedule-cell">
-                          {matchingPeriod ? (
-                            <div className="schedule-item">
-                              <div className="class-name">Class {matchingPeriod.classId}</div>
-                              <div className="subject-name">
-                                {subjectNames[matchingPeriod.subjectCode] || matchingPeriod.subjectCode}
+                          {/* Check if this entire day is a holiday first */}
+                          {isHoliday ? (
+                            <div className={`schedule-item ${isHalfHoliday ? 'half-holiday-cell' : 'holiday-cell'}`}>
+                              <div className="holiday-text">
+                                {isHalfHoliday ? 'HALF HOLIDAY' : 'Holiday'}
                               </div>
+                              <div className="holiday-name">{dayData.holiday_name}</div>
                             </div>
+                          ) : scheduleItem ? (
+                            (() => {
+                              // Check if this is a lunch break first
+                              if (scheduleItem.subjectCode === 'LUNCH' || scheduleItem.teacherId === 'LUNCH') {
+                                return (
+                                  <div className="schedule-item lunch-break">
+                                    <div className="subject-name">Lunch Break</div>
+                                    <div className="teacher-name">Break Time</div>
+                                  </div>
+                                );
+                              }
+                              
+                              // Check if this is an exam slot
+                              const isExamSlot = scheduleItem.isExam;
+                              
+                              if (isExamSlot) {
+                                // Get exam details - for teacher we show class and subject
+                                const examSubject = scheduleItem.subjectCode || 'Unknown';
+                                const examClass = scheduleItem.classId || '';
+                                
+                                return (
+                                  <div className="schedule-item exam-cell">
+                                    <div className="exam-text">EXAM</div>
+                                    {examClass && <div className="class-name">Class {examClass}</div>}
+                                    <div className="exam-subject">{subjectNames[examSubject] || examSubject}</div>
+                                  </div>
+                                );
+                              }
+                              
+                              // Regular class schedule item
+                              return (
+                                <div className={`schedule-item ${
+                                  scheduleItem.subjectCode === 'STUDY' ? 'study-period' :
+                                  scheduleItem.subjectCode === 'LUNCH' ? 'lunch-break' : ''
+                                }`}>
+                                  <div className="class-name">
+                                    Class {scheduleItem.classId}
+                                  </div>
+                                  <div className="subject-name">
+                                    {subjectNames[scheduleItem.subjectCode] || scheduleItem.subjectCode || 'Unknown Subject'}
+                                  </div>
+                                </div>
+                              );
+                            })()
                           ) : (
-                            <span className="no-class">—</span>
+                            <div className="empty-slot">
+                              <span>—</span>
+                            </div>
                           )}
                         </td>
                       );

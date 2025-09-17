@@ -526,3 +526,59 @@ table.schedule-table thead th small {
   margin: 2px 4px 2px 0;
   box-shadow: 0 1px 3px rgba(40, 167, 69, 0.3);
 }
+
+/* Holiday Cell Styles */
+.holiday-cell {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%) !important;
+}
+
+.holiday-period {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 4px;
+  color: white;
+}
+
+.holiday-text {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.holiday-name {
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+  opacity: 0.9;
+}
+
+/* Exam Cell Styles */
+.exam-cell {
+  background: linear-gradient(135deg, #ff9500 0%, #ff7b00 100%) !important;
+}
+
+.exam-period {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 4px;
+  color: white;
+}
+
+.exam-text {
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.exam-subject {
+  font-size: 10px;
+  font-weight: 500;
+  text-align: center;
+  opacity: 0.9;
+}
