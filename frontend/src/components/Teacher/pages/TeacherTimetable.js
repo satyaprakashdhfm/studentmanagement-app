@@ -32,7 +32,8 @@ const TeacherTimetable = () => {
     '8_HIN': 'Hindi',
     '8_TEL': 'Telugu',
     'STUDY': 'Study Period',
-    'LUNCH': 'Lunch Break'
+    'LUNCH': 'Lunch Break',
+    'EXAM': 'Exam Period'
   };
 
   const timeSlots = [
@@ -127,6 +128,18 @@ const TeacherTimetable = () => {
       
       if (weeklyResponse && weeklyResponse.success && weeklyResponse.data) {
         console.log('📅 Loaded teacher weekly calendar:', weeklyResponse.data);
+        
+        // Quick debug: Check if any periods are marked as exams
+        let examCount = 0;
+        weeklyResponse.data.forEach((day, dayIndex) => {
+          day.periods?.forEach((period) => {
+            if (period.isExam) {
+              examCount++;
+              console.log(`🎯 EXAM FOUND! Day ${dayIndex}, Class ${period.classId}, Subject ${period.subjectCode}, Time ${period.startTime}`);
+            }
+          });
+        });
+        console.log(`📊 Total exam periods found: ${examCount}`);
         
         // Set schedule data from calendar
         setSchedule(weeklyResponse.data);
@@ -285,10 +298,49 @@ const TeacherTimetable = () => {
                       </div>
                     </td>
                     {timeSlots.map((slot, slotIndex) => {
-                      const scheduleItem = findTeacherScheduleItem(dateInfo.dayData, slot.start_time, slot.end_time);
                       const dayData = dateInfo.dayData;
                       const isHoliday = dayData && dayData.holiday_name;
                       const isHalfHoliday = dayData && dayData.day_type === 'half_holiday';
+
+                      // Find the teacher's scheduled item for this exact slot (if any)
+                      const scheduleItem = findTeacherScheduleItem(dayData, slot.start_time, slot.end_time);
+
+                      // Find exam periods for the day (created by backend). We'll only show EXAM
+                      // if the exam belongs to the same class that the teacher would have for this slot.
+                      const examPeriods = dayData.periods ? dayData.periods.filter(p => p.isExam) : [];
+
+                      // Helper to check time overlap precisely (HH:MM:SS strings)
+                      const slotStart = slot.start_time;
+                      const slotEnd = slot.end_time;
+                      const toSeconds = (t) => {
+                        const parts = (t || '').split(':').map(x => parseInt(x, 10) || 0);
+                        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+                      };
+                      const sSec = toSeconds(slotStart);
+                      const eSec = toSeconds(slotEnd);
+
+                      // Find a matching exam period that (a) overlaps this slot and (b) is for the same class
+                      const matchingExamPeriod = examPeriods.find(exam => {
+                        if (!exam || !exam.startTime || !exam.endTime || !exam.classId) return false;
+                        // Only consider exam if teacher would have this class in this slot
+                        if (!scheduleItem || String(scheduleItem.classId) !== String(exam.classId)) return false;
+                        const examStartSec = toSeconds(exam.startTime);
+                        const examEndSec = toSeconds(exam.endTime);
+                        // overlap if slot start < exam end && slot end > exam start
+                        return sSec < examEndSec && eSec > examStartSec;
+                      });
+
+                      // DEBUG: log per-slot matching info (temporary)
+                      if (process.env.NODE_ENV !== 'production') {
+                        // eslint-disable-next-line no-console
+                        console.debug('[TT DEBUG] date:', dateInfo.formatted, 'slot:', slot.slot_name, 'slotRange:', slotStart, '-', slotEnd);
+                        // eslint-disable-next-line no-console
+                        console.debug('[TT DEBUG] scheduleItem:', scheduleItem);
+                        // eslint-disable-next-line no-console
+                        console.debug('[TT DEBUG] examPeriods:', examPeriods);
+                        // eslint-disable-next-line no-console
+                        console.debug('[TT DEBUG] matchingExamPeriod:', matchingExamPeriod);
+                      }
 
                       return (
                         <td key={slotIndex} className="schedule-cell">
@@ -299,6 +351,12 @@ const TeacherTimetable = () => {
                                 {isHalfHoliday ? 'HALF HOLIDAY' : 'Holiday'}
                               </div>
                               <div className="holiday-name">{dayData.holiday_name}</div>
+                            </div>
+                          ) : matchingExamPeriod ? (
+                            <div className="schedule-item exam-cell">
+                              <div className="exam-text">EXAM</div>
+                              <div className="class-name">Class {matchingExamPeriod.classId}</div>
+                              <div className="exam-subject">{subjectNames[matchingExamPeriod.subjectCode] || matchingExamPeriod.subjectCode}</div>
                             </div>
                           ) : scheduleItem ? (
                             (() => {
