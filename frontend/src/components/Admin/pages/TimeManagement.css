@@ -1741,18 +1741,18 @@
 
 /* Holiday Slot Styling */
 .holiday-slot {
-  border: 2px solid #e84393 !important;
-  box-shadow: 0 0 10px rgba(232, 67, 147, 0.3);
+  border: 2px solid #10b981 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
   animation: holidayGlow 3s ease-in-out infinite alternate;
 }
 
 @keyframes holidayGlow {
-  from { box-shadow: 0 0 10px rgba(232, 67, 147, 0.3); }
-  to { box-shadow: 0 0 20px rgba(232, 67, 147, 0.5); }
+  from { box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
+  to { box-shadow: 0 0 20px rgba(16, 185, 129, 0.5); }
 }
 
 .holiday-slot .subject-name {
-  color: #e84393;
+  color: #10b981;
   font-weight: bold;
   text-transform: uppercase;
   font-size: 0.9rem;
@@ -1760,7 +1760,7 @@
 
 .holiday-slot .teacher-name,
 .holiday-slot .room-info {
-  color: #636e72;
+  color: #047857;
   font-size: 0.8rem;
 }
 
@@ -2421,4 +2421,149 @@
   background: linear-gradient(135deg, #5b21b6, #4c1d95) !important;
   border-color: #3730a3 !important;
   box-shadow: 0 2px 6px rgba(91, 33, 182, 0.4) !important;
+}
+
+/* Holiday Schedule Styles */
+.schedule-item.holiday-slot {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: white !important;
+  border: 2px solid #047857 !important;
+  border-radius: 6px !important;
+  padding: 6px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3) !important;
+  min-height: 45px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+}
+
+.schedule-item.holiday-slot .holiday-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 700;
+}
+
+.schedule-item.holiday-slot .holiday-name {
+  font-size: 13px;
+  font-weight: 700;
+  display: block;
+  line-height: 1.2;
+}
+
+/* Half Holiday Schedule Styles */
+.schedule-item.half-holiday-slot {
+  background: linear-gradient(135deg, #6ee7b7, #34d399) !important;
+  color: #065f46 !important;
+  border: 2px solid #10b981 !important;
+  border-radius: 6px !important;
+  padding: 6px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  box-shadow: 0 2px 6px rgba(52, 211, 153, 0.3) !important;
+  min-height: 45px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+}
+
+.schedule-item.half-holiday-slot .holiday-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 700;
+}
+
+.schedule-item.half-holiday-slot .holiday-name {
+  font-size: 13px;
+  font-weight: 700;
+  display: block;
+  line-height: 1.2;
+}
+
+/* Dark mode holiday styles */
+[data-theme="dark"] .schedule-item.holiday-slot {
+  background: linear-gradient(135deg, #065f46, #064e3b) !important;
+  border-color: #047857 !important;
+  box-shadow: 0 2px 6px rgba(6, 95, 70, 0.4) !important;
+  color: #d1fae5 !important;
+}
+
+[data-theme="dark"] .schedule-item.half-holiday-slot {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  border-color: #047857 !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4) !important;
+  color: #ecfdf5 !important;
+}
+
+/* Holiday Schedule Styles */
+.schedule-item.holiday-slot {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: white !important;
+  border: 2px solid #047857 !important;
+  border-radius: 6px !important;
+  padding: 6px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3) !important;
+  min-height: 45px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+}
+
+.schedule-item.half-holiday-slot {
+  background: linear-gradient(135deg, #6ee7b7, #34d399) !important;
+  color: #065f46 !important;
+  border: 2px solid #10b981 !important;
+  border-radius: 6px !important;
+  padding: 6px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  box-shadow: 0 2px 6px rgba(52, 211, 153, 0.3) !important;
+  min-height: 45px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+}
+
+.schedule-item.holiday-slot .holiday-label,
+.schedule-item.half-holiday-slot .holiday-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 700;
+}
+
+.schedule-item.holiday-slot .holiday-name,
+.schedule-item.half-holiday-slot .holiday-name {
+  font-size: 13px;
+  font-weight: 700;
+  display: block;
+  line-height: 1.2;
+}
+
+[data-theme="dark"] .schedule-item.holiday-slot {
+  background: linear-gradient(135deg, #065f46, #064e3b) !important;
+  border-color: #047857 !important;
+  box-shadow: 0 2px 6px rgba(6, 95, 70, 0.4) !important;
+  color: #d1fae5 !important;
+}
+
+[data-theme="dark"] .schedule-item.half-holiday-slot {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  border-color: #047857 !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4) !important;
+  color: #ecfdf5 !important;
 }

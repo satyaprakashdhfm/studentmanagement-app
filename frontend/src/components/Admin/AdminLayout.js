@@ -12,6 +12,7 @@ const AdminLayout = ({ children }) => {
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
   const [showMarksDropdown, setShowMarksDropdown] = useState(false);
   const [showAttendanceDropdown, setShowAttendanceDropdown] = useState(false);
+  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
   
   // Use the academic year context
   const { 
@@ -63,6 +64,9 @@ const AdminLayout = ({ children }) => {
     if (location.pathname.includes('/admin/attendance')) {
       setShowAttendanceDropdown(true);
     }
+    if (location.pathname.includes('/admin/schedule-management')) {
+      setShowScheduleDropdown(true);
+    }
   }, [location.pathname]);
 
   const handleStudentDropdownToggle = () => {
@@ -73,6 +77,7 @@ const AdminLayout = ({ children }) => {
       setShowTimeDropdown(false);
       setShowAttendanceDropdown(false);
       setShowMarksDropdown(false);
+      setShowScheduleDropdown(false);
     }
   };
 
@@ -84,6 +89,7 @@ const AdminLayout = ({ children }) => {
       setShowTimeDropdown(false);
       setShowAttendanceDropdown(false);
       setShowMarksDropdown(false);
+      setShowScheduleDropdown(false);
     }
   };
 
@@ -93,6 +99,19 @@ const AdminLayout = ({ children }) => {
     if (!showTimeDropdown) {
       setShowStudentDropdown(false);
       setShowFeeDropdown(false);
+      setShowAttendanceDropdown(false);
+      setShowMarksDropdown(false);
+      setShowScheduleDropdown(false);
+    }
+  };
+
+  const handleScheduleDropdownToggle = () => {
+    setShowScheduleDropdown(!showScheduleDropdown);
+    // Close other dropdowns when schedule dropdown is opened
+    if (!showScheduleDropdown) {
+      setShowStudentDropdown(false);
+      setShowFeeDropdown(false);
+      setShowTimeDropdown(false);
       setShowAttendanceDropdown(false);
       setShowMarksDropdown(false);
     }
@@ -106,6 +125,7 @@ const AdminLayout = ({ children }) => {
       setShowFeeDropdown(false);
       setShowTimeDropdown(false);
       setShowAttendanceDropdown(false);
+      setShowScheduleDropdown(false);
     }
   };
 
@@ -117,6 +137,7 @@ const AdminLayout = ({ children }) => {
       setShowFeeDropdown(false);
       setShowTimeDropdown(false);
       setShowMarksDropdown(false);
+      setShowScheduleDropdown(false);
     }
   };
 
@@ -127,6 +148,7 @@ const AdminLayout = ({ children }) => {
     setShowTimeDropdown(false);
     setShowMarksDropdown(false);
     setShowAttendanceDropdown(false);
+    setShowScheduleDropdown(false);
   };
 
   // Function to handle navigation without closing dropdown for Time Management
@@ -145,6 +167,7 @@ const AdminLayout = ({ children }) => {
     setShowTimeDropdown(false);
     setShowMarksDropdown(false);
     setShowAttendanceDropdown(false);
+    setShowScheduleDropdown(false);
   };
 
   const handleLogout = () => {
@@ -288,6 +311,46 @@ const AdminLayout = ({ children }) => {
                       </Link>
                     </li>
                   ))}
+                </ul>
+              )}
+            </li>
+
+            {/* Schedule, Holidays & Exams Management with Dropdown */}
+            <li>
+              <div
+                className={`dropdown-header ${location.pathname.includes('/admin/schedule-management') ? 'active' : ''}`}
+                onClick={handleScheduleDropdownToggle}
+              >
+                <span style={{ marginRight: '10px' }}>📅</span>
+                Schedule, Holidays & Exams Management
+                <span style={{ marginLeft: '10px' }}>{showScheduleDropdown ? '▲' : '▼'}</span>
+              </div>
+              {showScheduleDropdown && (
+                <ul className="dropdown-menu">
+                  <li>
+                    <Link
+                      to="/admin/schedule-management/exams"
+                      className={location.pathname === '/admin/schedule-management/exams' ? 'active' : ''}
+                    >
+                      📚 Exams
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/admin/schedule-management/holidays"
+                      className={location.pathname === '/admin/schedule-management/holidays' ? 'active' : ''}
+                    >
+                      🏖️ Holidays
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/admin/schedule-management/schedules"
+                      className={location.pathname === '/admin/schedule-management/schedules' ? 'active' : ''}
+                    >
+                      🗓️ New Schedule (Coming Soon)
+                    </Link>
+                  </li>
                 </ul>
               )}
             </li>

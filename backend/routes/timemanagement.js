@@ -911,4 +911,366 @@ router.put('/exam/:examId', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/timemanagement/upcoming-holidays/all
+// Get upcoming holidays for all classes
+router.get('/upcoming-holidays/all', authenticateToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day
+
+    console.log('🏖️ Fetching upcoming holidays for all classes from date:', today);
+
+    // Fetch holidays from academic calendar
+    const academicCalendar = await prisma.academicCalendar.findFirst({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!academicCalendar || !academicCalendar.holidays) {
+      console.log('🏖️ No academic calendar or holidays found');
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    // Parse holidays from JSONB field
+    const holidays = academicCalendar.holidays || [];
+    
+    // Filter upcoming holidays (include today's holidays)
+    const upcomingHolidays = holidays
+      .map(holiday => {
+        const holidayDate = new Date(holiday.date);
+        holidayDate.setHours(0, 0, 0, 0);
+        
+        return {
+          id: holiday.date + '_holiday', // Create unique ID
+          name: holiday.name,
+          date: holidayDate,
+          dayName: holidayDate.toLocaleDateString('en-US', { weekday: 'long' }),
+          description: holiday.description || '',
+          type: holiday.type || 'general',
+          duration: holiday.duration || 'full-day', // Add duration support
+          academicYear: academicCalendar.academicYear
+        };
+      })
+      .filter(holiday => holiday.date >= today) // This will include today's holidays
+      .sort((a, b) => a.date - b.date);
+
+    console.log('🏖️ Found upcoming holidays for all classes:', upcomingHolidays.length);
+
+    res.json({
+      success: true,
+      data: upcomingHolidays
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching upcoming holidays for all classes:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming holidays for all classes' });
+  }
+});
+
+// GET /api/timemanagement/upcoming-holidays/:classId
+// Get upcoming holidays for a specific class (same as all classes since holidays are global)
+router.get('/upcoming-holidays/:classId', authenticateToken, async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day
+
+    console.log('🏖️ Fetching upcoming holidays for class:', classId, 'from date:', today.toISOString().split('T')[0]);
+
+    // Fetch holidays from academic calendar (holidays are global, not class-specific)
+    const academicCalendar = await prisma.academicCalendar.findFirst({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!academicCalendar || !academicCalendar.holidays) {
+      console.log('🏖️ No academic calendar or holidays found');
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    // Parse holidays from JSONB field
+    const holidays = academicCalendar.holidays || [];
+    
+    // Filter upcoming holidays (include today's holidays)
+    const upcomingHolidays = holidays
+      .map(holiday => {
+        const holidayDate = new Date(holiday.date);
+        holidayDate.setHours(0, 0, 0, 0);
+        
+        return {
+          id: holiday.date + '_holiday', // Create unique ID
+          name: holiday.name,
+          date: holidayDate,
+          dayName: holidayDate.toLocaleDateString('en-US', { weekday: 'long' }),
+          description: holiday.description || '',
+          type: holiday.type || 'general',
+          duration: holiday.duration || 'full-day', // Add duration support
+          academicYear: academicCalendar.academicYear
+        };
+      })
+      .filter(holiday => holiday.date >= today) // This will include today's holidays
+      .sort((a, b) => a.date - b.date);
+
+    console.log('🏖️ Found upcoming holidays:', upcomingHolidays.length);
+
+    res.json({
+      success: true,
+      data: upcomingHolidays
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching upcoming holidays:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming holidays' });
+  }
+});
+
+// POST /api/timemanagement/holidays - Save holiday
+router.post('/holidays', authenticateToken, async (req, res) => {
+  try {
+    const { holidayName, startDate, endDate, description, type = 'general', duration = 'full-day', academicYear } = req.body;
+
+    console.log('🏖️ Adding holiday:', { holidayName, startDate, endDate, description, type, duration });
+
+    if (!holidayName || !startDate) {
+      return res.status(400).json({ error: 'Holiday name and start date are required' });
+    }
+
+    // Get or create academic calendar
+    let academicCalendar = await prisma.academicCalendar.findFirst({
+      where: { academicYear: academicYear },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!academicCalendar) {
+      return res.status(404).json({ error: 'Academic calendar not found for the specified year' });
+    }
+
+    // Parse existing holidays
+    const existingHolidays = academicCalendar.holidays || [];
+    
+    // Create new holiday entry with duration support
+    const newHoliday = {
+      date: startDate,
+      name: holidayName,
+      description: description || '',
+      type: type,
+      duration: duration // full-day, half-day
+    };
+
+    // If it's a multi-day holiday, create entries for each day
+    const holidays = [];
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : start;
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      holidays.push({
+        ...newHoliday,
+        date: d.toISOString().split('T')[0]
+      });
+    }
+
+    // Add new holidays to existing ones
+    const updatedHolidays = [...existingHolidays, ...holidays];
+
+    // Sort holidays by date
+    updatedHolidays.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Update academic calendar
+    const updatedCalendar = await prisma.academicCalendar.update({
+      where: { calendarId: academicCalendar.calendarId },
+      data: {
+        holidays: updatedHolidays,
+        updatedAt: new Date()
+      }
+    });
+
+    // Also update calendar grid entries for all classes to show holidays
+    await Promise.all(holidays.map(async (holiday) => {
+      try {
+        // Get all classes for this academic year
+        const classes = await prisma.class.findMany({
+          where: { academicYear }
+        });
+
+        // Update calendar grid for each class on the holiday date
+        await Promise.all(classes.map(async (classData) => {
+          const gridId = `${classData.classId}_${holiday.date}`;
+          
+          const dayType = duration === 'half-day' ? 'half_holiday' : 'holiday';
+          
+          // Check if calendar grid entry exists
+          const existingGrid = await prisma.calendarGrid.findUnique({
+            where: { gridId }
+          });
+
+          if (existingGrid) {
+            // Update existing entry
+            await prisma.calendarGrid.update({
+              where: { gridId },
+              data: {
+                holidayName: holidayName,
+                dayType: dayType,
+                updatedAt: new Date()
+              }
+            });
+          } else {
+            // Create new calendar grid entry
+            const holidayDate = new Date(holiday.date);
+            await prisma.calendarGrid.create({
+              data: {
+                gridId,
+                classId: classData.classId,
+                academicYear,
+                calendarDate: holidayDate,
+                dayOfWeek: holidayDate.getDay(),
+                holidayName: holidayName,
+                dayType: dayType,
+                morningSlots: JSON.stringify([]),
+                afternoonSlots: JSON.stringify([]),
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }
+            });
+          }
+        }));
+      } catch (gridError) {
+        console.warn('⚠️ Error updating calendar grid for holiday:', holiday.date, gridError);
+      }
+    }));
+
+    console.log('✅ Holiday(s) added successfully to academic calendar and calendar grid');
+
+    res.json({
+      success: true,
+      message: 'Holiday(s) added successfully',
+      holidays: holidays
+    });
+
+  } catch (error) {
+    console.error('❌ Error adding holiday:', error);
+    res.status(500).json({ error: 'Failed to add holiday' });
+  }
+});
+
+// PUT /api/timemanagement/holiday/:holidayId
+// Update an existing holiday
+router.put('/holiday/:holidayId', authenticateToken, async (req, res) => {
+  try {
+    const { holidayId } = req.params;
+    const { holidayName, startDate, description, type } = req.body;
+
+    console.log('📝 Updating holiday:', holidayId, 'with data:', { holidayName, startDate, description, type });
+
+    // Extract original date from holidayId (format: "YYYY-MM-DD_holiday")
+    const originalDate = holidayId.replace('_holiday', '');
+
+    // Get academic calendar
+    const academicCalendar = await prisma.academicCalendar.findFirst({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!academicCalendar || !academicCalendar.holidays) {
+      return res.status(404).json({ error: 'Academic calendar or holidays not found' });
+    }
+
+    // Parse existing holidays
+    const existingHolidays = academicCalendar.holidays || [];
+    
+    // Find and update the holiday
+    const holidayIndex = existingHolidays.findIndex(holiday => holiday.date === originalDate);
+    
+    if (holidayIndex === -1) {
+      return res.status(404).json({ error: 'Holiday not found' });
+    }
+
+    // Update the holiday
+    existingHolidays[holidayIndex] = {
+      date: startDate || originalDate,
+      name: holidayName || existingHolidays[holidayIndex].name,
+      description: description || existingHolidays[holidayIndex].description || '',
+      type: type || existingHolidays[holidayIndex].type || 'general'
+    };
+
+    // Sort holidays by date
+    existingHolidays.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Update academic calendar
+    const updatedCalendar = await prisma.academicCalendar.update({
+      where: { calendarId: academicCalendar.calendarId },
+      data: {
+        holidays: existingHolidays,
+        updatedAt: new Date()
+      }
+    });
+
+    console.log('✅ Holiday updated successfully');
+
+    res.json({
+      success: true,
+      message: 'Holiday updated successfully',
+      holiday: existingHolidays[holidayIndex]
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating holiday:', error);
+    res.status(500).json({ error: 'Failed to update holiday' });
+  }
+});
+
+// DELETE /api/timemanagement/holiday/:holidayId
+// Delete a holiday
+router.delete('/holiday/:holidayId', authenticateToken, async (req, res) => {
+  try {
+    const { holidayId } = req.params;
+
+    console.log('🗑️ Deleting holiday:', holidayId);
+
+    // Extract original date from holidayId (format: "YYYY-MM-DD_holiday")
+    const originalDate = holidayId.replace('_holiday', '');
+
+    // Get academic calendar
+    const academicCalendar = await prisma.academicCalendar.findFirst({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!academicCalendar || !academicCalendar.holidays) {
+      return res.status(404).json({ error: 'Academic calendar or holidays not found' });
+    }
+
+    // Parse existing holidays
+    const existingHolidays = academicCalendar.holidays || [];
+    
+    // Filter out the holiday to delete
+    const updatedHolidays = existingHolidays.filter(holiday => holiday.date !== originalDate);
+    
+    if (existingHolidays.length === updatedHolidays.length) {
+      return res.status(404).json({ error: 'Holiday not found' });
+    }
+
+    // Update academic calendar
+    const updatedCalendar = await prisma.academicCalendar.update({
+      where: { calendarId: academicCalendar.calendarId },
+      data: {
+        holidays: updatedHolidays,
+        updatedAt: new Date()
+      }
+    });
+
+    console.log('✅ Holiday deleted successfully');
+
+    res.json({
+      success: true,
+      message: 'Holiday deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting holiday:', error);
+    res.status(500).json({ error: 'Failed to delete holiday' });
+  }
+});
+
 module.exports = router;

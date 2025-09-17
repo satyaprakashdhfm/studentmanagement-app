@@ -35,8 +35,21 @@ const TimeManagement = () => {
   const [examSessions, setExamSessions] = useState([]);
   const [showSessionsGrid, setShowSessionsGrid] = useState(false);
   const [upcomingExams, setUpcomingExams] = useState([]);
-  const [examViewMode, setExamViewMode] = useState('current'); // 'current' or 'all'
   const [editingExam, setEditingExam] = useState(null);
+  
+  // Holiday management state
+  const [upcomingHolidays, setUpcomingHolidays] = useState([]);
+  const [editingHoliday, setEditingHoliday] = useState(null);
+  const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [holidayForm, setHolidayForm] = useState({
+    startDate: '',
+    endDate: '',
+    holidayName: '',
+    description: '',
+    type: 'general',
+    duration: 'full-day', // full-day, half-day
+    classId: ''
+  });
 
   // Use local classes if available, otherwise use context classes
   const effectiveClasses = localClasses.length > 0 ? localClasses : classes;
@@ -154,27 +167,46 @@ const TimeManagement = () => {
   // Fetch upcoming exams for the selected class
   const fetchUpcomingExams = async () => {
     try {
-      console.log('📚 Fetching upcoming exams, mode:', examViewMode, 'class:', selectedClass?.classId);
+      console.log('📚 Fetching upcoming exams for class:', selectedClass?.classId);
       
-      let response;
-      if (examViewMode === 'all') {
-        response = await apiService.get(`/timemanagement/upcoming-exams/all`);
-      } else if (selectedClass) {
-        response = await apiService.get(`/timemanagement/upcoming-exams/${selectedClass.classId}`);
-      } else {
-        setUpcomingExams([]);
-        return;
-      }
-      
-      if (response && response.data) {
-        console.log('📚 Upcoming exams received:', response.data);
-        setUpcomingExams(response.data);
+      if (selectedClass) {
+        const response = await apiService.get(`/timemanagement/upcoming-exams/${selectedClass.classId}`);
+        
+        if (response && response.data) {
+          console.log('📚 Upcoming exams received:', response.data);
+          setUpcomingExams(response.data);
+        } else {
+          setUpcomingExams([]);
+        }
       } else {
         setUpcomingExams([]);
       }
     } catch (error) {
       console.error('❌ Error fetching upcoming exams:', error);
       setUpcomingExams([]);
+    }
+  };
+
+  // Fetch upcoming holidays for the selected class
+  const fetchUpcomingHolidays = async () => {
+    try {
+      console.log('🏖️ Fetching upcoming holidays for class:', selectedClass?.classId);
+      
+      if (selectedClass) {
+        const response = await apiService.get(`/timemanagement/upcoming-holidays/${selectedClass.classId}`);
+        
+        if (response && response.data) {
+          console.log('🏖️ Upcoming holidays received:', response.data);
+          setUpcomingHolidays(response.data);
+        } else {
+          setUpcomingHolidays([]);
+        }
+      } else {
+        setUpcomingHolidays([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching upcoming holidays:', error);
+      setUpcomingHolidays([]);
     }
   };
 
@@ -238,13 +270,9 @@ const TimeManagement = () => {
     if (selectedClass) {
       fetchSchedule();
       fetchUpcomingExams();
+      fetchUpcomingHolidays();
     }
   }, [selectedClass]);
-
-  // Fetch upcoming exams when view mode changes
-  useEffect(() => {
-    fetchUpcomingExams();
-  }, [examViewMode]);
 
   // Fetch schedule when week offset changes
   useEffect(() => {
@@ -680,6 +708,194 @@ const TimeManagement = () => {
     }
   };
 
+  // Holiday scheduling functions
+  const handleHolidayClick = () => {
+    setShowHolidayModal(true);
+    setHolidayForm({
+      startDate: '',
+      endDate: '',
+      holidayName: '',
+      description: '',
+      type: 'general',
+      duration: 'full-day',
+      classId: selectedClass ? selectedClass.classId : ''
+    });
+  };
+
+  const handleHolidayFormSubmit = () => {
+    const effectiveClassId = selectedClass ? selectedClass.classId : holidayForm.classId;
+    
+    if (!holidayForm.startDate || !holidayForm.endDate || !holidayForm.holidayName || !effectiveClassId) {
+      alert('Please fill in all required fields (Start Date, End Date, Holiday Name)');
+      return;
+    }
+    
+    // Validate that end date is not before start date
+    if (new Date(holidayForm.endDate) < new Date(holidayForm.startDate)) {
+      alert('End date cannot be before start date');
+      return;
+    }
+    
+    // Update holidayForm with effective class ID
+    if (selectedClass && !holidayForm.classId) {
+      setHolidayForm(prev => ({...prev, classId: selectedClass.classId}));
+    }
+    
+    saveHolidaySchedule();
+    setShowHolidayModal(false);
+  };
+
+  const saveHolidaySchedule = async () => {
+    try {
+      setLoading(true);
+      console.log('🏖️ Saving holiday schedule to database:', holidayForm);
+
+      const effectiveClassId = selectedClass ? selectedClass.classId : holidayForm.classId;
+      
+      // Prepare holiday data for API
+      const holidayData = {
+        startDate: holidayForm.startDate,
+        endDate: holidayForm.endDate,
+        holidayName: holidayForm.holidayName,
+        description: holidayForm.description,
+        type: holidayForm.type,
+        duration: holidayForm.duration,
+        classId: effectiveClassId,
+        academicYear: selectedAcademicYear
+      };
+
+      // Call API to save holiday schedule
+      const response = await apiService.post('/timemanagement/holidays', holidayData);
+      
+      console.log('✅ Holiday schedule saved successfully:', response);
+      alert(`Holiday "${holidayForm.holidayName}" scheduled successfully!`);
+      
+      // Reset form and refresh data
+      setHolidayForm({
+        startDate: '',
+        endDate: '',
+        holidayName: '',
+        description: '',
+        type: 'general',
+        duration: 'full-day',
+        classId: selectedClass ? selectedClass.classId : ''
+      });
+      
+      // Refresh the schedule to show holidays in calendar and update upcoming holidays table
+      if (selectedClass) {
+        await fetchSchedule();
+      }
+      await fetchUpcomingHolidays();
+      
+    } catch (error) {
+      console.error('❌ Error saving holiday schedule:', error);
+      alert('Error saving holiday schedule: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddHoliday = async () => {
+    if (!holidayForm.holidayName || !holidayForm.startDate) {
+      alert('Please fill in holiday name and start date');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('🏖️ Adding holiday:', holidayForm);
+
+      const holidayData = {
+        holidayName: holidayForm.holidayName,
+        startDate: holidayForm.startDate,
+        endDate: holidayForm.endDate || holidayForm.startDate,
+        description: holidayForm.description,
+        type: holidayForm.type || 'general',
+        academicYear: selectedAcademicYear
+      };
+
+      const response = await apiService.post('/timemanagement/holidays', holidayData);
+      
+      console.log('✅ Holiday added successfully:', response);
+      alert(`Holiday "${holidayForm.holidayName}" added successfully!`);
+      
+      // Reset form and refresh data
+      setShowHolidayModal(false);
+      setHolidayForm({
+        startDate: '',
+        endDate: '',
+        holidayName: '',
+        description: '',
+        type: 'general'
+      });
+      
+      await fetchUpcomingHolidays();
+      
+    } catch (error) {
+      console.error('❌ Error adding holiday:', error);
+      alert('Error adding holiday: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateHoliday = async () => {
+    if (!editingHoliday.name || !editingHoliday.date) {
+      alert('Please fill in holiday name and date');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('📝 Updating holiday:', editingHoliday);
+
+      const holidayData = {
+        holidayName: editingHoliday.name,
+        startDate: new Date(editingHoliday.date).toISOString().split('T')[0],
+        description: editingHoliday.description,
+        type: editingHoliday.type || 'general'
+      };
+
+      const response = await apiService.put(`/timemanagement/holiday/${editingHoliday.id}`, holidayData);
+      
+      console.log('✅ Holiday updated successfully:', response);
+      alert('Holiday updated successfully!');
+      
+      setEditingHoliday(null);
+      await fetchUpcomingHolidays();
+      
+    } catch (error) {
+      console.error('❌ Error updating holiday:', error);
+      alert('Error updating holiday: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteHoliday = async (holidayId) => {
+    if (!confirm('Are you sure you want to delete this holiday?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log('🗑️ Deleting holiday:', holidayId);
+
+      const response = await apiService.delete(`/timemanagement/holiday/${holidayId}`);
+      
+      console.log('✅ Holiday deleted successfully:', response);
+      alert('Holiday deleted successfully!');
+      
+      await fetchUpcomingHolidays();
+      
+    } catch (error) {
+      console.error('❌ Error deleting holiday:', error);
+      alert('Error deleting holiday: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="time-management">
       {console.log('🔄 TimeManagement render - grade:', grade, 'classId:', classId, 'classes.length:', classes.length)}
@@ -700,27 +916,29 @@ const TimeManagement = () => {
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="tab-navigation">
-        <button 
-          className={`tab-btn ${activeTab === 'schedule' ? 'active' : ''}`}
-          onClick={() => setActiveTab('schedule')}
-        >
-          SCHEDULE
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'exams' ? 'active' : ''}`}
-          onClick={() => setActiveTab('exams')}
-        >
-          EXAMS
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'holidays' ? 'active' : ''}`}
-          onClick={() => setActiveTab('holidays')}
-        >
-          HOLIDAYS
-        </button>
-      </div>
+      {/* Tab Navigation - Only show when a specific class is selected */}
+      {selectedClass && (
+        <div className="tab-navigation">
+          <button 
+            className={`tab-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+            onClick={() => setActiveTab('schedule')}
+          >
+            SCHEDULE
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'exams' ? 'active' : ''}`}
+            onClick={() => setActiveTab('exams')}
+          >
+            EXAMS
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'holidays' ? 'active' : ''}`}
+            onClick={() => setActiveTab('holidays')}
+          >
+            HOLIDAYS
+          </button>
+        </div>
+      )}
 
       <div className="tab-content">
         {/* Schedule Tab Content */}
@@ -877,10 +1095,21 @@ const TimeManagement = () => {
                           </td>
                           {timeSlots.map((slot, slotIndex) => {
                             const scheduleItem = findScheduleItem(dayIndex, slot.start_time, slot.end_time);
+                            const dayData = schedule[dayIndex];
+                            const isHoliday = dayData && dayData.holiday_name;
+                            const isHalfHoliday = dayData && dayData.day_type === 'half_holiday';
 
                             return (
                               <td key={slotIndex} className="period-cell">
-                                {scheduleItem ? (
+                                {/* Check if this entire day is a holiday first */}
+                                {isHoliday ? (
+                                  <div className={`schedule-item ${isHalfHoliday ? 'half-holiday-slot' : 'holiday-slot'}`}>
+                                    <div className="holiday-label">
+                                      {isHalfHoliday ? 'HALF HOLIDAY' : 'HOLIDAY'}
+                                    </div>
+                                    <div className="holiday-name">{dayData.holiday_name}</div>
+                                  </div>
+                                ) : scheduleItem ? (
                                   (() => {
                                     // Check if this is a lunch break first
                                     if (scheduleItem.subjectCode === 'LUNCH' || scheduleItem.teacherId === 'LUNCH') {
@@ -967,39 +1196,8 @@ const TimeManagement = () => {
             <div className="upcoming-exams-section" style={{ marginBottom: '40px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                 <h3 style={{ margin: 0, color: '#495057' }}>
-                  📚 Upcoming Exams {examViewMode === 'current' && selectedClass ? `- ${selectedClass.grade} ${selectedClass.section}` : examViewMode === 'all' ? '- All Classes' : ''}
+                  📚 Upcoming Exams {selectedClass ? `- ${selectedClass.grade} ${selectedClass.section}` : ''}
                 </h3>
-                
-                <div className="exam-view-toggle" style={{ display: 'flex', backgroundColor: 'white', borderRadius: '8px', border: '2px solid #dee2e6', overflow: 'hidden' }}>
-                  <button
-                    onClick={() => setExamViewMode('current')}
-                    style={{
-                      padding: '8px 16px',
-                      border: 'none',
-                      backgroundColor: examViewMode === 'current' ? '#667eea' : 'transparent',
-                      color: examViewMode === 'current' ? 'white' : '#6c757d',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                      fontWeight: '500'
-                    }}
-                  >
-                    Current Class
-                  </button>
-                  <button
-                    onClick={() => setExamViewMode('all')}
-                    style={{
-                      padding: '8px 16px',
-                      border: 'none',
-                      backgroundColor: examViewMode === 'all' ? '#667eea' : 'transparent',
-                      color: examViewMode === 'all' ? 'white' : '#6c757d',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem',
-                      fontWeight: '500'
-                    }}
-                  >
-                    All Classes
-                  </button>
-                </div>
               </div>
                 
                 {upcomingExams.length > 0 ? (
@@ -1009,9 +1207,6 @@ const TimeManagement = () => {
                         <tr style={{ backgroundColor: '#667eea', color: 'white' }}>
                           <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Date</th>
                           <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Day</th>
-                          {examViewMode === 'all' && (
-                            <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Class</th>
-                          )}
                           <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Session Type</th>
                           <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Subjects</th>
                           <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Total</th>
@@ -1029,20 +1224,6 @@ const TimeManagement = () => {
                               })}
                             </td>
                             <td style={{ padding: '15px' }}>{exam.dayName}</td>
-                            {examViewMode === 'all' && (
-                              <td style={{ padding: '15px', fontWeight: '500' }}>
-                                <span style={{ 
-                                  padding: '4px 8px', 
-                                  borderRadius: '8px', 
-                                  fontSize: '0.8rem', 
-                                  backgroundColor: '#fff3cd',
-                                  color: '#856404',
-                                  fontWeight: '600'
-                                }}>
-                                  {exam.className || `${exam.grade} ${exam.section}`}
-                                </span>
-                              </td>
-                            )}
                             <td style={{ padding: '15px' }}>
                               <span style={{ 
                                 padding: '4px 8px', 
@@ -1282,18 +1463,146 @@ const TimeManagement = () => {
         {/* Holidays Tab Content */}
         {activeTab === 'holidays' && (
           <div className="holidays-content">
-            <div style={{ padding: '20px', textAlign: 'center', color: '#6c757d' }}>
-              <h3>Holiday Management</h3>
-              <p>Holiday management features will be implemented here.</p>
-              <div style={{ marginTop: '20px' }}>
-                <p>Coming soon:</p>
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  <li>• Add school holidays</li>
-                  <li>• Manage vacation periods</li>
-                  <li>• Set public holidays</li>
-                  <li>• Holiday calendar view</li>
-                </ul>
+            {/* Upcoming Holidays Table */}
+            <div className="upcoming-holidays-section" style={{ marginBottom: '40px', padding: '20px', backgroundColor: '#f8f9fa', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                <h3 style={{ margin: 0, color: '#495057' }}>
+                  🏖️ Upcoming Holidays {selectedClass ? `- ${selectedClass.grade} ${selectedClass.section}` : ''}
+                </h3>
               </div>
+                
+                {upcomingHolidays.length > 0 ? (
+                  <div className="upcoming-holidays-table" style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#28a745', color: 'white' }}>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Date</th>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Day</th>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Holiday Name</th>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Type</th>
+                          <th style={{ padding: '15px', textAlign: 'left', fontWeight: '600' }}>Description</th>
+                          <th style={{ padding: '15px', textAlign: 'center', fontWeight: '600' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {upcomingHolidays.map((holiday, index) => (
+                          <tr key={holiday.id} style={{ borderBottom: '1px solid #dee2e6', backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'white' }}>
+                            <td style={{ padding: '15px', fontWeight: '500' }}>
+                              {new Date(holiday.date).toLocaleDateString('en-GB', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                              })}
+                            </td>
+                            <td style={{ padding: '15px' }}>{holiday.dayName}</td>
+                            <td style={{ padding: '15px', fontWeight: '500', color: '#28a745' }}>
+                              {holiday.name}
+                            </td>
+                            <td style={{ padding: '15px' }}>
+                              <span style={{ 
+                                padding: '4px 8px', 
+                                borderRadius: '12px', 
+                                fontSize: '0.8rem', 
+                                fontWeight: '500',
+                                backgroundColor: holiday.type === 'national' ? '#dc3545' : 
+                                                 holiday.type === 'religious' ? '#6f42c1' :
+                                                 holiday.type === 'school' ? '#fd7e14' : '#17a2b8',
+                                color: 'white'
+                              }}>
+                                {holiday.type === 'national' ? '🇮🇳 National' :
+                                 holiday.type === 'religious' ? '🕉️ Religious' :
+                                 holiday.type === 'school' ? '🏫 School' : '📅 General'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '15px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {holiday.description || 'No description'}
+                            </td>
+                            <td style={{ padding: '15px', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                <button
+                                  onClick={() => setEditingHoliday(holiday)}
+                                  style={{
+                                    padding: '6px 12px',
+                                    backgroundColor: '#007bff',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  onMouseOver={(e) => e.target.style.backgroundColor = '#0056b3'}
+                                  onMouseOut={(e) => e.target.style.backgroundColor = '#007bff'}
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteHoliday(holiday.id)}
+                                  style={{
+                                    padding: '6px 12px',
+                                    backgroundColor: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  onMouseOver={(e) => e.target.style.backgroundColor = '#c82333'}
+                                  onMouseOut={(e) => e.target.style.backgroundColor = '#dc3545'}
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+                    <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🏖️</div>
+                    <h4 style={{ marginBottom: '10px', color: '#495057' }}>No Upcoming Holidays</h4>
+                    <p>No holidays found in the academic calendar. Add a holiday below.</p>
+                  </div>
+                )}
+              </div>
+            
+            {/* Add Holiday Section */}
+            <div style={{ padding: '40px', textAlign: 'center' }}>
+              <h3 style={{ marginBottom: '20px', color: '#495057' }}>Holiday Management</h3>
+              <p style={{ marginBottom: '40px', color: '#6c757d' }}>
+                Add new holidays to the academic calendar
+              </p>
+              
+              <button 
+                onClick={() => setShowHolidayModal(true)}
+                style={{
+                  padding: '15px 30px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '1.1rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.transform = 'translateY(-2px)';
+                  e.target.style.backgroundColor = '#218838';
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.backgroundColor = '#28a745';
+                }}
+              >
+                🏖️ Add New Holiday
+              </button>
             </div>
           </div>
         )}
@@ -1596,6 +1905,331 @@ const TimeManagement = () => {
                 }}
               >
                 Update Exam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Holiday Modal */}
+      {showHolidayModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '30px',
+            minWidth: '500px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ marginBottom: '20px', color: '#495057' }}>
+              🏖️ Add New Holiday
+            </h3>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Holiday Name:
+              </label>
+              <input
+                type="text"
+                value={holidayForm.holidayName}
+                onChange={(e) => setHolidayForm({...holidayForm, holidayName: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+                placeholder="Enter holiday name"
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Start Date:
+              </label>
+              <input
+                type="date"
+                value={holidayForm.startDate}
+                onChange={(e) => setHolidayForm({...holidayForm, startDate: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                End Date (Optional):
+              </label>
+              <input
+                type="date"
+                value={holidayForm.endDate}
+                onChange={(e) => setHolidayForm({...holidayForm, endDate: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+                placeholder="Leave empty for single day"
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Holiday Type:
+              </label>
+              <select
+                value={holidayForm.type || 'general'}
+                onChange={(e) => setHolidayForm({...holidayForm, type: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+              >
+                <option value="general">📅 General</option>
+                <option value="national">🇮🇳 National</option>
+                <option value="religious">🕉️ Religious</option>
+                <option value="school">🏫 School</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Holiday Duration:
+              </label>
+              <select
+                value={holidayForm.duration || 'full-day'}
+                onChange={(e) => setHolidayForm({...holidayForm, duration: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+              >
+                <option value="full-day">🌅 Full Day Holiday</option>
+                <option value="half-day">🌤️ Half Day Holiday</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '30px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Description (Optional):
+              </label>
+              <textarea
+                value={holidayForm.description}
+                onChange={(e) => setHolidayForm({...holidayForm, description: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  resize: 'vertical',
+                  minHeight: '80px'
+                }}
+                placeholder="Enter holiday description"
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowHolidayModal(false);
+                  setHolidayForm({
+                    startDate: '',
+                    endDate: '',
+                    holidayName: '',
+                    description: '',
+                    type: 'general'
+                  });
+                }}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddHoliday}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Add Holiday
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Holiday Modal */}
+      {editingHoliday && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '30px',
+            minWidth: '500px',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ marginBottom: '25px', textAlign: 'center', color: '#495057' }}>
+              ✏️ Edit Holiday
+            </h3>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Holiday Name:
+              </label>
+              <input
+                type="text"
+                value={editingHoliday.name}
+                onChange={(e) => setEditingHoliday({...editingHoliday, name: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+                placeholder="Enter holiday name"
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Date:
+              </label>
+              <input
+                type="date"
+                value={new Date(editingHoliday.date).toISOString().split('T')[0]}
+                onChange={(e) => setEditingHoliday({...editingHoliday, date: new Date(e.target.value)})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Holiday Type:
+              </label>
+              <select
+                value={editingHoliday.type || 'general'}
+                onChange={(e) => setEditingHoliday({...editingHoliday, type: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem'
+                }}
+              >
+                <option value="general">📅 General</option>
+                <option value="national">🇮🇳 National</option>
+                <option value="religious">🕉️ Religious</option>
+                <option value="school">🏫 School</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '30px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
+                Description:
+              </label>
+              <textarea
+                value={editingHoliday.description || ''}
+                onChange={(e) => setEditingHoliday({...editingHoliday, description: e.target.value})}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #ced4da',
+                  borderRadius: '6px',
+                  fontSize: '1rem',
+                  resize: 'vertical',
+                  minHeight: '80px'
+                }}
+                placeholder="Enter holiday description"
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '15px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setEditingHoliday(null)}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateHoliday}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Update Holiday
               </button>
             </div>
           </div>

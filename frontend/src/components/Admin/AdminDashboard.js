@@ -14,6 +14,9 @@ import AttendanceSummary from './pages/AttendanceSummary';
 import MarksManagement from './pages/MarksManagement';
 import MarksSummary from './pages/MarksSummary';
 import StudentClassMarks from './pages/StudentClassMarks';
+import ExamManagement from './pages/ExamManagement';
+import HolidayManagement from './pages/HolidayManagement';
+import ScheduleManagement from './pages/ScheduleManagement';
 import { useEffect } from 'react';
 import apiService from '../../services/api';
 
@@ -67,6 +70,9 @@ const AdminDashboard = () => {
             <Route path="/time-management" element={<TimeManagement key="default" />} />
             <Route path="/time-management/grade/:grade" element={<TimeManagement key={window.location.pathname} />} />
             <Route path="/time-management/:classId/:section" element={<TimeManagement key={window.location.pathname} />} />
+            <Route path="/schedule-management" element={<ScheduleManagement />} />
+            <Route path="/schedule-management/exams" element={<ExamManagement />} />
+            <Route path="/schedule-management/holidays" element={<HolidayManagement />} />
             <Route path="/system-config" element={<SystemConfiguration />} />
             <Route path="/students" element={<StudentSummary />} />
             <Route path="/students/:classId" element={<StudentManagement />} />
