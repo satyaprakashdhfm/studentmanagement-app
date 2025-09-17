@@ -4,10 +4,23 @@ import './TeacherTimetable.css';
 
 const TeacherTimetable = () => {
   const [teacher, setTeacher] = useState(null);
-  const [schedule, setSchedule] = useState([]);
-  const [classesMap, setClassesMap] = useState({});
+  const [schedule, setSchedule] = useState([]); // weekly schedule data (array of days)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Week navigation state
+  const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
+  const [weekInfo, setWeekInfo] = useState(null);
+  const [weekDates, setWeekDates] = useState([]);
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState('schedule'); // schedule | exams | holidays
+  const [exams, setExams] = useState([]);
+  const [holidays, setHolidays] = useState([]);
+  const [loadingExams, setLoadingExams] = useState(false);
+  const [loadingHolidays, setLoadingHolidays] = useState(false);
+  const [examsError, setExamsError] = useState(null);
+  const [holidaysError, setHolidaysError] = useState(null);
 
   const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -59,98 +72,295 @@ const TeacherTimetable = () => {
     return schedule.find(item => item.dayOfWeek === dayOfWeek && normalizeTime(item.startTime) === sStart && normalizeTime(item.endTime) === sEnd);
   };
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacherObj = currentUser.teacher;
-        if (!teacherObj || !teacherObj.teacherId) {
-          setError('Teacher session not found. Please login.');
-          return;
-        }
-        setTeacher(teacherObj);
-
-        // Fetch classes to build friendly names map
-        try {
-          const classesResp = await apiService.getClasses();
-          if (classesResp && classesResp.classes) {
-            const map = {};
-            classesResp.classes.forEach(c => {
-              const display = `${c.className} ${c.section}`;
-              // store both numeric and string keys to be robust
-              map[c.classId] = display;
-              map[String(c.classId)] = display;
-            });
-            setClassesMap(map);
-          }
-        } catch (cErr) {
-          console.warn('Could not fetch classes for friendly names:', cErr);
-        }
-
-        const response = await apiService.getTeacherSchedule(teacherObj.teacherId, teacherObj.academicYear || '2024-2025');
-        if (response && response.data) setSchedule(response.data);
-        else setSchedule([]);
-      } catch (err) {
-        console.error('Error loading teacher timetable:', err);
-        setError('Failed to load timetable');
-      } finally {
-        setLoading(false);
+  const loadTeacherData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const teacherObj = currentUser.teacher;
+      
+      if (!teacherObj || !teacherObj.teacherId) {
+        setError('Teacher session not found. Please login.');
+        return;
       }
-    };
+      setTeacher(teacherObj);
 
-    load();
-  }, []);
+      console.log('👩‍🏫 Loading teacher weekly calendar for:', teacherObj.teacherId, 'week offset:', currentWeekOffset);
 
-  if (loading) return <div className="content-card"><h2>My Timetable</h2><p>Loading...</p></div>;
-  if (error) return <div className="content-card"><h2>My Timetable</h2><p style={{color: 'red'}}>{error}</p></div>;
+      // Load dynamic weekly calendar for teacher
+      const weeklyResponse = await apiService.get(`/timemanagement/teacher-calendar-week/${teacherObj.teacherId}/${teacherObj.academicYear || '2024-2025'}/${currentWeekOffset}`);
+      
+      if (weeklyResponse && weeklyResponse.success && weeklyResponse.data) {
+        console.log('📅 Loaded teacher weekly calendar:', weeklyResponse.data);
+        
+        // Set schedule data from calendar
+        setSchedule(weeklyResponse.data);
+        setWeekInfo(weeklyResponse.weekInfo);
+        
+        // Generate week dates for display
+        const dates = weeklyResponse.data.map(dayData => {
+          const date = new Date(dayData.calendar_date);
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = String(date.getFullYear()).slice(-2);
+          return {
+            dayName: dayNames[dayData.day_of_week - 1] || `Day ${dayData.day_of_week}`,
+            date: date,
+            formatted: `${day}/${month}/${year}`,
+            dayData: dayData
+          };
+        });
+        setWeekDates(dates);
+        
+      } else {
+        setSchedule([]);
+        setWeekDates([]);
+      }
+
+    } catch (err) {
+      console.error('❌ Error loading teacher timetable:', err);
+      setError('Failed to load timetable data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTeacherData();
+  }, [currentWeekOffset]);
+
+  // Week navigation functions
+  const goToPreviousWeek = () => {
+    setCurrentWeekOffset(prev => prev - 1);
+  };
+
+  const goToNextWeek = () => {
+    setCurrentWeekOffset(prev => prev + 1);
+  };
+
+  const goToCurrentWeek = () => {
+    setCurrentWeekOffset(0);
+  };
+
+  // Lazy loaders for exams & holidays (for ALL classes teacher teaches)
+  const loadExams = async (teacherObj) => {
+    if (exams.length || loadingExams) return;
+    try {
+      setLoadingExams(true);
+      setExamsError(null);
+      const resp = await apiService.get(`/timemanagement/upcoming-exams/all`); // All exams for filtering
+      if (resp && resp.success) setExams(resp.data || []); else setExams([]);
+    } catch (e) {
+      console.error('❌ Error loading exams:', e);
+      setExamsError('Failed to load upcoming exams');
+    } finally {
+      setLoadingExams(false);
+    }
+  };
+
+  const loadHolidays = async (teacherObj) => {
+    if (holidays.length || loadingHolidays) return;
+    try {
+      setLoadingHolidays(true);
+      setHolidaysError(null);
+      const resp = await apiService.get(`/timemanagement/upcoming-holidays/all`);
+      if (resp && resp.success) setHolidays(resp.data || []); else setHolidays([]);
+    } catch (e) {
+      console.error('❌ Error loading holidays:', e);
+      setHolidaysError('Failed to load upcoming holidays');
+    } finally {
+      setLoadingHolidays(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!teacher) return;
+    if (activeTab === 'exams') loadExams(teacher);
+    if (activeTab === 'holidays') loadHolidays(teacher);
+  }, [activeTab, teacher]);
+
+  if (loading) return <div className="loading">Loading timetable...</div>;
+  if (error) return <div className="error">{error}</div>;
 
   return (
-    <div className="content-card">
-      <h2>My Timetable</h2>
-      <p><strong>{teacher?.name}</strong></p>
-      <div className="table-container">
-        <table className="schedule-table">
-          <thead>
-            <tr>
-              <th>Day</th>
-              {timeSlots.map((slot, i) => (
-                <th key={i}>{slot.slot_name}<div style={{fontSize: '0.8rem'}}>{slot.start_time.substring(0,5)}-{slot.end_time.substring(0,5)}</div></th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {dayNames.map((day, di) => {
-              const dow = di + 1;
-              return (
-                <tr key={day}>
-                  <td>{day}</td>
-                  {timeSlots.map((slot, si) => {
-                    const item = findScheduleItem(dow, slot.start_time, slot.end_time);
-                    return (
-                      <td key={si} style={{minWidth: '140px'}}>
-                        {item ? (
-                          <div style={{padding: '6px', borderRadius: '6px', background: '#667eea', color: 'white'}}>
-                            <div style={{fontWeight: 700}}>{item.classId ? (classesMap[item.classId] || classesMap[String(item.classId)] || `Class ${item.classId}`) : ''}</div>
-                            {(() => {
-                              const code = item.subjectCode || item.subject_code || '';
-                              // Only show subject when it's not a Study or Lunch placeholder
-                              if (!code || code.toUpperCase() === 'STUDY' || code.toUpperCase() === 'LUNCH') return null;
-                              return <div style={{fontSize: '0.85rem'}}>{subjectNames[code] || code}</div>;
-                            })()}
-                          </div>
-                        ) : (
-                          <div style={{color: '#888'}}>—</div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div className="teacher-timetable">
+      <h2>My Teaching Schedule</h2>
+      {teacher && (
+        <p className="teacher-info">
+          <strong>{teacher.name}</strong> | Academic Year: {teacher.academicYear || '2024-2025'}
+        </p>
+      )}
+
+      {/* Tabs */}
+      <div className="tt-tabs">
+        <button
+          className={activeTab === 'schedule' ? 'tt-tab active' : 'tt-tab'}
+          onClick={() => setActiveTab('schedule')}
+        >Schedule</button>
+        <button
+          className={activeTab === 'exams' ? 'tt-tab active' : 'tt-tab'}
+          onClick={() => setActiveTab('exams')}
+        >Exams</button>
+        <button
+          className={activeTab === 'holidays' ? 'tt-tab active' : 'tt-tab'}
+          onClick={() => setActiveTab('holidays')}
+        >Holidays</button>
       </div>
+
+      {activeTab === 'schedule' && (
+        <>
+          {/* Week Navigation */}
+          <div className="week-navigation">
+            <button className="nav-button" onClick={goToPreviousWeek}>◀ Previous Week</button>
+            <div className="week-info">
+              <h3>{weekInfo?.weekLabel || 'Current Week'}</h3>
+              {weekInfo && (
+                <p>{new Date(weekInfo.startDate).toLocaleDateString('en-GB')} - {new Date(weekInfo.endDate).toLocaleDateString('en-GB')}</p>
+              )}
+            </div>
+            <button className="nav-button" onClick={goToNextWeek}>Next Week ▶</button>
+            {currentWeekOffset !== 0 && (
+              <button className="current-week-button" onClick={goToCurrentWeek}>📅 Current Week</button>
+            )}
+          </div>
+
+          <div className="timetable-container">
+            <table className="schedule-table">
+              <thead>
+                <tr>
+                  <th>Day</th>
+                  {timeSlots.map((slot, index) => (
+                    <th key={index}>
+                      {slot.slot_name}<br />
+                      <small>{slot.start_time.substring(0, 5)}-{slot.end_time.substring(0, 5)}</small>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {weekDates.length > 0 ? weekDates.map((dateInfo, dayIndex) => (
+                  <tr key={dayIndex}>
+                    <td className="day-column">
+                      <div className="day-header">
+                        <strong>{dateInfo.dayName}</strong>
+                        <div className="date-info">{dateInfo.formatted}</div>
+                        {dateInfo.dayData.day_type === 'holiday' && (
+                          <div className="holiday-indicator">🏖️ {dateInfo.dayData.holiday_name}</div>
+                        )}
+                      </div>
+                    </td>
+                    {timeSlots.map((slot, slotIndex) => {
+                      const matchingPeriod = dateInfo.dayData.periods?.find(period => {
+                        const periodStart = period.startTime.substring(0, 5);
+                        const slotStart = slot.start_time.substring(0, 5);
+                        return periodStart === slotStart;
+                      });
+                      return (
+                        <td key={slotIndex} className="schedule-cell">
+                          {matchingPeriod ? (
+                            <div className="schedule-item">
+                              <div className="class-name">Class {matchingPeriod.classId}</div>
+                              <div className="subject-name">
+                                {subjectNames[matchingPeriod.subjectCode] || matchingPeriod.subjectCode}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="no-class">—</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                )) : (
+                  dayNames.map((dayName, dayIndex) => (
+                    <tr key={dayIndex}>
+                      <td className="day-column">{dayName}</td>
+                      {timeSlots.map((_, slotIndex) => (
+                        <td key={slotIndex} className="schedule-cell">
+                          <span className="no-class">—</span>
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'exams' && (
+        <div className="exams-panel">
+          <h3>Upcoming Exams (All Classes)</h3>
+          {loadingExams && <p>Loading exams...</p>}
+          {examsError && <p className="error-inline">{examsError}</p>}
+          {!loadingExams && !examsError && exams.length === 0 && <p>No upcoming exams.</p>}
+          {!loadingExams && exams.length > 0 && (
+            <table className="aux-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Day</th>
+                  <th>Class</th>
+                  <th>Exam Type</th>
+                  <th>Session</th>
+                  <th>Subjects</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exams.map((exam) => (
+                  <tr key={exam.id}>
+                    <td>{exam.date}</td>
+                    <td>{exam.dayName}</td>
+                    <td>{exam.className}</td>
+                    <td>{exam.examType}</td>
+                    <td>{exam.examSession}</td>
+                    <td>
+                      {exam.examDetails && exam.examDetails.length > 0 ? (
+                        exam.examDetails.map((d, i) => (
+                          <span key={i} className="subject-pill">{d.subjectName || d.subject}</span>
+                        ))
+                      ) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'holidays' && (
+        <div className="holidays-panel">
+          <h3>Upcoming Holidays</h3>
+          {loadingHolidays && <p>Loading holidays...</p>}
+          {holidaysError && <p className="error-inline">{holidaysError}</p>}
+          {!loadingHolidays && !holidaysError && holidays.length === 0 && <p>No upcoming holidays.</p>}
+          {!loadingHolidays && holidays.length > 0 && (
+            <table className="aux-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Day</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {holidays.map(h => (
+                  <tr key={h.id}>
+                    <td>{h.date}</td>
+                    <td>{h.dayName}</td>
+                    <td>{h.holidayName}</td>
+                    <td>{h.type}</td>
+                    <td>{h.description || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 };
