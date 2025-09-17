@@ -2252,3 +2252,134 @@
     min-width: 55px;
   }
 }
+
+/* Tab Navigation Styles */
+.tab-navigation {
+  display: flex;
+  background: var(--card-background, #ffffff);
+  border-radius: 12px 12px 0 0;
+  margin-bottom: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color, #e9ecef);
+  border-bottom: none;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .tab-navigation {
+  background: var(--card-background, #2d2d2d);
+  border-color: var(--border-color, #404040);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 15px 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-color, #6c757d);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+
+[data-theme="dark"] .tab-btn {
+  color: var(--text-color, #adb5bd);
+}
+
+.tab-btn:hover {
+  background: var(--hover-background, rgba(102, 126, 234, 0.05));
+  color: var(--primary-color, #667eea);
+}
+
+[data-theme="dark"] .tab-btn:hover {
+  background: var(--hover-background, rgba(116, 185, 255, 0.1));
+  color: var(--primary-color, #74b9ff);
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 0;
+}
+
+[data-theme="dark"] .tab-btn.active {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+  color: #ffffff;
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+[data-theme="dark"] .tab-btn.active::after {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+}
+
+/* Adjust tab-content for rounded corners */
+.tab-content {
+  background: var(--card-background, #ffffff);
+  border-radius: 0 0 12px 12px;
+  border: 1px solid var(--border-color, #e9ecef);
+  border-top: none;
+  min-height: 300px;
+}
+
+[data-theme="dark"] .tab-content {
+  background: var(--card-background, #2d2d2d);
+  border-color: var(--border-color, #404040);
+}
+
+/* Tab Content Styles */
+.exams-content,
+.holidays-content {
+  padding: 30px;
+  min-height: 400px;
+}
+
+.exams-content h3,
+.holidays-content h3 {
+  color: var(--text-color, #2c3e50);
+  margin-bottom: 15px;
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+[data-theme="dark"] .exams-content h3,
+[data-theme="dark"] .holidays-content h3 {
+  color: var(--text-color, #ffffff);
+}
+
+.exams-content p,
+.holidays-content p {
+  color: var(--text-color-secondary, #6c757d);
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+}
+
+[data-theme="dark"] .exams-content p,
+[data-theme="dark"] .holidays-content p {
+  color: var(--text-color-secondary, #adb5bd);
+}
+
+.exams-content ul,
+.holidays-content ul {
+  color: var(--text-color, #495057);
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+[data-theme="dark"] .exams-content ul,
+[data-theme="dark"] .holidays-content ul {
+  color: var(--text-color, #ced4da);
+}

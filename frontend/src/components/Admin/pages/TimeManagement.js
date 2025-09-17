@@ -20,6 +20,9 @@ const TimeManagement = () => {
   const [error, setError] = useState(null);
   const [weekDates, setWeekDates] = useState([]);
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0); // 0 = current week, +1 = next week, -1 = previous week
+  
+  // Tab management state
+  const [activeTab, setActiveTab] = useState('schedule'); // 'schedule', 'exams', 'holidays'
 
   // Use local classes if available, otherwise use context classes
   const effectiveClasses = localClasses.length > 0 ? localClasses : classes;
@@ -419,9 +422,34 @@ const TimeManagement = () => {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="tab-navigation">
+        <button 
+          className={`tab-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+          onClick={() => setActiveTab('schedule')}
+        >
+          SCHEDULE
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'exams' ? 'active' : ''}`}
+          onClick={() => setActiveTab('exams')}
+        >
+          EXAMS
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'holidays' ? 'active' : ''}`}
+          onClick={() => setActiveTab('holidays')}
+        >
+          HOLIDAYS
+        </button>
+      </div>
+
       <div className="tab-content">
-        {/* Class Selection when no class is selected */}
-        {!selectedClass && !classId && (
+        {/* Schedule Tab Content */}
+        {activeTab === 'schedule' && (
+          <>
+            {/* Class Selection when no class is selected */}
+            {!selectedClass && !classId && (
           <div className="class-selection">
             {effectiveClasses.length === 0 ? (
               <div className="loading-message">
@@ -618,6 +646,46 @@ const TimeManagement = () => {
                 )}
               </div>
             )}
+          </div>
+        )}
+          </>
+        )}
+        
+        {/* Exams Tab Content */}
+        {activeTab === 'exams' && (
+          <div className="exams-content">
+            <div style={{ padding: '20px', textAlign: 'center', color: '#6c757d' }}>
+              <h3>Exam Schedule Management</h3>
+              <p>Exam scheduling features will be implemented here.</p>
+              <div style={{ marginTop: '20px' }}>
+                <p>Coming soon:</p>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  <li>• Create exam schedules</li>
+                  <li>• Manage exam dates and times</li>
+                  <li>• Set exam subjects and classes</li>
+                  <li>• Exam notifications</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Holidays Tab Content */}
+        {activeTab === 'holidays' && (
+          <div className="holidays-content">
+            <div style={{ padding: '20px', textAlign: 'center', color: '#6c757d' }}>
+              <h3>Holiday Management</h3>
+              <p>Holiday management features will be implemented here.</p>
+              <div style={{ marginTop: '20px' }}>
+                <p>Coming soon:</p>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  <li>• Add school holidays</li>
+                  <li>• Manage vacation periods</li>
+                  <li>• Set public holidays</li>
+                  <li>• Holiday calendar view</li>
+                </ul>
+              </div>
+            </div>
           </div>
         )}
       </div>

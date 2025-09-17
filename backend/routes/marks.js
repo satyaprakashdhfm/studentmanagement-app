@@ -29,6 +29,27 @@ router.get('/', authenticateToken, async (req, res) => {
     
     if (classId) {
       where.classId = parseInt(classId);
+      
+      // If classId is provided but no specific subjectCode, filter by class grade
+      if (!subjectCode) {
+        // Get the class details to determine the grade
+        const classDetails = await prisma.class.findUnique({
+          where: { classId: parseInt(classId) },
+          select: { className: true }
+        });
+        
+        if (classDetails) {
+          // Extract grade from className (e.g., "8 A" -> "8")
+          const grade = classDetails.className.split(' ')[0];
+          
+          // Filter subjects that start with the grade prefix (e.g., "8_")
+          where.subjectCode = {
+            startsWith: `${grade}_`
+          };
+          
+          console.log(`🎯 Filtering marks for class ${classId}, grade ${grade}, subject pattern: ${grade}_*`);
+        }
+      }
     }
     
     if (subjectCode) {

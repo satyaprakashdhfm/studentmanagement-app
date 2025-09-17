@@ -53,25 +53,24 @@ model Student {
 }
 
 model Teacher {
-  name               String       @map("name") @db.VarChar(255)
-  email              String       @unique @map("email") @db.VarChar(255)
-  phoneNumber        String?      @map("phone_number") @db.VarChar(20)
+  name               String     @map("name") @db.VarChar(255)
+  email              String     @unique @map("email") @db.VarChar(255)
+  phoneNumber        String?    @map("phone_number") @db.VarChar(20)
   qualification      String?
-  subjectsHandled    String[]     @map("subjects_handled")
-  classesAssigned    String[]     @map("classes_assigned")
-  classTeacherOf     String?      @map("class_teacher_of") @db.VarChar(50)
-  hireDate           DateTime?    @map("hire_date")
-  salary             Decimal?     @db.Decimal(10, 2)
-  active             Boolean      @default(true) @map("active")
-  createdAt          DateTime     @default(now()) @map("created_at")
-  updatedAt          DateTime     @updatedAt @map("updated_at")
+  subjectsHandled    String[]   @map("subjects_handled")
+  classesAssigned    String[]   @map("classes_assigned")
+  classTeacherOf     String?    @map("class_teacher_of") @db.VarChar(50)
+  hireDate           DateTime?  @map("hire_date")
+  salary             Decimal?   @db.Decimal(10, 2)
+  active             Boolean    @default(true) @map("active")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
   qualified_subjects String[]
-  teacherId          String       @id @map("teacher_id") @db.VarChar(255)
-  attendances        Attendance[]
+  teacherId          String     @id @map("teacher_id") @db.VarChar(255)
   classesTeaching    Class[]
   marks              Mark[]
   syllabi            Syllabus[]
-  users              User         @relation(fields: [teacherId], references: [username], onDelete: NoAction, onUpdate: NoAction)
+  users              User       @relation(fields: [teacherId], references: [username], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("teachers")
 }
@@ -164,7 +163,6 @@ model Attendance {
   scheduleId   String?  @map("schedule_id") @db.VarChar(100)
   subjectCode  String?  @map("subject_code") @db.VarChar(20)
   class        Class    @relation(fields: [classId], references: [classId])
-  markedByUser Teacher  @relation(fields: [markedBy], references: [teacherId], onDelete: NoAction, onUpdate: NoAction)
   student      Student  @relation(fields: [studentId], references: [studentId], onDelete: NoAction, onUpdate: NoAction)
 
   @@map("attendance")

@@ -23,7 +23,6 @@ const MarksManagement = () => {
   
   // Filter states for performance
   const [selectedSubject, setSelectedSubject] = useState(''); // Subject filter for better performance
-  const [selectedDate, setSelectedDate] = useState('2025-09-15'); // Default to recent data date
   const [selectedExamType, setSelectedExamType] = useState(''); // Exam type filter
   const [availableExamTypes, setAvailableExamTypes] = useState([]);
   const [filtersLoading, setFiltersLoading] = useState(false); // Loading state for filter changes
@@ -32,7 +31,6 @@ const MarksManagement = () => {
     studentId: '',
     subjectCode: '',
     classId: '',
-    entryDate: '',
     marksObtained: '',
     maxMarks: '',
     grade: '',
@@ -80,12 +78,6 @@ const MarksManagement = () => {
               params.append('subjectCode', selectedSubject);
             }
 
-            // Apply date filter (defaults to recent date)
-            if (selectedDate) {
-              params.append('startDate', selectedDate);
-              params.append('endDate', selectedDate);
-            }
-
             // Apply exam type filter if selected
             if (selectedExamType) {
               params.append('examinationType', selectedExamType);
@@ -94,7 +86,6 @@ const MarksManagement = () => {
             console.log('🔍 Fetching marks with filters:', {
               classId,
               subject: selectedSubject || 'All',
-              date: selectedDate || 'Any',
               examType: selectedExamType || 'Any'
             });
 
@@ -138,7 +129,7 @@ const MarksManagement = () => {
     if (classes.length > 0) {
       fetchData();
     }
-  }, [classId, grade, classes, selectedAcademicYear, selectedSubject, selectedDate, selectedExamType]); // Re-fetch when filters change
+  }, [classId, grade, classes, selectedAcademicYear, selectedSubject, selectedExamType]); // Re-fetch when filters change
 
   // Toggle record details expansion
   const toggleRecordExpansion = (recordId) => {
@@ -175,7 +166,6 @@ const MarksManagement = () => {
       studentId: '',
       subjectCode: '',
       classId: classId || '',
-      entryDate: new Date().toISOString().split('T')[0],
       marksObtained: '',
       maxMarks: '',
       grade: '',
@@ -192,13 +182,13 @@ const MarksManagement = () => {
         ? await apiService.updateMarks(selectedRecord.marksId, recordData)
         : await apiService.addMarks(recordData);
 
-      if (response.success) {
+      if (response.mark && response.message) {
         if (editMode) {
           setMarks(prev => prev.map(record =>
-            record.marksId === selectedRecord.marksId ? response.data : record
+            record.marksId === selectedRecord.marksId ? response.mark : record
           ));
         } else {
-          setMarks(prev => [...prev, response.data]);
+          setMarks(prev => [...prev, response.mark]);
         }
         setShowRecordModal(false);
         setShowAddModal(false);
@@ -388,15 +378,6 @@ const MarksManagement = () => {
               </div>
 
               <div className="filter-group">
-                <label>Date:</label>
-                <input 
-                  type="date" 
-                  value={selectedDate} 
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                />
-              </div>
-
-              <div className="filter-group">
                 <label>Exam Type:</label>
                 <select 
                   value={selectedExamType} 
@@ -416,7 +397,6 @@ const MarksManagement = () => {
                   className="clear-filters-btn"
                   onClick={() => {
                     setSelectedSubject(''); // Reset to all subjects
-                    setSelectedDate('2025-09-15'); // Reset to recent data date
                     setSelectedExamType('');
                   }}
                 >
@@ -496,7 +476,6 @@ const MarksManagement = () => {
                               {record.grade || 'N/A'}
                             </span>
                           </td>
-                          <td>{new Date(record.entryDate).toLocaleDateString()}</td>
                           <td>-</td>
                           <td>
                             <button
@@ -568,21 +547,6 @@ const MarksManagement = () => {
                         setSelectedRecord({...selectedRecord, subjectCode: e.target.value});
                       } else {
                         setNewRecord({...newRecord, subjectCode: e.target.value});
-                      }
-                    }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Entry Date:</label>
-                  <input
-                    type="date"
-                    value={editMode ? selectedRecord?.entryDate?.split('T')[0] : newRecord.entryDate}
-                    onChange={(e) => {
-                      if (editMode) {
-                        setSelectedRecord({...selectedRecord, entryDate: e.target.value});
-                      } else {
-                        setNewRecord({...newRecord, entryDate: e.target.value});
                       }
                     }}
                     required

@@ -211,11 +211,10 @@ router.get('/student/:studentId', authenticateToken, async (req, res) => {
             academicYear: true
           }
         },
-        markedByUser: {
+        student: {
           select: {
-            username: true,
-            firstName: true,
-            lastName: true
+            name: true,
+            email: true
           }
         }
       },
@@ -413,11 +412,10 @@ router.post('/', authenticateToken, async (req, res) => {
             section: true
           }
         },
-        markedByUser: {
+        student: {
           select: {
-            username: true,
-            firstName: true,
-            lastName: true
+            name: true,
+            email: true
           }
         }
       }
@@ -564,13 +562,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
           select: {
             className: true,
             section: true
-          }
-        },
-        markedByUser: {
-          select: {
-            username: true,
-            firstName: true,
-            lastName: true
           }
         }
       }

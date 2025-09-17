@@ -439,17 +439,6 @@ const StudentManagement = () => {
                 <p>Academic Year: {cls.academicYear}</p>
                 <p>Max Students: {cls.maxStudents}</p>
                 <p>Current Students: {cls.students?.length || 0}</p>
-                <p style={{ marginTop: '8px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-primary"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Navigate to class marks with grade context
-                      navigate(`/admin/students/grade/${grade}/class/${cls.classId}/marks`);
-                    }}
-                  >View Marks</button>
-                </p>
                 {!cls.active && (
                   <p className="inactive-notice">⚠️ This class is deactivated but students are still viewable</p>
                 )}
