@@ -706,17 +706,38 @@ router.get('/upcoming-exams/all', authenticateToken, async (req, res) => {
       
       // Parse morning and afternoon slots to extract exam subjects
       try {
-        const morningSlots = exam.morningSlots ? JSON.parse(exam.morningSlots) : {};
-        const afternoonSlots = exam.afternoonSlots ? JSON.parse(exam.afternoonSlots) : {};
+        const morningSlots = exam.morningSlots ? JSON.parse(exam.morningSlots) : [];
+        const afternoonSlots = exam.afternoonSlots ? JSON.parse(exam.afternoonSlots) : [];
         
-        // Extract exam subjects from slots
-        Object.entries({ ...morningSlots, ...afternoonSlots }).forEach(([timeSlot, data]) => {
-          if (data && data !== 'LUNCH' && data !== 'STUDY') {
-            examDetails.push({
-              timeSlot,
-              subject: data,
-              subjectName: getSubjectName(data)
-            });
+        // Extract exam subjects from morning slots
+        morningSlots.forEach((slot, index) => {
+          if (slot && slot.startsWith('EXAM_')) {
+            const parts = slot.split('_');
+            if (parts.length >= 2) {
+              const subjectCode = parts[1];
+              examDetails.push({
+                timeSlot: `morning-${index + 1}`,
+                subject: subjectCode,
+                subjectName: getSubjectName(subjectCode),
+                session: 'morning'
+              });
+            }
+          }
+        });
+        
+        // Extract exam subjects from afternoon slots
+        afternoonSlots.forEach((slot, index) => {
+          if (slot && slot.startsWith('EXAM_')) {
+            const parts = slot.split('_');
+            if (parts.length >= 2) {
+              const subjectCode = parts[1];
+              examDetails.push({
+                timeSlot: `afternoon-${index + 1}`,
+                subject: subjectCode,
+                subjectName: getSubjectName(subjectCode),
+                session: 'afternoon'
+              });
+            }
           }
         });
       } catch (parseError) {
@@ -728,13 +749,13 @@ router.get('/upcoming-exams/all', authenticateToken, async (req, res) => {
       return {
         id: exam.gridId,
         classId: exam.classId,
-        className: classInfo ? `${classInfo.grade} ${classInfo.section}` : `Class ${exam.classId}`,
-        grade: classInfo?.grade,
-        section: classInfo?.section,
-        date: exam.calendarDate,
-        dayName: exam.dayName,
-        examType: exam.examType,
-        examSession: exam.examSession,
+        className: classInfo ? `${classInfo.className} ${classInfo.section}` : `Class ${exam.classId}`,
+        grade: classInfo?.className, // Use className as grade
+        section: classInfo?.section || '',
+        date: exam.calendarDate.toISOString().split('T')[0], // Format as YYYY-MM-DD string
+        dayName: exam.calendarDate.toLocaleDateString('en-US', { weekday: 'long' }),
+        examType: exam.examType || 'General',
+        examSession: exam.examSession || 'full_day',
         examDetails,
         totalSubjects: examDetails.length
       };
@@ -789,17 +810,38 @@ router.get('/upcoming-exams/:classId', authenticateToken, async (req, res) => {
       
       // Parse morning and afternoon slots to extract exam subjects
       try {
-        const morningSlots = exam.morningSlots ? JSON.parse(exam.morningSlots) : {};
-        const afternoonSlots = exam.afternoonSlots ? JSON.parse(exam.afternoonSlots) : {};
+        const morningSlots = exam.morningSlots ? JSON.parse(exam.morningSlots) : [];
+        const afternoonSlots = exam.afternoonSlots ? JSON.parse(exam.afternoonSlots) : [];
         
-        // Extract exam subjects from slots
-        Object.entries({ ...morningSlots, ...afternoonSlots }).forEach(([timeSlot, data]) => {
-          if (data && data !== 'LUNCH' && data !== 'STUDY') {
-            examDetails.push({
-              timeSlot,
-              subject: data,
-              subjectName: getSubjectName(data)
-            });
+        // Extract exam subjects from morning slots
+        morningSlots.forEach((slot, index) => {
+          if (slot && slot.startsWith('EXAM_')) {
+            const parts = slot.split('_');
+            if (parts.length >= 2) {
+              const subjectCode = parts[1];
+              examDetails.push({
+                timeSlot: `morning-${index + 1}`,
+                subject: subjectCode,
+                subjectName: getSubjectName(subjectCode),
+                session: 'morning'
+              });
+            }
+          }
+        });
+        
+        // Extract exam subjects from afternoon slots
+        afternoonSlots.forEach((slot, index) => {
+          if (slot && slot.startsWith('EXAM_')) {
+            const parts = slot.split('_');
+            if (parts.length >= 2) {
+              const subjectCode = parts[1];
+              examDetails.push({
+                timeSlot: `afternoon-${index + 1}`,
+                subject: subjectCode,
+                subjectName: getSubjectName(subjectCode),
+                session: 'afternoon'
+              });
+            }
           }
         });
       } catch (parseError) {
@@ -833,6 +875,18 @@ router.get('/upcoming-exams/:classId', authenticateToken, async (req, res) => {
 // Helper function to convert subject codes to readable names
 const getSubjectName = (subjectCode) => {
   const subjectNames = {
+    'MATH': 'Mathematics',
+    'SCI': 'Science', 
+    'ENG': 'English',
+    'SOC': 'Social Studies',
+    'HIN': 'Hindi',
+    'TEL': 'Telugu',
+    'PHY': 'Physics',
+    'CHEM': 'Chemistry',
+    'BIO': 'Biology',
+    'COMP': 'Computer Science',
+    'ART': 'Arts',
+    'PE': 'Physical Education',
     '8_MATH': 'Mathematics',
     '8_SCI': 'Science',
     '8_ENG': 'English',
@@ -936,25 +990,45 @@ router.get('/upcoming-holidays/all', authenticateToken, async (req, res) => {
     // Parse holidays from JSONB field
     const holidays = academicCalendar.holidays || [];
     
-    // Filter upcoming holidays (include today's holidays)
+    // Get class information for mapping
+    const classes = await prisma.class.findMany({
+      where: { academicYear: academicCalendar.academicYear }
+    });
+
+    // Create a map for quick class lookup
+    const classMap = {};
+    classes.forEach(cls => {
+      classMap[cls.classId] = cls;
+    });
+    
+    // Filter upcoming holidays (include today's holidays) and format for frontend
     const upcomingHolidays = holidays
       .map(holiday => {
         const holidayDate = new Date(holiday.date);
         holidayDate.setHours(0, 0, 0, 0);
         
+        // Get class information
+        const classInfo = classMap[holiday.classId];
+        
         return {
-          id: holiday.date + '_holiday', // Create unique ID
-          name: holiday.name,
-          date: holidayDate,
+          id: holiday.date + '_' + (holiday.classId || 'all'), // Create unique ID
+          holidayName: holiday.name,
+          startDate: holiday.date, // Keep as string for frontend
+          endDate: holiday.endDate || holiday.date, // Use same date if no end date
+          date: holidayDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
           dayName: holidayDate.toLocaleDateString('en-US', { weekday: 'long' }),
           description: holiday.description || '',
           type: holiday.type || 'general',
-          duration: holiday.duration || 'full-day', // Add duration support
+          duration: holiday.duration || 'full_day',
+          classId: holiday.classId,
+          className: classInfo ? `${classInfo.className} ${classInfo.section}` : 'All Classes',
+          grade: classInfo?.className, // Add grade field for consistency
+          section: classInfo?.section || '',
           academicYear: academicCalendar.academicYear
         };
       })
-      .filter(holiday => holiday.date >= today) // This will include today's holidays
-      .sort((a, b) => a.date - b.date);
+      .filter(holiday => holiday.date >= today.toISOString().split('T')[0]) // Compare with string dates
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
 
     console.log('🏖️ Found upcoming holidays for all classes:', upcomingHolidays.length);
 
@@ -995,20 +1069,31 @@ router.get('/upcoming-holidays/:classId', authenticateToken, async (req, res) =>
     // Parse holidays from JSONB field
     const holidays = academicCalendar.holidays || [];
     
-    // Filter upcoming holidays (include today's holidays)
+    // Get class information
+    const classInfo = await prisma.class.findUnique({
+      where: { classId: parseInt(classId) }
+    });
+    
+    // Filter upcoming holidays for this class (include today's holidays) and format for frontend
     const upcomingHolidays = holidays
+      .filter(holiday => !holiday.classId || holiday.classId == classId) // Include holidays for this class or global holidays
       .map(holiday => {
         const holidayDate = new Date(holiday.date);
         holidayDate.setHours(0, 0, 0, 0);
         
         return {
-          id: holiday.date + '_holiday', // Create unique ID
-          name: holiday.name,
+          id: holiday.date + '_' + (holiday.classId || 'all'), // Create unique ID
+          holidayName: holiday.name,
+          startDate: holiday.date,
+          endDate: holiday.endDate || holiday.date,
           date: holidayDate,
           dayName: holidayDate.toLocaleDateString('en-US', { weekday: 'long' }),
           description: holiday.description || '',
           type: holiday.type || 'general',
-          duration: holiday.duration || 'full-day', // Add duration support
+          duration: holiday.duration || 'full_day',
+          classId: holiday.classId,
+          className: classInfo ? `${classInfo.className}` : 'All Classes',
+          section: classInfo ? classInfo.section : '',
           academicYear: academicCalendar.academicYear
         };
       })
@@ -1031,128 +1116,153 @@ router.get('/upcoming-holidays/:classId', authenticateToken, async (req, res) =>
 // POST /api/timemanagement/holidays - Save holiday
 router.post('/holidays', authenticateToken, async (req, res) => {
   try {
-    const { holidayName, startDate, endDate, description, type = 'general', duration = 'full-day', academicYear } = req.body;
+    const { holidays } = req.body;
 
-    console.log('🏖️ Adding holiday:', { holidayName, startDate, endDate, description, type, duration });
+    // Handle both single holiday and array of holidays
+    const holidaysArray = holidays || [req.body];
 
-    if (!holidayName || !startDate) {
-      return res.status(400).json({ error: 'Holiday name and start date are required' });
-    }
+    console.log('🏖️ Processing holidays:', holidaysArray.length, 'holidays');
 
-    // Get or create academic calendar
-    let academicCalendar = await prisma.academicCalendar.findFirst({
-      where: { academicYear: academicYear },
-      orderBy: { createdAt: 'desc' }
-    });
+    // Process each holiday
+    const results = [];
+    for (const holidayData of holidaysArray) {
+      const { holidayName, startDate, endDate, description, type = 'general', duration = 'full_day', classId, academicYear } = holidayData;
 
-    if (!academicCalendar) {
-      return res.status(404).json({ error: 'Academic calendar not found for the specified year' });
-    }
+      console.log('🏖️ Adding holiday:', { holidayName, startDate, endDate, description, type, duration, classId });
 
-    // Parse existing holidays
-    const existingHolidays = academicCalendar.holidays || [];
-    
-    // Create new holiday entry with duration support
-    const newHoliday = {
-      date: startDate,
-      name: holidayName,
-      description: description || '',
-      type: type,
-      duration: duration // full-day, half-day
-    };
-
-    // If it's a multi-day holiday, create entries for each day
-    const holidays = [];
-    const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : start;
-    
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      holidays.push({
-        ...newHoliday,
-        date: d.toISOString().split('T')[0]
-      });
-    }
-
-    // Add new holidays to existing ones
-    const updatedHolidays = [...existingHolidays, ...holidays];
-
-    // Sort holidays by date
-    updatedHolidays.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Update academic calendar
-    const updatedCalendar = await prisma.academicCalendar.update({
-      where: { calendarId: academicCalendar.calendarId },
-      data: {
-        holidays: updatedHolidays,
-        updatedAt: new Date()
+      if (!holidayName || !startDate) {
+        return res.status(400).json({ error: 'Holiday name and start date are required' });
       }
-    });
 
-    // Also update calendar grid entries for all classes to show holidays
-    await Promise.all(holidays.map(async (holiday) => {
-      try {
-        // Get all classes for this academic year
-        const classes = await prisma.class.findMany({
-          where: { academicYear }
+      // Get or create academic calendar
+      let academicCalendar = await prisma.academicCalendar.findFirst({
+        where: { academicYear: academicYear },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      if (!academicCalendar) {
+        return res.status(404).json({ error: 'Academic calendar not found for the specified year' });
+      }
+
+      // Parse existing holidays
+      const existingHolidays = academicCalendar.holidays || [];
+      
+      // Create new holiday entry with duration support
+      const newHoliday = {
+        date: startDate,
+        name: holidayName,
+        description: description || '',
+        type: type,
+        duration: duration, // full_day, half_day
+        classId: classId // Add classId to track which class this holiday is for
+      };
+
+      // If it's a multi-day holiday, create entries for each day
+      const holidays = [];
+      const start = new Date(startDate);
+      const end = endDate ? new Date(endDate) : start;
+      
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        holidays.push({
+          ...newHoliday,
+          date: d.toISOString().split('T')[0]
         });
+      }
 
-        // Update calendar grid for each class on the holiday date
-        await Promise.all(classes.map(async (classData) => {
-          const gridId = `${classData.classId}_${holiday.date}`;
-          
-          const dayType = duration === 'half-day' ? 'half_holiday' : 'holiday';
-          
-          // Check if calendar grid entry exists
-          const existingGrid = await prisma.calendarGrid.findUnique({
-            where: { gridId }
+      // Add new holidays to existing ones
+      const updatedHolidays = [...existingHolidays, ...holidays];
+
+      // Sort holidays by date
+      updatedHolidays.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      // Update academic calendar
+      const updatedCalendar = await prisma.academicCalendar.update({
+        where: { calendarId: academicCalendar.calendarId },
+        data: {
+          holidays: updatedHolidays,
+          updatedAt: new Date()
+        }
+      });
+
+      // Also update calendar grid entries for the specific class to show holidays
+      await Promise.all(holidays.map(async (holiday) => {
+        try {
+          // Update calendar grid for the specific class on the holiday date
+          const calendarDate = new Date(holiday.date);
+          const dayOfWeek = calendarDate.getDay();
+          const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const dayName = weekdays[dayOfWeek];
+
+          console.log(`🏖️ Updating calendar grid for class ${classId} on ${holiday.date} (${dayName})`);
+
+          // Find existing calendar grid entry
+          let calendarGridEntry = await prisma.calendarGrid.findFirst({
+            where: {
+              classId: classId,
+              date: calendarDate,
+              academicYear: academicYear
+            }
           });
 
-          if (existingGrid) {
+          if (calendarGridEntry) {
             // Update existing entry
+            const existingHolidays = calendarGridEntry.holidays || [];
+            const newHolidays = [...existingHolidays, {
+              name: holiday.name,
+              type: holiday.type,
+              duration: holiday.duration,
+              description: holiday.description
+            }];
+
             await prisma.calendarGrid.update({
-              where: { gridId },
+              where: { gridId: calendarGridEntry.gridId },
               data: {
-                holidayName: holidayName,
-                dayType: dayType,
+                holidays: newHolidays,
                 updatedAt: new Date()
               }
             });
+            console.log(`🏖️ Updated existing calendar grid entry for class ${classId}`);
           } else {
-            // Create new calendar grid entry
-            const holidayDate = new Date(holiday.date);
+            // Create new entry
             await prisma.calendarGrid.create({
               data: {
-                gridId,
-                classId: classData.classId,
-                academicYear,
-                calendarDate: holidayDate,
-                dayOfWeek: holidayDate.getDay(),
-                holidayName: holidayName,
-                dayType: dayType,
-                morningSlots: JSON.stringify([]),
-                afternoonSlots: JSON.stringify([]),
+                classId: classId,
+                date: calendarDate,
+                dayOfWeek: dayName,
+                academicYear: academicYear,
+                holidays: [{
+                  name: holiday.name,
+                  type: holiday.type,
+                  duration: holiday.duration,
+                  description: holiday.description
+                }],
                 createdAt: new Date(),
                 updatedAt: new Date()
               }
             });
+            console.log(`🏖️ Created new calendar grid entry for class ${classId}`);
           }
-        }));
-      } catch (gridError) {
-        console.warn('⚠️ Error updating calendar grid for holiday:', holiday.date, gridError);
-      }
-    }));
+        } catch (error) {
+          console.error(`❌ Error updating calendar grid for class ${classId}:`, error);
+        }
+      }));
 
-    console.log('✅ Holiday(s) added successfully to academic calendar and calendar grid');
+      results.push({ classId, holidayName, status: 'success' });
+    }
 
     res.json({
       success: true,
-      message: 'Holiday(s) added successfully',
-      holidays: holidays
+      message: `Successfully added holidays for ${results.length} classes`,
+      data: results
     });
 
   } catch (error) {
     console.error('❌ Error adding holiday:', error);
-    res.status(500).json({ error: 'Failed to add holiday' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to add holiday', 
+      details: error.message 
+    });
   }
 });
 
