@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import StudentLayout from './StudentLayout';
 import PersonalDetails from './pages/PersonalDetails';
@@ -9,6 +9,10 @@ import AcademicPerformance from './pages/AcademicPerformance';
 import SyllabusProgress from './pages/SyllabusProgress';
 
 const StudentDashboard = () => {
+  useEffect(() => {
+    document.title = 'Student Dashboard - Student Management System';
+  }, []);
+
   return (
     <StudentLayout>
       <Routes>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import TeacherLayout from './TeacherLayout';
 import TeacherProfile from './pages/TeacherProfile';
@@ -9,6 +9,10 @@ import SyllabusManagement from './pages/SyllabusManagement';
 import TeacherTimetable from './pages/TeacherTimetable';
 
 const TeacherDashboard = () => {
+  useEffect(() => {
+    document.title = 'Teacher Dashboard - Student Management System';
+  }, []);
+
   return (
     <TeacherLayout>
       <Routes>
@@ -17,8 +21,8 @@ const TeacherDashboard = () => {
         <Route path="/attendance" element={<AttendanceManagement />} />
         <Route path="/fees" element={<FeeInquiry />} />
         <Route path="/marks" element={<MarksManagement />} />
-  <Route path="/syllabus" element={<SyllabusManagement />} />
-  <Route path="/timetable" element={<TeacherTimetable />} />
+        <Route path="/syllabus" element={<SyllabusManagement />} />
+        <Route path="/timetable" element={<TeacherTimetable />} />
       </Routes>
     </TeacherLayout>
   );

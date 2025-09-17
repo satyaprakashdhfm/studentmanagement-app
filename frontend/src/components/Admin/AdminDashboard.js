@@ -26,6 +26,8 @@ const TimeManagement = React.lazy(() => import('./pages/TimeManagement'));
 const AdminDashboard = () => {
   // Dev-only helper: if running on localhost and no auth token, auto-login using seeded admin
   useEffect(() => {
+    document.title = 'Admin Dashboard - Student Management System';
+    
     const tryAutoLogin = async () => {
       try {
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
