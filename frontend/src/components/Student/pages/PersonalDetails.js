@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const PersonalDetails = () => {
   const [studentData, setStudentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchStudentData = async () => {
       try {
-        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-        if (!currentUser || !currentUser.student) {
+        if (!user || !user.student) {
           setError('Student data not found');
           return;
         }
 
-        const studentId = currentUser.student.studentId;
+        const studentId = user.student.studentId;
         const response = await apiService.getStudent(studentId);
         
         if (response.success) {
@@ -31,8 +32,10 @@ const PersonalDetails = () => {
       }
     };
 
-    fetchStudentData();
-  }, []);
+    if (user) {
+      fetchStudentData();
+    }
+  }, [user]);
 
   if (loading) {
     return (

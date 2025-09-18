@@ -6,6 +6,12 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api
 class ApiService {
   constructor() {
     this.baseUrl = API_BASE_URL;
+    this.authErrorHandler = null;
+  }
+
+  // Set auth error handler (called when 401 errors occur)
+  setAuthErrorHandler(handler) {
+    this.authErrorHandler = handler;
   }
 
   // Helper method for making API calls with enhanced logging
@@ -46,6 +52,12 @@ class ApiService {
         const error = new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
         error.status = response.status;
         error.data = errorData;
+        
+        // Handle authentication errors
+        if (response.status === 401 && this.authErrorHandler) {
+          console.log('Authentication error detected, triggering logout');
+          this.authErrorHandler();
+        }
         
         // Log API error
         logger.apiCall(method, endpoint, 
@@ -124,6 +136,11 @@ class ApiService {
       method: 'POST',
       body: JSON.stringify(userData),
     });
+  }
+
+  // Validate current user session
+  async getUserProfile() {
+    return this.request('/auth/profile');
   }
 
   // Users

@@ -1,26 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const TeacherProfile = () => {
   const [teacher, setTeacher] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchTeacherProfile = async () => {
       try {
         setLoading(true);
-        // Get current user from localStorage
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
         
-        console.log('Current user from localStorage:', currentUser);
+        console.log('Current user from auth context:', user);
         
-        if (currentUser && currentUser.teacher) {
+        if (user && user.teacher) {
           // If user data includes teacher info, use it
-          console.log('Using teacher data from localStorage:', currentUser.teacher);
-          setTeacher(currentUser.teacher);
+          console.log('Using teacher data from auth context:', user.teacher);
+          setTeacher(user.teacher);
         } else {
-          console.log('No teacher data found in localStorage, attempting API call...');
+          console.log('No teacher data found in auth context, attempting API call...');
           // For now, show error since we don't have a specific teacher profile endpoint
           setError('Teacher profile not found in session. Please login again.');
         }
@@ -32,8 +32,10 @@ const TeacherProfile = () => {
       }
     };
 
-    fetchTeacherProfile();
-  }, []);
+    if (user) {
+      fetchTeacherProfile();
+    }
+  }, [user]);
 
   if (loading) {
     return (

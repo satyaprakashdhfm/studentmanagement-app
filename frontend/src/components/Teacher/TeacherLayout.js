@@ -1,23 +1,25 @@
 import React from 'react';
 import ThemeToggle from '../Common/ThemeToggle';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const TeacherLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    navigate('/login');
+    logout();
+    navigate('/login/teacher');
   };
 
   const sidebarItems = [
-    { path: '/teacher/profile', label: 'Teacher Profile', icon: '👤' },
-    { path: '/teacher/attendance', label: 'Attendance Management', icon: '📅' },
-    { path: '/teacher/fees', label: 'Fee Inquiry', icon: '💰' },
-    { path: '/teacher/marks', label: 'Marks Management', icon: '📝' },
-    { path: '/teacher/syllabus', label: 'Syllabus Management', icon: '📚' },
-    { path: '/teacher/timetable', label: 'Timetable', icon: '🕒' }
+    { path: 'profile', label: 'Teacher Profile', icon: '👤' },
+    { path: 'attendance', label: 'Attendance Management', icon: '📅' },
+    { path: 'fees', label: 'Fee Inquiry', icon: '💰' },
+    { path: 'marks', label: 'Marks Management', icon: '📝' },
+    { path: 'syllabus', label: 'Syllabus Management', icon: '📚' },
+    { path: 'timetable', label: 'Timetable', icon: '🕒' }
   ];
 
   return (

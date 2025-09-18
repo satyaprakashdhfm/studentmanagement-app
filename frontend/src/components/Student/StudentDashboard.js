@@ -16,13 +16,14 @@ const StudentDashboard = () => {
   return (
     <StudentLayout>
       <Routes>
-        <Route path="/" element={<Navigate to="/student/personal-details" replace />} />
-        <Route path="/personal-details" element={<PersonalDetails />} />
-        <Route path="/timetable" element={<StudentTimetable />} />
-        <Route path="/attendance" element={<AttendanceTracker />} />
-        <Route path="/fees" element={<FeeHistory />} />
-        <Route path="/performance" element={<AcademicPerformance />} />
-        <Route path="/syllabus" element={<SyllabusProgress />} />
+        <Route path="" element={<Navigate to="personal-details" replace />} />
+        <Route path="dashboard" element={<Navigate to="../personal-details" replace />} />
+        <Route path="personal-details" element={<PersonalDetails />} />
+        <Route path="timetable" element={<StudentTimetable />} />
+        <Route path="attendance" element={<AttendanceTracker />} />
+        <Route path="fees" element={<FeeHistory />} />
+        <Route path="performance" element={<AcademicPerformance />} />
+        <Route path="syllabus" element={<SyllabusProgress />} />
       </Routes>
     </StudentLayout>
   );

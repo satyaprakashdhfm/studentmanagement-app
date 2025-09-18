@@ -74,13 +74,14 @@ router.post('/login', loginValidationRules(), handleValidationErrors, async (req
       role: user.role 
     });
 
-    // Prepare user response with role-specific data
+    // Prepare user response
     const userResponse = {
       username: user.username,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       role: user.role,
+      active: user.active,
       lastLogin: user.lastLogin
     };
 

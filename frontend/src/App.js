@@ -1,5 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import AuthGuard from './components/Common/AuthGuard';
 import AdminLogin from './components/Auth/AdminLogin';
 import TeacherLogin from './components/Auth/TeacherLogin';
 import StudentLogin from './components/Auth/StudentLogin';
@@ -10,31 +12,45 @@ import './App.css';
 
 function App() {
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          {/* Default route redirects to admin login */}
-          <Route path="/" element={<Navigate to="/login/admin" replace />} />
+    <AuthProvider>
+      <Router>
+        <div className="App">
+          <Routes>
+            {/* Default route redirects to admin login */}
+            <Route path="/" element={<Navigate to="/login/admin" replace />} />
 
-          {/* Role-specific login routes */}
-          <Route path="/login/admin" element={<AdminLogin />} />
-          <Route path="/login/teacher" element={<TeacherLogin />} />
-          <Route path="/login/student" element={<StudentLogin />} />
+            {/* Role-specific login routes */}
+            <Route path="/login/admin" element={<AdminLogin />} />
+            <Route path="/login/teacher" element={<TeacherLogin />} />
+            <Route path="/login/student" element={<StudentLogin />} />
 
-          {/* Student Routes */}
-          <Route path="/student/*" element={<StudentDashboard />} />
+            {/* Protected Student Routes */}
+            <Route path="/student/*" element={
+              <AuthGuard allowedRoles={['student']}>
+                <StudentDashboard />
+              </AuthGuard>
+            } />
 
-          {/* Teacher Routes */}
-          <Route path="/teacher/*" element={<TeacherDashboard />} />
+            {/* Protected Teacher Routes */}
+            <Route path="/teacher/*" element={
+              <AuthGuard allowedRoles={['teacher']}>
+                <TeacherDashboard />
+              </AuthGuard>
+            } />
 
-          {/* Admin Routes */}
-          <Route path="/admin/*" element={<AdminDashboard />} />
+            {/* Protected Admin Routes */}
+            <Route path="/admin/*" element={
+              <AuthGuard allowedRoles={['admin']}>
+                <AdminDashboard />
+              </AuthGuard>
+            } />
 
-          {/* Catch all route */}
-          <Route path="*" element={<Navigate to="/login/admin" replace />} />
-        </Routes>
-      </div>
-    </Router>
+            {/* Catch all route */}
+            <Route path="*" element={<Navigate to="/login/admin" replace />} />
+          </Routes>
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 

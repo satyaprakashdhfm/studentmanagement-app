@@ -3,10 +3,12 @@ import ThemeToggle from '../Common/ThemeToggle';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import apiService from '../../services/api';
 import { useAcademicYear } from '../../context/AcademicYearContext';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [showFeeDropdown, setShowFeeDropdown] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
@@ -171,8 +173,8 @@ const AdminLayout = ({ children }) => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    navigate('/login');
+    logout();
+    navigate('/login/admin');
   };
 
   // Group classes by grade (e.g., "8th", "9th", "10th")

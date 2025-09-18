@@ -1,14 +1,16 @@
 import React from 'react';
 import ThemeToggle from '../Common/ThemeToggle';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 
 const StudentLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    navigate('/login');
+    logout();
+    navigate('/login/student');
   };
 
   const sidebarItems = [
