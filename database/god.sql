@@ -99,7 +99,7 @@ DROP TABLE IF EXISTS users CASCADE;
 CREATE TABLE users (
     username VARCHAR(255) PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    password VARCHAR(255), -- Nullable: Application will handle password setting
     first_name VARCHAR(255),
     last_name VARCHAR(255),
     role VARCHAR(50) NOT NULL DEFAULT 'student',
@@ -132,7 +132,7 @@ CREATE TABLE schools (
 DROP TABLE IF EXISTS students CASCADE;
 
 CREATE TABLE students (
-    student_id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) PRIMARY KEY REFERENCES users(username), -- Links to user account
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255), -- Not mandatory, used for user account creation
     address TEXT, -- Student's residential address
@@ -171,7 +171,7 @@ CREATE TABLE students (
 DROP TABLE IF EXISTS teachers CASCADE;
 
 CREATE TABLE teachers (
-    teacher_id VARCHAR(255) PRIMARY KEY,
+    teacher_id VARCHAR(255) PRIMARY KEY REFERENCES users(username), -- Links to user account
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255), -- Not mandatory, used for user account creation
     phone_number VARCHAR(20),
@@ -258,28 +258,247 @@ CREATE TABLE syllabus (
     CONSTRAINT uk_syllabus_unique_per_class_subject_unit UNIQUE (class_id, subject_code, unit_name, academic_year_id)
 );
 
--- Additional constraints for new fields
-ALTER TABLE students ADD CONSTRAINT chk_students_admission_date_not_future
-    CHECK (admission_date IS NULL OR admission_date <= CURRENT_DATE);
+-- ========================================
+-- TEMPLATE-BASED SCHEDULE SYSTEM - THREE TABLES
+-- ========================================
 
-ALTER TABLE students ADD CONSTRAINT chk_students_previous_school_phone_format
-    CHECK (previous_school_phone IS NULL OR previous_school_phone ~ '^[0-9]{10}$');
+-- 1. TIME_SLOTS TABLE (Schedule Template)
+DROP TABLE IF EXISTS time_slots CASCADE;
 
--- SCHOOLS TABLE CONSTRAINTS
--- No constraints needed for simplified schools table
+CREATE TABLE time_slots (
+    slot_id SERIAL PRIMARY KEY,
+    class_id VARCHAR(10) NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    period_number INTEGER NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    session_type VARCHAR(10) NOT NULL CHECK (session_type IN ('morning', 'afternoon')),
+    slot_type VARCHAR(20) DEFAULT 'regular' CHECK (slot_type IN ('regular', 'exam', 'break', 'holiday')),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255),
+    FOREIGN KEY (class_id) REFERENCES classes(class_id) ON DELETE CASCADE,
+    UNIQUE(class_id, day_of_week, period_number),
+    CHECK (end_time > start_time)
+);
 
--- CLASS STANDARD FEES TABLE CONSTRAINTS
-ALTER TABLE class_standard_fees ADD CONSTRAINT chk_class_standard_fees_amount_positive
-    CHECK (amount > 0);
+-- 2. SCHEDULE_DATA TABLE (Template Assignments)
+DROP TABLE IF EXISTS schedule_data CASCADE;
 
-ALTER TABLE class_standard_fees ADD CONSTRAINT chk_class_standard_fees_fee_name_not_empty
-    CHECK (TRIM(fee_name) != '');
+CREATE TABLE schedule_data (
+    schedule_id VARCHAR(30) PRIMARY KEY,
+    slot_id INTEGER NOT NULL,
+    class_id VARCHAR(10) NOT NULL,
+    subject_code VARCHAR(20),
+    teacher_id VARCHAR(255),
+    academic_year VARCHAR(4) NOT NULL,
+    is_template BOOLEAN DEFAULT true,
+    template_name VARCHAR(50),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255),
+    FOREIGN KEY (slot_id) REFERENCES time_slots(slot_id) ON DELETE CASCADE,
+    FOREIGN KEY (class_id) REFERENCES classes(class_id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_code) REFERENCES subjects(subject_code),
+    FOREIGN KEY (teacher_id) REFERENCES teachers(teacher_id),
+    UNIQUE(slot_id, academic_year)
+);
 
-ALTER TABLE class_standard_fees ADD CONSTRAINT uk_class_standard_fees_unique_per_class_year
-    UNIQUE (class_id, fee_name, academic_year_id);
+-- 3. CALENDAR_GRID TABLE (Template Applications + Exceptions)
+DROP TABLE IF EXISTS calendar_grid CASCADE;
+
+CREATE TABLE calendar_grid (
+    grid_id VARCHAR(30) PRIMARY KEY,
+    class_id VARCHAR(10) NOT NULL,
+    calendar_date DATE NOT NULL,
+    day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    day_type VARCHAR(20) DEFAULT 'working' CHECK (day_type IN ('working', 'holiday', 'exam', 'vacation')),
+    holiday_name VARCHAR(100),
+    academic_year VARCHAR(4) NOT NULL,
+    applied_template_id VARCHAR(30),
+    schedule_overrides JSONB DEFAULT '{}',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255),
+    FOREIGN KEY (class_id) REFERENCES classes(class_id) ON DELETE CASCADE,
+    UNIQUE(class_id, calendar_date),
+    CHECK (EXTRACT(DOW FROM calendar_date) = day_of_week)
+);
 
 -- ========================================
--- INDEXES
+-- 3. DATABASE FUNCTIONS
+-- ========================================
+
+-- FUNCTION TO AUTO-CREATE USER ACCOUNT WHEN STUDENT IS ADDED
+CREATE OR REPLACE FUNCTION create_student_user_account()
+RETURNS TRIGGER AS $$
+DECLARE
+    user_email VARCHAR(255);
+    first_name_part VARCHAR(255);
+    last_name_part VARCHAR(255);
+BEGIN
+    -- Generate email if not provided
+    user_email := COALESCE(NEW.email, NEW.student_id || '@school.com');
+    
+    -- Split name into first and last name
+    first_name_part := SPLIT_PART(NEW.name, ' ', 1);
+    last_name_part := CASE 
+        WHEN array_length(string_to_array(NEW.name, ' '), 1) > 1 
+        THEN array_to_string((string_to_array(NEW.name, ' '))[2:], ' ')
+        ELSE '' 
+    END;
+    
+    -- Create user account
+    INSERT INTO users (
+        username, 
+        email, 
+        password, 
+        first_name, 
+        last_name, 
+        role, 
+        academic_year_id,
+        created_by,
+        updated_by
+    ) VALUES (
+        NEW.student_id,
+        user_email,
+        NULL, -- Password will be set by the application
+        first_name_part,
+        last_name_part,
+        'student',
+        (SELECT academic_year_id FROM classes WHERE class_id = NEW.class_id),
+        NEW.created_by,
+        NEW.updated_by
+    );
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- FUNCTION TO AUTO-CREATE STUDENT FEE RECORDS WHEN STUDENT IS ADDED
+CREATE OR REPLACE FUNCTION create_student_fee_records()
+RETURNS TRIGGER AS $$
+DECLARE
+    fee_record RECORD;
+    fee_counter INTEGER := 1;
+BEGIN
+    -- Loop through all standard fees for the student's class and academic year
+    FOR fee_record IN
+        SELECT fee_id, fee_name, amount, due_date, academic_year_id
+        FROM class_standard_fees
+        WHERE class_id = NEW.class_id 
+        AND academic_year_id = (SELECT academic_year_id FROM classes WHERE class_id = NEW.class_id)
+    LOOP
+        -- Create individual fee record for the student
+        INSERT INTO student_fees (
+            student_fee_id,
+            student_id,
+            class_id,
+            fee_id,
+            standard_amount,
+            final_amount,
+            balance,
+            due_date,
+            academic_year_id,
+            created_by,
+            updated_by
+        ) VALUES (
+            'SF' || NEW.student_id || '_' || fee_counter,
+            NEW.student_id,
+            NEW.class_id,
+            fee_record.fee_id,
+            fee_record.amount,
+            fee_record.amount, -- Initially same as standard
+            fee_record.amount, -- Initially same as final_amount
+            fee_record.due_date,
+            fee_record.academic_year_id,
+            NEW.created_by,
+            NEW.updated_by
+        );
+        
+        fee_counter := fee_counter + 1;
+    END LOOP;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- FUNCTION TO AUTO-CREATE USER ACCOUNT WHEN TEACHER IS ADDED
+CREATE OR REPLACE FUNCTION create_teacher_user_account()
+RETURNS TRIGGER AS $$
+DECLARE
+    user_email VARCHAR(255);
+    first_name_part VARCHAR(255);
+    last_name_part VARCHAR(255);
+BEGIN
+    -- Generate email if not provided
+    user_email := COALESCE(NEW.email, NEW.teacher_id || '@school.com');
+    
+    -- Split name into first and last name
+    first_name_part := SPLIT_PART(NEW.name, ' ', 1);
+    last_name_part := CASE 
+        WHEN array_length(string_to_array(NEW.name, ' '), 1) > 1 
+        THEN array_to_string((string_to_array(NEW.name, ' '))[2:], ' ')
+        ELSE '' 
+    END;
+    
+    -- Create user account
+    INSERT INTO users (
+        username, 
+        email, 
+        password, 
+        first_name, 
+        last_name, 
+        role, 
+        academic_year_id,
+        created_by,
+        updated_by
+    ) VALUES (
+        NEW.teacher_id,
+        user_email,
+        NULL, -- Password will be set by the application
+        first_name_part,
+        last_name_part,
+        'teacher',
+        NEW.academic_year_id,
+        NEW.created_by,
+        NEW.updated_by
+    );
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ========================================
+-- 4. DATABASE TRIGGERS
+-- ========================================
+
+-- TRIGGER TO AUTO-CREATE USER ACCOUNT WHEN STUDENT IS INSERTED
+CREATE TRIGGER trg_create_student_user_account
+    AFTER INSERT ON students
+    FOR EACH ROW
+    EXECUTE FUNCTION create_student_user_account();
+
+-- TRIGGER TO AUTO-CREATE STUDENT FEE RECORDS WHEN STUDENT IS INSERTED
+CREATE TRIGGER trg_create_student_fee_records
+    AFTER INSERT ON students
+    FOR EACH ROW
+    EXECUTE FUNCTION create_student_fee_records();
+
+-- TRIGGER TO AUTO-CREATE USER ACCOUNT WHEN TEACHER IS INSERTED
+CREATE TRIGGER trg_create_teacher_user_account
+    AFTER INSERT ON teachers
+    FOR EACH ROW
+    EXECUTE FUNCTION create_teacher_user_account();
+
+-- ========================================
+-- 5. INDEXES
 -- ========================================
 
 -- CLASS STANDARD FEES TABLE INDEXES
@@ -287,3 +506,32 @@ CREATE INDEX CONCURRENTLY idx_class_standard_fees_class_id ON class_standard_fee
 CREATE INDEX CONCURRENTLY idx_class_standard_fees_academic_year ON class_standard_fees(academic_year_id);
 CREATE INDEX CONCURRENTLY idx_class_standard_fees_fee_name ON class_standard_fees(fee_name);
 CREATE INDEX CONCURRENTLY idx_class_standard_fees_due_date ON class_standard_fees(due_date);
+
+-- STUDENT FEES TABLE INDEXES
+CREATE INDEX CONCURRENTLY idx_student_fees_student_id ON student_fees(student_id);
+CREATE INDEX CONCURRENTLY idx_student_fees_class_id ON student_fees(class_id);
+CREATE INDEX CONCURRENTLY idx_student_fees_fee_id ON student_fees(fee_id);
+CREATE INDEX CONCURRENTLY idx_student_fees_academic_year ON student_fees(academic_year_id);
+CREATE INDEX CONCURRENTLY idx_student_fees_payment_status ON student_fees(payment_status);
+CREATE INDEX CONCURRENTLY idx_student_fees_due_date ON student_fees(due_date);
+CREATE INDEX CONCURRENTLY idx_student_fees_last_payment_date ON student_fees(last_payment_date);
+
+-- ========================================
+-- TEMPLATE-BASED SCHEDULE SYSTEM INDEXES
+-- ========================================
+
+-- Time Slots Indexes
+CREATE INDEX CONCURRENTLY idx_time_slots_class_day ON time_slots(class_id, day_of_week);
+CREATE INDEX CONCURRENTLY idx_time_slots_session ON time_slots(session_type);
+
+-- Schedule Data Indexes
+CREATE INDEX CONCURRENTLY idx_schedule_data_slot ON schedule_data(slot_id);
+CREATE INDEX CONCURRENTLY idx_schedule_data_class_year ON schedule_data(class_id, academic_year);
+CREATE INDEX CONCURRENTLY idx_schedule_data_teacher ON schedule_data(teacher_id);
+CREATE INDEX CONCURRENTLY idx_schedule_data_subject ON schedule_data(subject_code);
+
+-- Calendar Grid Indexes
+CREATE INDEX CONCURRENTLY idx_calendar_grid_class_date ON calendar_grid(class_id, calendar_date);
+CREATE INDEX CONCURRENTLY idx_calendar_grid_date_type ON calendar_grid(calendar_date, day_type);
+CREATE INDEX CONCURRENTLY idx_calendar_grid_template ON calendar_grid(applied_template_id);
+CREATE INDEX CONCURRENTLY idx_calendar_grid_year ON calendar_grid(academic_year);
