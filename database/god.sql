@@ -92,32 +92,6 @@ CREATE TABLE class_standard_fees (
     updated_by VARCHAR(255)
 );
 
--- STUDENT FEES TABLE (Referenced by triggers/functions and indexes below)
--- Added to resolve missing table causing failures in create_student_fee_records()
-DROP TABLE IF EXISTS student_fees CASCADE;
-
-CREATE TABLE student_fees (
-    student_fee_id VARCHAR(255) PRIMARY KEY,
-    student_id VARCHAR(255) NOT NULL REFERENCES students(student_id),
-    class_id VARCHAR(10) NOT NULL REFERENCES classes(class_id),
-    fee_id VARCHAR(255) NOT NULL REFERENCES class_standard_fees(fee_id),
-    standard_amount DECIMAL(10,2) NOT NULL CHECK (standard_amount > 0),
-    final_amount DECIMAL(10,2) NOT NULL CHECK (final_amount > 0),
-    amount_paid DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
-    balance DECIMAL(10,2) NOT NULL CHECK (balance >= 0),
-    payment_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'partial', 'paid', 'overdue')),
-    due_date DATE,
-    last_payment_date DATE,
-    academic_year_id VARCHAR(4) NOT NULL REFERENCES academic_years(academic_year_id),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(255),
-    updated_by VARCHAR(255),
-    CONSTRAINT chk_balance_calculation CHECK (balance = final_amount - amount_paid),
-    CONSTRAINT chk_payment_not_exceed_final CHECK (amount_paid <= final_amount),
-    CONSTRAINT chk_last_payment_date_valid CHECK (last_payment_date IS NULL OR last_payment_date <= CURRENT_DATE)
-);
-
 -- PRODUCTION USERS TABLE (SEVENTH - Referenced by students and teachers)
 -- User creation handled at student/teacher table level
 DROP TABLE IF EXISTS users CASCADE;
@@ -191,6 +165,34 @@ CREATE TABLE students (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(255)
 );
+
+-- STUDENT FEES TABLE (Referenced by triggers/functions and indexes below)
+-- Moved here (after students table) to satisfy foreign key dependencies
+DROP TABLE IF EXISTS student_fees CASCADE;
+
+CREATE TABLE student_fees (
+    student_fee_id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) NOT NULL REFERENCES students(student_id),
+    class_id VARCHAR(10) NOT NULL REFERENCES classes(class_id),
+    fee_id VARCHAR(255) NOT NULL REFERENCES class_standard_fees(fee_id),
+    standard_amount DECIMAL(10,2) NOT NULL CHECK (standard_amount > 0),
+    final_amount DECIMAL(10,2) NOT NULL CHECK (final_amount > 0),
+    amount_paid DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
+    balance DECIMAL(10,2) NOT NULL CHECK (balance >= 0),
+    payment_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'partial', 'paid', 'overdue')),
+    due_date DATE,
+    last_payment_date DATE,
+    academic_year_id VARCHAR(4) NOT NULL REFERENCES academic_years(academic_year_id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255),
+    CONSTRAINT chk_balance_calculation CHECK (balance = final_amount - amount_paid),
+    CONSTRAINT chk_payment_not_exceed_final CHECK (amount_paid <= final_amount),
+    CONSTRAINT chk_last_payment_date_valid CHECK (last_payment_date IS NULL OR last_payment_date <= CURRENT_DATE)
+);
+
+-- users table moved above to satisfy FK dependency for students
 
 -- PRODUCTION TEACHERS TABLE (SIXTH - Depends on users and academic_years)
 -- Teacher management with user account integration and class assignments
@@ -404,7 +406,7 @@ CREATE TABLE attendance (
     FOREIGN KEY (marked_by) REFERENCES users(username),
 
     -- Business Logic Constraints
-    UNIQUE(grid_id, student_id, COALESCE(slot_id, 0), COALESCE(period_number, 0)),
+    UNIQUE (grid_id, student_id, slot_id, period_number),
     CHECK (attendance_date <= CURRENT_DATE)
 );
 
@@ -697,26 +699,6 @@ CREATE INDEX CONCURRENTLY idx_calendar_grid_class_date ON calendar_grid(class_id
 CREATE INDEX CONCURRENTLY idx_calendar_grid_date_type ON calendar_grid(calendar_date, day_type);
 CREATE INDEX CONCURRENTLY idx_calendar_grid_template ON calendar_grid(applied_template_id);
 CREATE INDEX CONCURRENTLY idx_calendar_grid_year ON calendar_grid(academic_year);
-
--- Attendance Indexes
-CREATE INDEX CONCURRENTLY idx_attendance_grid_student ON attendance(grid_id, student_id);
-CREATE INDEX CONCURRENTLY idx_attendance_student_date ON attendance(student_id, attendance_date DESC);
-CREATE INDEX CONCURRENTLY idx_attendance_class_date ON attendance(class_id, attendance_date);
-CREATE INDEX CONCURRENTLY idx_attendance_date_status ON attendance(attendance_date, status);
-CREATE INDEX CONCURRENTLY idx_attendance_teacher_date ON attendance(teacher_id, attendance_date);
-CREATE INDEX CONCURRENTLY idx_attendance_class_date_status ON attendance(class_id, attendance_date, status);
-CREATE INDEX CONCURRENTLY idx_attendance_absent_only ON attendance(student_id, attendance_date) WHERE status = 'absent';
-CREATE INDEX CONCURRENTLY idx_attendance_bulk_entries ON attendance(grid_id, attendance_date) WHERE is_bulk_entry = true;
-
--- Marks Indexes
-CREATE INDEX CONCURRENTLY idx_marks_grid_exam ON marks(grid_id, exam_date) WHERE grid_id IS NOT NULL;
-CREATE INDEX CONCURRENTLY idx_marks_exam_date_subject ON marks(exam_date, subject_code);
-CREATE INDEX CONCURRENTLY idx_marks_academic_exam ON marks(academic_year, examination_name);
-CREATE INDEX CONCURRENTLY idx_marks_student_exam_date ON marks(student_id, exam_date DESC);
-CREATE INDEX CONCURRENTLY idx_marks_class_exam_session ON marks(class_id, exam_session, exam_date);
-CREATE INDEX CONCURRENTLY idx_marks_teacher_exam_period ON marks(teacher_id, exam_date, exam_session);
-CREATE INDEX CONCURRENTLY idx_marks_final_exam_results ON marks(academic_year, examination_name, is_final) WHERE is_final = true;
-CREATE INDEX CONCURRENTLY idx_marks_percentage_analysis ON marks(percentage DESC, examination_name);
 
 -- ========================================
 -- ON-DEMAND PARTITIONING - ENTERPRISE PERFORMANCE (ON-DEMAND)
