@@ -92,6 +92,32 @@ CREATE TABLE class_standard_fees (
     updated_by VARCHAR(255)
 );
 
+-- STUDENT FEES TABLE (Referenced by triggers/functions and indexes below)
+-- Added to resolve missing table causing failures in create_student_fee_records()
+DROP TABLE IF EXISTS student_fees CASCADE;
+
+CREATE TABLE student_fees (
+    student_fee_id VARCHAR(255) PRIMARY KEY,
+    student_id VARCHAR(255) NOT NULL REFERENCES students(student_id),
+    class_id VARCHAR(10) NOT NULL REFERENCES classes(class_id),
+    fee_id VARCHAR(255) NOT NULL REFERENCES class_standard_fees(fee_id),
+    standard_amount DECIMAL(10,2) NOT NULL CHECK (standard_amount > 0),
+    final_amount DECIMAL(10,2) NOT NULL CHECK (final_amount > 0),
+    amount_paid DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (amount_paid >= 0),
+    balance DECIMAL(10,2) NOT NULL CHECK (balance >= 0),
+    payment_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'partial', 'paid', 'overdue')),
+    due_date DATE,
+    last_payment_date DATE,
+    academic_year_id VARCHAR(4) NOT NULL REFERENCES academic_years(academic_year_id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255),
+    CONSTRAINT chk_balance_calculation CHECK (balance = final_amount - amount_paid),
+    CONSTRAINT chk_payment_not_exceed_final CHECK (amount_paid <= final_amount),
+    CONSTRAINT chk_last_payment_date_valid CHECK (last_payment_date IS NULL OR last_payment_date <= CURRENT_DATE)
+);
+
 -- PRODUCTION USERS TABLE (SEVENTH - Referenced by students and teachers)
 -- User creation handled at student/teacher table level
 DROP TABLE IF EXISTS users CASCADE;
@@ -138,7 +164,7 @@ CREATE TABLE students (
     address TEXT, -- Student's residential address
     admission_date DATE, -- Date when student was admitted to the school
     
-    -- 🆕 PREVIOUS SCHOOL INFORMATION
+    -- PREVIOUS SCHOOL INFORMATION
     previous_school_id VARCHAR(255) REFERENCES schools(school_id), -- For known schools in our database
     previous_school_name VARCHAR(255), -- For schools not in our database
     previous_school_address TEXT, -- Previous school address
@@ -147,7 +173,7 @@ CREATE TABLE students (
     
     class_id VARCHAR(10) NOT NULL REFERENCES classes(class_id), -- Updated to match new class_id format
     
-    -- 🆕 GUARDIAN INFORMATION (2 guardians)
+    -- GUARDIAN INFORMATION (2 guardians)
     primary_guardian_name VARCHAR(255),
     primary_guardian_relationship VARCHAR(50), -- Father, Mother, Uncle, etc.
     primary_guardian_phone VARCHAR(20),
@@ -179,7 +205,7 @@ CREATE TABLE teachers (
     hire_date DATE,
     salary NUMERIC(10,2),
     
-    -- 🆕 NEW TEACHER MANAGEMENT FIELDS
+    -- NEW TEACHER MANAGEMENT FIELDS
     classes_assigned JSONB DEFAULT '[]',        -- Array of class_ids teacher teaches
     subjects_handled JSONB DEFAULT '[]',        -- Array of subject_codes teacher can handle
     academic_year_id VARCHAR(4) REFERENCES academic_years(academic_year_id),
@@ -207,7 +233,7 @@ CREATE TABLE subjects (
     updated_by VARCHAR(255),
 
     -- Business constraints
-    CONSTRAINT chk_subject_code_format CHECK (subject_code ~ '^[0-9]{10}[A-Z]{3}$'),
+    CONSTRAINT chk_subject_code_format CHECK (subject_code ~ '^[0-9]{9}[A-Z]{3}$'),
     CONSTRAINT chk_subject_name_length CHECK (LENGTH(TRIM(subject_name)) >= 2),
     CONSTRAINT chk_grade_level_format CHECK (grade_level ~ '^Grade [0-9]{1,2}(st|nd|rd|th)?$'),
     CONSTRAINT chk_max_marks_range CHECK (max_marks_per_exam > 0 AND max_marks_per_exam <= 500),
@@ -258,7 +284,6 @@ CREATE TABLE syllabus (
     CONSTRAINT uk_syllabus_unique_per_class_subject_unit UNIQUE (class_id, subject_code, unit_name, academic_year_id)
 );
 
--- ========================================
 -- TEMPLATE-BASED SCHEDULE SYSTEM - THREE TABLES
 -- ========================================
 
@@ -411,7 +436,7 @@ DROP TABLE IF EXISTS marks CASCADE;
 CREATE TABLE marks (
     -- CORE IDENTIFIERS
     marks_id VARCHAR(50) PRIMARY KEY,
-    grid_id VARCHAR(30) NULL, -- 🔗 DIRECT LINK TO CALENDAR_GRID FOR EXAMS
+    grid_id VARCHAR(30) NULL, -- DIRECT LINK TO CALENDAR_GRID FOR EXAMS
     student_id VARCHAR(255) NOT NULL,
     class_id VARCHAR(10) NOT NULL,
     academic_year VARCHAR(4) NOT NULL,
@@ -654,7 +679,6 @@ CREATE INDEX CONCURRENTLY idx_student_fees_payment_status ON student_fees(paymen
 CREATE INDEX CONCURRENTLY idx_student_fees_due_date ON student_fees(due_date);
 CREATE INDEX CONCURRENTLY idx_student_fees_last_payment_date ON student_fees(last_payment_date);
 
--- ========================================
 -- TEMPLATE-BASED SCHEDULE SYSTEM INDEXES
 -- ========================================
 
@@ -700,13 +724,16 @@ CREATE INDEX CONCURRENTLY idx_marks_percentage_analysis ON marks(percentage DESC
 
 -- ATTENDANCE TABLE PARTITIONING (Most Critical - Daily Records)
 -- Partition by month for optimal query performance
-ALTER TABLE attendance PARTITION BY RANGE (attendance_date);
+-- NOTE: Partitioning plan placeholder. Implement actual partitions in deployment scripts when needed.
+-- ALTER TABLE attendance PARTITION BY RANGE (attendance_date);
 
 -- MARKS TABLE PARTITIONING (Exam Records)
-ALTER TABLE marks PARTITION BY RANGE (exam_date);
+-- NOTE: Partitioning plan placeholder. Implement actual partitions in deployment scripts when needed.
+-- ALTER TABLE marks PARTITION BY RANGE (exam_date);
 
 -- CALENDAR_GRID TABLE PARTITIONING (Schedule Records)
-ALTER TABLE calendar_grid PARTITION BY RANGE (calendar_date);
+-- NOTE: Partitioning plan placeholder. Implement actual partitions in deployment scripts when needed.
+-- ALTER TABLE calendar_grid PARTITION BY RANGE (calendar_date);
 
 -- ========================================
 -- PARTITION CLEANUP (Keep last 24 months)
