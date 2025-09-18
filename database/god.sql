@@ -693,3 +693,44 @@ CREATE INDEX CONCURRENTLY idx_marks_class_exam_session ON marks(class_id, exam_s
 CREATE INDEX CONCURRENTLY idx_marks_teacher_exam_period ON marks(teacher_id, exam_date, exam_session);
 CREATE INDEX CONCURRENTLY idx_marks_final_exam_results ON marks(academic_year, examination_name, is_final) WHERE is_final = true;
 CREATE INDEX CONCURRENTLY idx_marks_percentage_analysis ON marks(percentage DESC, examination_name);
+
+-- ========================================
+-- ON-DEMAND PARTITIONING - ENTERPRISE PERFORMANCE (ON-DEMAND)
+-- ========================================
+
+-- ATTENDANCE TABLE PARTITIONING (Most Critical - Daily Records)
+-- Partition by month for optimal query performance
+ALTER TABLE attendance PARTITION BY RANGE (attendance_date);
+
+-- MARKS TABLE PARTITIONING (Exam Records)
+ALTER TABLE marks PARTITION BY RANGE (exam_date);
+
+-- CALENDAR_GRID TABLE PARTITIONING (Schedule Records)
+ALTER TABLE calendar_grid PARTITION BY RANGE (calendar_date);
+
+-- ========================================
+-- PARTITION CLEANUP (Keep last 24 months)
+-- ========================================
+
+-- FUNCTION TO CLEANUP OLD PARTITIONS (Keep last 24 months)
+CREATE OR REPLACE FUNCTION cleanup_old_partitions(table_name TEXT, months_to_keep INTEGER DEFAULT 24)
+RETURNS VOID AS $$
+DECLARE
+    partition_record RECORD;
+    cutoff_date DATE;
+BEGIN
+    cutoff_date := CURRENT_DATE - INTERVAL '1 month' * months_to_keep;
+
+    FOR partition_record IN
+        SELECT tablename
+        FROM pg_tables
+        WHERE tablename LIKE table_name || '_%'
+        AND tablename ~ '^\w+_\d{4}_\d{2}$'
+    LOOP
+        -- Extract date from partition name and drop if older than cutoff
+        IF substring(partition_record.tablename from '[0-9]{4}_[0-9]{2}$')::DATE < cutoff_date THEN
+            EXECUTE format('DROP TABLE IF EXISTS %I', partition_record.tablename);
+        END IF;
+    END LOOP;
+END;
+$$ LANGUAGE plpgsql;
