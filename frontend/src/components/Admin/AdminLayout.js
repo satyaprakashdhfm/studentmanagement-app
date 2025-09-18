@@ -228,6 +228,18 @@ const AdminLayout = ({ children }) => {
               </Link>
             </li>
 
+            {/* Academic Year Management - NEW V2 FEATURE */}
+            <li>
+              <Link 
+                to="/admin/academic-years"
+                className={location.pathname === '/admin/academic-years' ? 'active' : ''}
+                onClick={handleSingleNavClick}
+              >
+                <span style={{ marginRight: '10px' }}>📅</span>
+                Academic Year Management
+              </Link>
+            </li>
+
             {/* Student Management with Dropdown */}
             <li>
               <div 

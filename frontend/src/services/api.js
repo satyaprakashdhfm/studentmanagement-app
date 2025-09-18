@@ -589,6 +589,49 @@ class ApiService {
       throw error;
     }
   }
+
+  // Academic Years API methods
+  async getAcademicYears() {
+    try {
+      logger.info('Fetching academic years from API');
+      const response = await this.request('/academic-years');
+      logger.info(`Successfully fetched ${response.academicYears?.length || 0} academic years`);
+      return response.academicYears || [];
+    } catch (error) {
+      logger.error('Failed to fetch academic years:', error);
+      throw error;
+    }
+  }
+
+  async createAcademicYear(yearData) {
+    try {
+      logger.info('Creating new academic year:', yearData);
+      const response = await this.request('/academic-years', {
+        method: 'POST',
+        body: JSON.stringify(yearData)
+      });
+      logger.info('Successfully created academic year:', response.academicYear);
+      return response.academicYear;
+    } catch (error) {
+      logger.error('Failed to create academic year:', error);
+      throw error;
+    }
+  }
+
+  async createComprehensiveAcademicYear(comprehensiveData) {
+    try {
+      logger.info('Creating comprehensive academic year with all data:', comprehensiveData);
+      const response = await this.request('/academic-years/comprehensive', {
+        method: 'POST',
+        body: JSON.stringify(comprehensiveData)
+      });
+      logger.info('Successfully created comprehensive academic year:', response.summary || response);
+      return response;
+    } catch (error) {
+      logger.error('Failed to create comprehensive academic year:', error);
+      throw error;
+    }
+  }
 }
 
 // Export a singleton instance

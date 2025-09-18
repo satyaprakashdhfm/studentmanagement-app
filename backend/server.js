@@ -24,6 +24,7 @@ const calendarRoutes = require('./routes/calendar');
 const timeManagementRoutes = require('./routes/timemanagement');
 const reactivationRoutes = require('./routes/reactivation');
 const healthRoutes = require('./routes/health');
+const academicYearsRoutes = require('./routes/academicYears');
 
 // Import database connection
 const { testConnection } = require('./config/database');
@@ -142,6 +143,7 @@ app.use('/api/syllabus', syllabusRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/timemanagement', timeManagementRoutes);
 app.use('/api/reactivation', reactivationRoutes);
+app.use('/api/academic-years', academicYearsRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -17,6 +17,7 @@ import StudentClassMarks from './pages/StudentClassMarks';
 import ExamManagement from './pages/ExamManagement';
 import HolidayManagement from './pages/HolidayManagement';
 import ScheduleManagement from './pages/ScheduleManagement';
+import AcademicYearManagement from './pages/AcademicYearManagement';
 import { useAuth } from '../../context/AuthContext';
 
 // Lazy load TimeManagement component
@@ -69,6 +70,7 @@ const AdminDashboard = () => {
             <Route path="marks/grade/:grade" element={<MarksManagement />} />
             <Route path="marks/class/:classId" element={<MarksManagement />} />
             <Route path="teachers" element={<TeacherManagement />} />
+            <Route path="academic-years" element={<AcademicYearManagement />} />
             <Route path="time-management" element={<TimeManagement key="default" />} />
             <Route path="time-management/grade/:grade" element={<TimeManagement key={window.location.pathname} />} />
             <Route path="time-management/:classId/:section" element={<TimeManagement key={window.location.pathname} />} />
