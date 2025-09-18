@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const AcademicPerformance = () => {
+  const { user } = useAuth();
   const [selectedExam, setSelectedExam] = useState('');
   const [marks, setMarks] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -14,13 +16,14 @@ const AcademicPerformance = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-        if (!currentUser || !currentUser.student) {
-          setError('Student data not found');
+        if (!user || user.role !== 'student') {
+          setError('Student session not found. Please login.');
           return;
         }
 
-        const studentId = currentUser.student.studentId;
+        // Use username as studentId for students
+        const studentId = user.username;
+        console.log('Fetching marks for student:', studentId);
         
         // Fetch student marks and subjects
         const [marksResponse, subjectsResponse] = await Promise.all([
@@ -60,8 +63,10 @@ const AcademicPerformance = () => {
       }
     };
 
-    fetchData();
-  }, []);
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
   
   // Get marks for selected examination
   const examMarks = marks.filter(mark => mark.examinationType === selectedExam);

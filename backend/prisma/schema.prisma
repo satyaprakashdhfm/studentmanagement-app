@@ -17,6 +17,9 @@ model User {
   twoFactorEnabled  Boolean            @default(false) @map("two_factor_enabled")
   lastLogin         DateTime?          @map("last_login")
   active            Boolean            @default(true) @map("active")
+  currentSessionId  String?            @map("current_session_id") @db.VarChar(255)
+  sessionExpiry     DateTime?          @map("session_expiry")
+  loginCount        Int                @default(0) @map("login_count")
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
   academicCalendars AcademicCalendar[]

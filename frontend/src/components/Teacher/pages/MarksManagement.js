@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const MarksManagement = () => {
+  const { user } = useAuth();
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedExam, setSelectedExam] = useState('');
@@ -28,10 +30,17 @@ const MarksManagement = () => {
       try {
         setLoading(true);
         
-        // Get current teacher from localStorage
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacher = currentUser.teacher;
+        if (!user || user.role !== 'teacher') {
+          setError('Teacher session not found. Please login.');
+          setLoading(false);
+          return;
+        }
+
+        // Use username as teacherId and fetch teacher data
+        const teacherId = user.username;
+        console.log('Fetching marks management for teacher:', teacherId);
         
+        const teacher = await apiService.getTeacher(teacherId);
         if (!teacher || !teacher.classesAssigned || teacher.classesAssigned.length === 0) {
           setError('Teacher classes not found. Please login again.');
           return;
@@ -43,27 +52,33 @@ const MarksManagement = () => {
           teacher.classesAssigned.includes(cls.classId.toString())
         );
         setClasses(teacherClasses);
+        setError(''); // Clear any previous errors
         
         if (teacherClasses.length > 0 && !selectedClass) {
           setSelectedClass(teacherClasses[0].classId);
         }
 
-        // Fetch examination types from the database
-        const examTypesResponse = await apiService.request('/marks/stats/overview');
-        // Extract unique examination types from the stats or use a separate endpoint
-        // For now, let's get examination types from marks data
-        const marksResponse = await apiService.request('/marks?limit=1');
-        if (marksResponse.marks && marksResponse.marks.length > 0) {
-          // Get all unique examination types
-          const allMarksResponse = await apiService.request('/marks?limit=1000');
-          const uniqueExams = [...new Set(allMarksResponse.marks.map(m => m.examinationType))];
-          setExaminationTypes(uniqueExams);
+        // Fetch examination types from marks data
+        try {
+          console.log('Fetching marks data for examination types...');
+          const marksResponse = await apiService.request('/marks?limit=100');
+          console.log('Marks response:', marksResponse);
           
-          if (uniqueExams.length > 0 && !selectedExam) {
-            setSelectedExam(uniqueExams[0]);
+          if (marksResponse.marks && marksResponse.marks.length > 0) {
+            // Get all unique examination types
+            const uniqueExams = [...new Set(marksResponse.marks.map(m => m.examinationType))];
+            console.log('Found examination types:', uniqueExams);
+            setExaminationTypes(uniqueExams);
+            setSelectedExam(uniqueExams[0] || 'FA1');
+          } else {
+            console.log('No marks data found, using default examination types');
+            // Fallback to default types if no data
+            setExaminationTypes(['FA1', 'FA2', 'SA1', 'SA2']);
+            setSelectedExam('FA1');
           }
-        } else {
-          // Fallback to default types if no data
+        } catch (marksError) {
+          console.error('Error fetching marks data:', marksError);
+          // Fallback to default types on error
           setExaminationTypes(['FA1', 'FA2', 'SA1', 'SA2']);
           setSelectedExam('FA1');
         }
@@ -79,8 +94,10 @@ const MarksManagement = () => {
       }
     };
 
-    fetchInitialData();
-  }, []);
+    if (user) {
+      fetchInitialData();
+    }
+  }, [user]);
 
   // Fetch subjects and marks when class changes
   useEffect(() => {
@@ -90,11 +107,15 @@ const MarksManagement = () => {
       try {
         setLoading(true);
         
-        // Get current teacher
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacher = currentUser.teacher;
+        if (!user || user.role !== 'teacher') {
+          setError('Teacher session not found. Please login.');
+          setLoading(false);
+          return;
+        }
         
-        if (!teacher) {
+        const teacherId = user.username;
+        
+        if (!teacherId) {
           setError('Teacher information not found. Please login again.');
           return;
         }
@@ -144,13 +165,17 @@ const MarksManagement = () => {
       try {
         setLoading(true);
         
-        // Get current teacher
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacher = currentUser.teacher;
+        if (!user || user.role !== 'teacher') {
+          setError('Teacher session not found. Please login.');
+          setLoading(false);
+          return;
+        }
+        
+        const teacherId = user.username;
         
         // Fetch marks for the selected class, subject, exam, and teacher
         const marksResponse = await apiService.request(
-          `/marks?classId=${selectedClass}&subjectCode=${selectedSubject}&examinationType=${selectedExam}&teacherId=${teacher.teacherId}`
+          `/marks?classId=${selectedClass}&subjectCode=${selectedSubject}&examinationType=${selectedExam}&teacherId=${teacherId}`
         );
         
         console.log('Marks API response:', marksResponse);
@@ -208,11 +233,14 @@ const MarksManagement = () => {
         return;
       }
       
-      // Get current teacher
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      const teacher = currentUser.teacher;
+      if (!user || user.role !== 'teacher') {
+        alert('Teacher session not found. Please login.');
+        return;
+      }
       
-      if (!teacher) {
+      const teacherId = user.username;
+      
+      if (!teacherId) {
         alert('Teacher information not found. Please login again.');
         return;
       }

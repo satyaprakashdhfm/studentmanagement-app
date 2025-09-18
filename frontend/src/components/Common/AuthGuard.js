@@ -61,9 +61,10 @@ const AuthGuard = ({ children, allowedRoles = [] }) => {
 
   // If not authenticated, redirect to appropriate login page
   if (!isAuthenticated) {
-    // Determine which login page to redirect to based on current path
-    let loginPath = '/login/admin'; // default
+    // Determine which login page to redirect to based on the current path
+    let loginPath = '/login/admin'; // default fallback
 
+    // Strategy: Check current path to determine which role's login page to show
     if (location.pathname.startsWith('/teacher')) {
       loginPath = '/login/teacher';
     } else if (location.pathname.startsWith('/student')) {
@@ -71,7 +72,9 @@ const AuthGuard = ({ children, allowedRoles = [] }) => {
     } else if (location.pathname.startsWith('/admin')) {
       loginPath = '/login/admin';
     }
+    // For other paths, keep the default admin login
 
+    console.log('🔐 Redirecting unauthenticated user to:', loginPath, 'from path:', location.pathname);
     return <Navigate to={loginPath} state={{ from: location }} replace />;
   }
 

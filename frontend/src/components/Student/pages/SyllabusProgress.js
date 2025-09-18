@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const SyllabusProgress = () => {
+  const { user } = useAuth();
   const [syllabusData, setSyllabusData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -12,14 +14,21 @@ const SyllabusProgress = () => {
       try {
         setLoading(true);
         
-        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-        if (!currentUser || !currentUser.student) {
-          setError('Student data not found');
+        if (!user || user.role !== 'student') {
+          setError('Student session not found. Please login.');
           return;
         }
 
+        // First get student data to find their classId
+        const studentResponse = await apiService.getStudent(user.username);
+        if (!studentResponse.success || !studentResponse.data.classId) {
+          setError('Student class information not found.');
+          return;
+        }
+
+        console.log('Fetching syllabus for class:', studentResponse.data.classId);
         // Fetch syllabus for student's class and grade subjects (backend handles filtering)
-        const response = await apiService.getSyllabus({ classId: currentUser.student.classId });
+        const response = await apiService.getSyllabus({ classId: studentResponse.data.classId });
         
         if (response.syllabus) {
           // Group syllabus by subject (since student is in one class)
@@ -62,8 +71,10 @@ const SyllabusProgress = () => {
       }
     };
 
-    fetchSyllabusProgress();
-  }, []);
+    if (user) {
+      fetchSyllabusProgress();
+    }
+  }, [user]);
 
   const toggleSubjectExpansion = (subjectCode) => {
     setExpandedSubjects(prev => {

@@ -12,11 +12,16 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
 
   useEffect(() => {
     document.title = 'Admin Login - Student Management System';
-  }, []);
+
+    // If user is already authenticated and is admin, redirect to dashboard
+    if (isAuthenticated && user && user.role === 'admin') {
+      navigate('/admin/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleChange = (e) => {
     setFormData({
@@ -30,12 +35,16 @@ const AdminLogin = () => {
     setLoading(true);
     setError('');
 
+    console.log('🔐 Admin login attempt:', formData.username);
+
     try {
       const result = await login({
         username: formData.username,
         password: formData.password,
         role: 'admin'
       });
+      
+      console.log('🔐 Admin login result:', result);
 
       if (result.success) {
         navigate('/admin/dashboard');
@@ -43,7 +52,8 @@ const AdminLogin = () => {
         setError(result.message || 'Login failed');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      console.error('🔐 Admin login error:', err);
+      setError(`Network error: ${err.message}. Please try again.`);
     } finally {
       setLoading(false);
     }

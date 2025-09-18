@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const FeeInquiry = () => {
+  const { user } = useAuth();
+  
   // Helper function to format fee types for display
   const formatFeeType = (feeType) => {
     const typeMap = {
@@ -14,9 +17,10 @@ const FeeInquiry = () => {
     };
     return typeMap[feeType] || feeType;
   };
+
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterFeeType, setFilterFeeType] = useState('all');
   const [filterClass, setFilterClass] = useState('all');
@@ -27,11 +31,16 @@ const FeeInquiry = () => {
       try {
         setLoading(true);
         
-        // Get current teacher from localStorage
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacher = currentUser.teacher;
+        if (!user || user.role !== 'teacher') {
+          setError('Teacher session not found. Please login.');
+          setLoading(false);
+          return;
+        }
+
+        const teacherId = user.username;
+        console.log('Fetching fee inquiry for teacher:', teacherId);
         
-        console.log('Current user:', currentUser);
+        const teacher = await apiService.getTeacher(teacherId);
         console.log('Teacher data:', teacher);
         
         if (!teacher) {
@@ -79,8 +88,10 @@ const FeeInquiry = () => {
       }
     };
 
-    fetchFees();
-  }, []);
+    if (user) {
+      fetchFees();
+    }
+  }, [user]);
 
   // Group fees by class and calculate summaries
   const classSummaries = teacherClasses.reduce((acc, classId) => {

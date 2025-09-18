@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 const StudentLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -47,7 +47,7 @@ const StudentLayout = ({ children }) => {
         <div className="header">
           <h1>Student Dashboard</h1>
           <div className="user-info" style={{ gap: '10px' }}>
-            <span>Welcome, Student</span>
+            <span>Welcome, {user ? `${user.firstName || user.username}` : 'Student'}</span>
             <ThemeToggle />
             <button className="logout-btn" onClick={handleLogout}>
               Logout

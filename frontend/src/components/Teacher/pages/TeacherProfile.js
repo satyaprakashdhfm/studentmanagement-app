@@ -19,10 +19,23 @@ const TeacherProfile = () => {
           // If user data includes teacher info, use it
           console.log('Using teacher data from auth context:', user.teacher);
           setTeacher(user.teacher);
+        } else if (user && user.role === 'teacher') {
+          console.log('Fetching teacher data via API for username:', user.username);
+          // Fetch teacher data using the teacher API
+          try {
+            const teacher = await apiService.getTeacher(user.username);
+            if (teacher && teacher.teacherId) {
+              setTeacher(teacher);
+              console.log('Successfully fetched teacher data:', teacher);
+            } else {
+              setError('Teacher profile not found. Please contact administrator.');
+            }
+          } catch (apiError) {
+            console.error('API call failed:', apiError);
+            setError('Failed to load teacher profile. Please try again.');
+          }
         } else {
-          console.log('No teacher data found in auth context, attempting API call...');
-          // For now, show error since we don't have a specific teacher profile endpoint
-          setError('Teacher profile not found in session. Please login again.');
+          setError('Invalid user session. Please login again.');
         }
       } catch (err) {
         console.error('Error loading teacher profile:', err);

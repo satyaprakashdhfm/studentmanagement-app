@@ -12,11 +12,16 @@ const StudentLogin = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
 
   useEffect(() => {
     document.title = 'Student Login - Student Management System';
-  }, []);
+
+    // If user is already authenticated and is student, redirect to dashboard
+    if (isAuthenticated && user && user.role === 'student') {
+      navigate('/student/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleChange = (e) => {
     setFormData({

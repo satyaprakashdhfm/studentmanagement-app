@@ -1,28 +1,33 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
-import AuthGuard from './components/Common/AuthGuard';
+import ConnectionStatus from './components/Common/ConnectionStatus';
 import AdminLogin from './components/Auth/AdminLogin';
 import TeacherLogin from './components/Auth/TeacherLogin';
 import StudentLogin from './components/Auth/StudentLogin';
 import StudentDashboard from './components/Student/StudentDashboard';
 import TeacherDashboard from './components/Teacher/TeacherDashboard';
 import AdminDashboard from './components/Admin/AdminDashboard';
+import AuthGuard from './components/Auth/AuthGuard';
+import './utils/sessionDebugger'; // Import session debugger for console access
 import './App.css';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="App">
-          <Routes>
-            {/* Default route redirects to admin login */}
-            <Route path="/" element={<Navigate to="/login/admin" replace />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <div className="App">
+            <ConnectionStatus />
+            <Routes>
+              {/* Default route redirects to admin login */}
+              <Route path="/" element={<Navigate to="/login/admin" replace />} />
 
-            {/* Role-specific login routes */}
-            <Route path="/login/admin" element={<AdminLogin />} />
-            <Route path="/login/teacher" element={<TeacherLogin />} />
-            <Route path="/login/student" element={<StudentLogin />} />
+              {/* Role-specific login routes */}
+              <Route path="/login/admin" element={<AdminLogin />} />
+              <Route path="/login/teacher" element={<TeacherLogin />} />
+              <Route path="/login/student" element={<StudentLogin />} />
 
             {/* Protected Student Routes */}
             <Route path="/student/*" element={
@@ -45,12 +50,13 @@ function App() {
               </AuthGuard>
             } />
 
-            {/* Catch all route */}
+            {/* Catch all route redirects to admin login */}
             <Route path="*" element={<Navigate to="/login/admin" replace />} />
           </Routes>
         </div>
       </Router>
     </AuthProvider>
+  </ThemeProvider>
   );
 }
 

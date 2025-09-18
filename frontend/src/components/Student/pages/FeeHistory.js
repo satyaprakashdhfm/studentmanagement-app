@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const FeeHistory = () => {
+  const { user } = useAuth();
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,13 +44,14 @@ const FeeHistory = () => {
   useEffect(() => {
     const fetchFeeHistory = async () => {
       try {
-        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-        if (!currentUser || !currentUser.student) {
-          setError('Student data not found');
+        if (!user || user.role !== 'student') {
+          setError('Student session not found. Please login.');
           return;
         }
 
-        const studentId = currentUser.student.studentId;
+        // Use username as studentId for students
+        const studentId = user.username;
+        console.log('Fetching fees for student:', studentId);
         const response = await apiService.getStudentFees(studentId);
         
         if (response.fees) {
@@ -69,8 +72,10 @@ const FeeHistory = () => {
       }
     };
 
-    fetchFeeHistory();
-  }, []);
+    if (user) {
+      fetchFeeHistory();
+    }
+  }, [user]);
 
   if (loading) {
     return (

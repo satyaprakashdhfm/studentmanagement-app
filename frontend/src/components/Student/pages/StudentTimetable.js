@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 import './StudentTimetable.css';
 
 const StudentTimetable = () => {
+  const { user } = useAuth();
   const [student, setStudent] = useState(null);
   const [schedule, setSchedule] = useState([]); // weekly schedule data (array of days)
   const [loading, setLoading] = useState(true);
@@ -245,8 +247,24 @@ const StudentTimetable = () => {
   const loadStudentData = async () => {
     try {
       setLoading(true);
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      const studentObj = currentUser.student;
+      if (!user || user.role !== 'student') {
+        setError('Student session not found. Please login.');
+        setLoading(false);
+        return;
+      }
+
+      // Use username as studentId and fetch student data
+      const studentId = user.username;
+      console.log('Fetching timetable for student:', studentId);
+      
+      const studentResponse = await apiService.getStudent(studentId);
+      if (!studentResponse.success) {
+        setError('Failed to load student data.');
+        setLoading(false);
+        return;
+      }
+      
+      const studentObj = studentResponse.data;
       
       if (!studentObj || !studentObj.studentId) {
         setError('Student session not found. Please login.');
@@ -254,10 +272,10 @@ const StudentTimetable = () => {
       }
       setStudent(studentObj);
 
-      console.log('📚 Loading student weekly calendar for:', studentObj.studentId, 'week offset:', currentWeekOffset);
+      console.log('📚 Loading student weekly calendar for:', studentId, 'week offset:', currentWeekOffset);
 
       // Load dynamic weekly calendar instead of static schedule
-      const weeklyResponse = await apiService.get(`/timemanagement/student-calendar-week/${studentObj.studentId}/${studentObj.academicYear || '2024-2025'}/${currentWeekOffset}`);
+      const weeklyResponse = await apiService.get(`/timemanagement/student-calendar-week/${studentId}/${studentObj.academicYear || '2024-2025'}/${currentWeekOffset}`);
       
       if (weeklyResponse && weeklyResponse.success && weeklyResponse.data) {
         console.log('📅 Loaded student weekly calendar:', weeklyResponse.data);
@@ -295,8 +313,10 @@ const StudentTimetable = () => {
   };
 
   useEffect(() => {
-    loadStudentData();
-  }, [currentWeekOffset]);
+    if (user) {
+      loadStudentData();
+    }
+  }, [currentWeekOffset, user]);
 
   // Week navigation functions
   const goToPreviousWeek = () => {

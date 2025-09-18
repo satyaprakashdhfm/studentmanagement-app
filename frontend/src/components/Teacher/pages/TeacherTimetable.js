@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 import './TeacherTimetable.css';
 
 const TeacherTimetable = () => {
+  const { user } = useAuth();
   const [teacher, setTeacher] = useState(null);
   const [schedule, setSchedule] = useState([]); // weekly schedule data (array of days)
   const [loading, setLoading] = useState(true);
@@ -112,9 +114,16 @@ const TeacherTimetable = () => {
   const loadTeacherData = async () => {
     try {
       setLoading(true);
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      const teacherObj = currentUser.teacher;
+      if (!user || user.role !== 'teacher') {
+        setError('Teacher session not found. Please login.');
+        setLoading(false);
+        return;
+      }
+
+      const teacherId = user.username;
+      console.log('Fetching timetable for teacher:', teacherId);
       
+      const teacherObj = await apiService.getTeacher(teacherId);
       if (!teacherObj || !teacherObj.teacherId) {
         setError('Teacher session not found. Please login.');
         return;
@@ -174,8 +183,10 @@ const TeacherTimetable = () => {
   };
 
   useEffect(() => {
-    loadTeacherData();
-  }, [currentWeekOffset]);
+    if (user) {
+      loadTeacherData();
+    }
+  }, [currentWeekOffset, user]);
 
   // Week navigation functions
   const goToPreviousWeek = () => {

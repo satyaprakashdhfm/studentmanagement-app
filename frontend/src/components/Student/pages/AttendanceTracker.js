@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const AttendanceTracker = () => {
+  const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [attendanceData, setAttendanceData] = useState([]);
@@ -16,13 +18,14 @@ const AttendanceTracker = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-        if (!currentUser || !currentUser.student) {
-          setError('Student data not found');
+        if (!user || user.role !== 'student') {
+          setError('Student session not found. Please login.');
           return;
         }
 
-        const studentId = currentUser.student.studentId;
+        // Use username as studentId for students
+        const studentId = user.username;
+        console.log('Fetching attendance for student:', studentId);
         
         // Fetch attendance and subjects data
         const [attendanceResponse, subjectsResponse] = await Promise.all([
@@ -48,8 +51,10 @@ const AttendanceTracker = () => {
       }
     };
 
-    fetchData();
-  }, []);
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
   // Update max periods when attendance data changes
   useEffect(() => {

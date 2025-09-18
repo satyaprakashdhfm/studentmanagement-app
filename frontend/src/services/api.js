@@ -5,8 +5,30 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api
 
 class ApiService {
   constructor() {
-    this.baseUrl = API_BASE_URL;
+    this.baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
     this.authErrorHandler = null;
+    this.currentToken = null; // Cache current token per instance
+  }
+
+  // Get current token from session storage (tab-specific)
+  getCurrentToken() {
+    if (this.currentToken) return this.currentToken;
+    
+    // Always use sessionStorage for current session (tab-specific)
+    const token = sessionStorage.getItem('authToken');
+    this.currentToken = token;
+    return token;
+  }
+
+  // Update cached token
+  setCurrentToken(token) {
+    this.currentToken = token;
+    if (token) {
+      sessionStorage.setItem('authToken', token);
+    } else {
+      sessionStorage.removeItem('authToken');
+      this.currentToken = null;
+    }
   }
 
   // Set auth error handler (called when 401 errors occur)
@@ -30,8 +52,8 @@ class ApiService {
       ...options,
     };
 
-    // Add auth token if available
-    const token = localStorage.getItem('authToken');
+    // Add auth token if available - use getCurrentToken for consistency
+    const token = this.getCurrentToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }

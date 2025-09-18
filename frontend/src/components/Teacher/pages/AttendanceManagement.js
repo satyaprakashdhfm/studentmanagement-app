@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const AttendanceManagement = () => {
+  const { user } = useAuth();
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [attendanceData, setAttendanceData] = useState([]);
@@ -18,9 +20,17 @@ const AttendanceManagement = () => {
       try {
         setLoading(true);
         
-        // Get current teacher from localStorage
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacher = currentUser.teacher;
+        if (!user || user.role !== 'teacher') {
+          setError('Teacher session not found. Please login.');
+          setLoading(false);
+          return;
+        }
+
+        // Use username as teacherId and fetch teacher data
+        const teacherId = user.username;
+        console.log('Fetching attendance management for teacher:', teacherId);
+        
+        const teacher = await apiService.getTeacher(teacherId);
         
         if (!teacher || !teacher.classesAssigned || teacher.classesAssigned.length === 0) {
           setError('Teacher classes not found. Please login again.');
@@ -46,8 +56,10 @@ const AttendanceManagement = () => {
       }
     };
 
-    fetchInitialData();
-  }, []);
+    if (user) {
+      fetchInitialData();
+    }
+  }, [user]);
 
   // Fetch students, attendance, and calendar slots when class/date changes
   useEffect(() => {
@@ -57,11 +69,16 @@ const AttendanceManagement = () => {
       try {
         setLoading(true);
         
-        // Get current teacher
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacher = currentUser.teacher;
+        if (!user || user.role !== 'teacher') {
+          setError('Teacher session not found. Please login.');
+          setLoading(false);
+          return;
+        }
+
+        // Use username as teacherId
+        const teacherId = user.username;
         
-        if (!teacher) {
+        if (!teacherId) {
           setError('Teacher information not found. Please login again.');
           return;
         }
@@ -82,7 +99,7 @@ const AttendanceManagement = () => {
           
           // Filter slots by the current teacher
           const teacherScheduledSlots = allSlots.filter(slot => 
-            slot.teacherId === teacher.teacherId && 
+            slot.teacherId === teacherId && 
             slot.subjectCode && 
             !slot.subjectCode.includes('LUNCH') &&
             !slot.subjectCode.includes('STUDY')
@@ -98,7 +115,7 @@ const AttendanceManagement = () => {
         
         // Fetch existing attendance for the selected class and date
         const attendanceResponse = await apiService.request(
-          `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacher.teacherId}`
+          `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacherId}`
         );
         
         console.log('Attendance API response:', attendanceResponse);
@@ -158,8 +175,11 @@ const AttendanceManagement = () => {
       setSaving(true);
       
       // Get current teacher
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      const teacher = currentUser.teacher;
+      if (!user || user.role !== 'teacher') {
+        setError('Teacher session not found. Please login.');
+        return;
+      }
+      const teacherId = user.username;
       
       // Mark attendance for all students
       const attendancePromises = students.map(student => 
@@ -169,7 +189,7 @@ const AttendanceManagement = () => {
           date: selectedDate,
           period: periodNum,
           status: 'present', // Default to present
-          markedBy: teacher.teacherId
+          markedBy: teacherId
         })
       );
       
@@ -177,7 +197,7 @@ const AttendanceManagement = () => {
       
       // Refresh attendance data
       const attendanceResponse = await apiService.request(
-        `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacher.teacherId}`
+        `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacherId}`
       );
       
       setAttendanceData(attendanceResponse.attendance || []);
@@ -193,8 +213,11 @@ const AttendanceManagement = () => {
   // New function for marking individual student attendance using schedule data
   const markIndividualAttendance = async (studentId, status, scheduleSlot) => {
     try {
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      const teacher = currentUser.teacher;
+      if (!user || user.role !== 'teacher') {
+        setError('Teacher session not found. Please login.');
+        return;
+      }
+      const teacherId = user.username;
       
       await apiService.addAttendance({
         studentId: studentId,
@@ -202,7 +225,7 @@ const AttendanceManagement = () => {
         date: selectedDate,
         period: scheduleSlot.period,
         status: status,
-        markedBy: teacher.teacherId,
+        markedBy: teacherId,
         scheduleId: scheduleSlot.scheduleId,
         subjectCode: scheduleSlot.subjectCode
       });
@@ -210,7 +233,7 @@ const AttendanceManagement = () => {
       // Refresh attendance data
       console.log('Refreshing attendance data after individual marking...');
       const attendanceResponse = await apiService.request(
-        `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacher.teacherId}`
+        `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacherId}`
       );
       
       console.log('Fresh attendance data after individual marking:', attendanceResponse);
@@ -227,8 +250,11 @@ const AttendanceManagement = () => {
     try {
       setSaving(true);
       
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      const teacher = currentUser.teacher;
+      if (!user || user.role !== 'teacher') {
+        setError('Teacher session not found. Please login.');
+        return;
+      }
+      const teacherId = user.username;
       
       // Mark attendance for all students for this specific subject/period
       const attendancePromises = students.map(student => 
@@ -238,7 +264,7 @@ const AttendanceManagement = () => {
           date: selectedDate,
           period: scheduleSlot.period,
           status: status,
-          markedBy: teacher.teacherId,
+          markedBy: teacherId,
           scheduleId: scheduleSlot.scheduleId,
           subjectCode: scheduleSlot.subjectCode
         })
@@ -249,7 +275,7 @@ const AttendanceManagement = () => {
       // Refresh attendance data
       console.log('Refreshing attendance data after bulk marking...');
       const attendanceResponse = await apiService.request(
-        `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacher.teacherId}`
+        `/attendance?classId=${selectedClass}&startDate=${selectedDate}&endDate=${selectedDate}&teacherId=${teacherId}`
       );
       
       console.log('Fresh attendance data after bulk marking:', attendanceResponse);

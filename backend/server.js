@@ -23,6 +23,7 @@ const syllabusRoutes = require('./routes/syllabus');
 const calendarRoutes = require('./routes/calendar');
 const timeManagementRoutes = require('./routes/timemanagement');
 const reactivationRoutes = require('./routes/reactivation');
+const healthRoutes = require('./routes/health');
 
 // Import database connection
 const { testConnection } = require('./config/database');
@@ -56,64 +57,62 @@ app.use(express.urlencoded({ extended: true }));
 // Add request tracking middleware
 app.use(requestTracker);
 
-// Enhanced Request logging middleware
+// Performance & Memory monitoring
+let requestCount = 0;
+let lastMemoryCheck = Date.now();
+
+// Simplified Request logging with performance monitoring
 app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  const method = req.method;
-  const url = req.url;
-  const userAgent = req.get('User-Agent') || 'Unknown';
-  const auth = req.get('Authorization') ? 'Bearer ***' : 'No Auth';
-  const ip = req.ip || req.connection.remoteAddress;
+  req.startTime = Date.now();
+  requestCount++;
   
-  console.log(`\n🌐 [${timestamp}] ${method} ${url}`);
-  console.log(`   📱 User-Agent: ${userAgent.substring(0, 50)}...`);
-  console.log(`   🔑 Auth: ${auth}`);
-  console.log(`   🌍 IP: ${ip}`);
-  
-  if (Object.keys(req.body).length > 0) {
-    console.log(`   📦 Body:`, JSON.stringify(req.body, null, 2));
+  // Simple request log
+  const authHeader = req.get('Authorization');
+  const hasAuth = authHeader ? '🔑' : '🔓';
+  console.log(`${hasAuth} ${req.method} ${req.originalUrl} (#${requestCount})`);
+
+  // Memory check every 50 requests
+  if (requestCount % 50 === 0) {
+    const memUsage = process.memoryUsage();
+    const memMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    console.log(`📊 Memory: ${memMB}MB | Requests: ${requestCount} | Uptime: ${Math.round(process.uptime())}s`);
+    
+    // Warn if memory usage is high
+    if (memMB > 500) {
+      console.log(`⚠️  HIGH MEMORY USAGE: ${memMB}MB - Consider restarting`);
+    }
   }
 
-  if (Object.keys(req.query).length > 0) {
-    console.log(`   🔍 Query:`, JSON.stringify(req.query, null, 2));
-  }
-
-  // Capture response with detailed logging
+  // Capture response with simple logging
   const originalSend = res.send;
   res.send = function(data) {
     const duration = Date.now() - req.startTime;
     
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      console.log(`   ✅ Response: ${res.statusCode} ${res.statusMessage}`);
-      
-      // Log response data structure for debugging
+      // Only log slow requests or errors
+      if (duration > 1000) {
+        console.log(`   🐌 SLOW: ${res.statusCode} (${duration}ms)`);
+      } else if (duration > 100) {
+        console.log(`   ⚡ ${res.statusCode} (${duration}ms)`);
+      } else {
+        console.log(`   ✅ ${res.statusCode} (${duration}ms)`);
+      }
+    } else {
+      console.log(`   ❌ ${res.statusCode} (${duration}ms)`);
+      // Log error details for debugging
       try {
-        const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
-        if (parsedData && typeof parsedData === 'object') {
-          const keys = Object.keys(parsedData);
-          console.log(`   📊 Response Keys: [${keys.join(', ')}]`);
-          
-          if (parsedData.data && Array.isArray(parsedData.data)) {
-            console.log(`   📈 Data Array Length: ${parsedData.data.length}`);
-          }
-          
-          if (parsedData.pagination) {
-            console.log(`   📄 Pagination: page ${parsedData.pagination.page}/${parsedData.pagination.pages}, total: ${parsedData.pagination.total}`);
-          }
+        const errorData = typeof data === 'string' ? JSON.parse(data) : data;
+        if (errorData?.error) {
+          console.log(`   💥 Error: ${errorData.error}`);
         }
       } catch (e) {
-        console.log(`   📊 Response Size: ${data ? data.length : 0} chars`);
+        console.log(`   💥 Error: ${data}`);
       }
-    } else if (res.statusCode >= 400) {
-      console.log(`   ❌ Error Response: ${res.statusCode} ${res.statusMessage}`);
-      console.log(`   💥 Error Data:`, data);
     }
     
-    console.log(`   ⏱️  Duration: ${duration}ms\n`);
     return originalSend.call(this, data);
   };
-  
-  req.startTime = Date.now();
+
   next();
 });
 
@@ -125,6 +124,9 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Health check route (no authentication required)
+app.use('/api/health', healthRoutes);
 
 // API routes
 app.use('/api/auth', authRoutes);

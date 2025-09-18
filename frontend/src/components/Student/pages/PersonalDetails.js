@@ -11,16 +11,30 @@ const PersonalDetails = () => {
   useEffect(() => {
     const fetchStudentData = async () => {
       try {
-        if (!user || !user.student) {
-          setError('Student data not found');
+        setLoading(true);
+        
+        console.log('Current user from auth context:', user);
+        
+        let studentId = null;
+        
+        if (user && user.student) {
+          // If user data includes student info, use it
+          studentId = user.student.studentId;
+          console.log('Using student ID from auth context:', studentId);
+        } else if (user && user.role === 'student') {
+          // Use the username as studentId for students
+          studentId = user.username;
+          console.log('Using username as student ID:', studentId);
+        } else {
+          setError('Invalid user session. Please login again.');
           return;
         }
 
-        const studentId = user.student.studentId;
         const response = await apiService.getStudent(studentId);
         
         if (response.success) {
           setStudentData(response.data);
+          console.log('Successfully fetched student data:', response.data);
         } else {
           setError(response.message || 'Failed to fetch student data');
         }

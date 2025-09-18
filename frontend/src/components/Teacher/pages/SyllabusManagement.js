@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../../../services/api';
+import { useAuth } from '../../../context/AuthContext';
 
 const SyllabusManagement = () => {
+  const { user } = useAuth();
   const [syllabusData, setSyllabusData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,10 +14,16 @@ const SyllabusManagement = () => {
       try {
         setLoading(true);
         
-        // Get current teacher from localStorage
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-        const teacher = currentUser.teacher;
+        if (!user || user.role !== 'teacher') {
+          setError('Teacher session not found. Please login.');
+          setLoading(false);
+          return;
+        }
+
+        const teacherId = user.username;
+        console.log('Fetching syllabus management for teacher:', teacherId);
         
+        const teacher = await apiService.getTeacher(teacherId);
         if (!teacher) {
           setError('Teacher information not found. Please login again.');
           return;
@@ -77,8 +85,10 @@ const SyllabusManagement = () => {
       }
     };
 
-    fetchSyllabusData();
-  }, []);
+    if (user) {
+      fetchSyllabusData();
+    }
+  }, [user]);
 
   const toggleClassExpansion = (subjectCode, classId) => {
     const key = `${subjectCode}-${classId}`;

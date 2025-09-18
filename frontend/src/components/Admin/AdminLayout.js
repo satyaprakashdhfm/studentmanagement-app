@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 const AdminLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [showFeeDropdown, setShowFeeDropdown] = useState(false);
   const [showStudentDropdown, setShowStudentDropdown] = useState(false);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
@@ -443,7 +443,7 @@ const AdminLayout = ({ children }) => {
           </div>
           <div className="header-right">
             <div className="user-info">
-              <span>Welcome, Admin</span>
+              <span>Welcome, {user ? `${user.firstName || user.username}` : 'Admin'}</span>
               <ThemeToggle />
               <button className="logout-btn" onClick={handleLogout}>Logout</button>
             </div>

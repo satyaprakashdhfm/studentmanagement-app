@@ -87,7 +87,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const teacher = await prisma.teacher.findUnique({
       where: { teacherId },
       include: {
-        user: {
+        users: {
           select: {
             username: true,
             email: true,
@@ -106,7 +106,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             academicYear: true,
             students: {
               select: {
-                id: true,
+                studentId: true,
                 name: true,
                 email: true
               }
@@ -132,12 +132,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
           },
           take: 20
         },
-        attendance: {
+        syllabi: {
           include: {
-            student: {
+            subject: {
               select: {
-                name: true,
-                email: true
+                subjectName: true,
+                subjectCode: true
               }
             },
             class: {
@@ -148,9 +148,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
             }
           },
           orderBy: {
-            date: 'desc'
+            lastUpdated: 'desc'
           },
-          take: 20
+          take: 10
         }
       }
     });
@@ -159,24 +159,19 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Teacher not found' });
     }
 
-    // Convert BigInt IDs to Numbers
+    // Convert BigInt/Decimal fields to Numbers for JSON serialization
     const teacherWithNumericIds = {
       ...teacher,
-      id: Number(teacher.id),
-      userId: Number(teacher.userId),
       salary: teacher.salary ? Number(teacher.salary) : null,
-      marks: teacher.marks.map(mark => ({
+      marks: teacher.marks ? teacher.marks.map(mark => ({
         ...mark,
-        marksId: Number(mark.marksId),
-        studentId: Number(mark.studentId),
-        teacherId: Number(mark.teacherId)
-      })),
-      attendance: teacher.attendance.map(att => ({
-        ...att,
-        attendanceId: Number(att.attendanceId),
-        studentId: Number(att.studentId),
-        markedBy: Number(att.markedBy)
-      }))
+        marksObtained: mark.marksObtained ? Number(mark.marksObtained) : null,
+        maxMarks: mark.maxMarks ? Number(mark.maxMarks) : null
+      })) : [],
+      syllabi: teacher.syllabi ? teacher.syllabi.map(syllabus => ({
+        ...syllabus,
+        completionPercentage: syllabus.completionPercentage ? Number(syllabus.completionPercentage) : 0
+      })) : []
     };
 
     res.json(teacherWithNumericIds);
